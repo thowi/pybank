@@ -4,11 +4,11 @@
 
 
 class Bank(object):
-    pass
+    """A bank."""
 
 
 class Account(object):
-    """Creates a new account.
+    """An account.
     
     @type name: unicode
     @param name: Account name.
