@@ -15,16 +15,30 @@ class Account(object):
     
     @type transactions: (Transaction,) or None
     @param transactions: The transactions.
+    
+    @type balance: float or None
+    @param balance: Balance.
+    
+    @type balance_date: datetime.datetime or None
+    @param balance_date: Balance date.
     """
-    def __init__(self, name, transactions=None):
+    def __init__(
+            self, name, transactions=None, balance=None, balance_date=None):
         self.name = name
         if transactions:
             self.transactions = transactions
         else:
             self.transactions = ()
+        self.balance = balance
+        self.balance_date = balance_date
     
     def __repr__(self):
-        return '%s. %i transactions.' % (self.name, len(self.transactions))
+        repr = [name]
+        if self.transactions:
+            repr.append('%i transactions' % len(self.transactions))
+        if self.balance:
+            repr.append('Balance: %.2f' % self.balance)
+        return '. '.join(repr) + '.'
 
 
 class CheckingAccount(Account):
