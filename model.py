@@ -13,15 +13,34 @@ class Account(object):
     @type name: unicode
     @param name: Account name.
     
-    @type transactions: (Transaction,)
+    @type transactions: (Transaction,) or None
     @param transactions: The transactions.
     """
-    def __init__(self, name, transactions):
+    def __init__(self, name, transactions=None):
         self.name = name
-        self.transactions = transactions
+        if transactions:
+            self.transactions = transactions
+        else:
+            self.transactions = ()
     
     def __repr__(self):
-        return '%s. %i transactins.' % (self.name, len(self.transactions))
+        return '%s. %i transactions.' % (self.name, len(self.transactions))
+
+
+class CheckingAccount(Account):
+    """A checking account."""
+
+
+class SavingsAccount(Account):
+    """A savings account."""
+
+
+class InvestmentsAccount(Account):
+    """An investments account."""
+
+
+class CreditCard(Account):
+    """A credit card."""
 
 
 class Transaction(object):
