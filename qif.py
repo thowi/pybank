@@ -12,7 +12,6 @@ import model
 DATE_FORMAT = '%x'
 AMOUNT_FORMAT = '%.2f'
 
-# !Type:
 TYPES = {
     'bank': 'Bank',
     'cash': 'Cash',
@@ -22,7 +21,7 @@ TYPES = {
     'liabilities': 'Oth L',
     'category list': 'Cat',
     'class list': 'Class',
-    'Memorized'
+    'memorized': 'Memorized',
 }
 
 ITEMS = {
@@ -82,7 +81,7 @@ END_OF_ENTRY = '^'
 def serialize_account(account):
     header = '!Type:' + TYPES['bank']
     txns = '\n'.join(serialize_transaction(t) for t in account.transactions)
-    return '\n'.join(header, txns)
+    return '\n'.join((header, txns))
 
 
 """Serializes a transaction to the QIF format.
