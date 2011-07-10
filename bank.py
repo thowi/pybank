@@ -25,7 +25,7 @@ BANK_BY_NAME = {
     'postfinance': fetch.PostFinance,
 }
 DATE_FORMAT = '%Y-%m-%d'
-INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z-_.]')
+INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z0-9-_.]')
 LOG_FORMAT = '%(message)s'
 LOG_FORMAT_DEBUG = '%(levelname)s %(name)s: %(message)s'
 
