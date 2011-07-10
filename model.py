@@ -32,7 +32,7 @@ class Account(object):
         else:
             self.transactions = ()
     
-    def __repr__(self):
+    def __str__(self):
         repr = [self.name]
         if self.transactions:
             repr.append('%i transactions' % len(self.transactions))
@@ -82,7 +82,7 @@ class Transaction(object):
         self.memo = memo
         self.category = category
     
-    def __repr__(self):
+    def __str__(self):
         return 'Date: %s. Amount: %.2f. Payee: %s. Memo: %s. Category: %s.' % (
                 self.date, self.amount, self.payee, self.memo, self.category)
 
