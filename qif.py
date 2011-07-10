@@ -54,6 +54,8 @@ INVESTMENT_ITEMS = {
     'amount transferred': '$',
 }
 
+ACCOUNT_HEADER = '!Account'
+
 ACCOUNT_INFO = {
     'name': 'N',
     'type': 'T',
@@ -79,9 +81,35 @@ END_OF_ENTRY = '^'
 @return: The QIF serialization of the account.
 """
 def serialize_account(account):
-    header = '!Type:' + TYPES['bank']
+    account_fields = []
+    
+    account_fields.append(ACCOUNT_HEADER)
+    
+    account_fields.append(ACCOUNT_INFO['name'] + account.name)
+    
+    if isinstance(account, model.CreditCard):
+        acc_type = TYPES['credit card']
+    elif isinstance(account, model.InvestmentsAccount):
+        acc_type = TYPES['investment']
+    else:
+        acc_type = TYPES['bank']
+    account_fields.append(ACCOUNT_INFO['type'] + acc_type)
+    
+    if account.balance is not None:
+        account_fields.append(
+                ACCOUNT_INFO['balance amount'] +
+                (AMOUNT_FORMAT % account.balance))
+        if account.balance_date:
+            account_fields.append(
+                    ACCOUNT_INFO['balance date'] +
+                    account.balance_date.strftime(DATE_FORMAT))
+
+    account_fields.append(END_OF_ENTRY)
+    
     txns = '\n'.join(serialize_transaction(t) for t in account.transactions)
-    return '\n'.join((header, txns))
+    account_fields.append(txns)
+
+    return '\n'.join(account_fields)
 
 
 """Serializes a transaction to the QIF format.
@@ -100,7 +128,16 @@ def serialize_transaction(transaction):
     if transaction.payee:
         fields.append(ITEMS['payee'] + transaction.payee)
     if transaction.memo:
-        fields.append(ITEMS['memo'] + transaction.memo)
+        lines = []
+        for line in transaction.memo.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            if not line.endswith('.') and not line.endswith(':'):
+                line += '.'
+            lines.append(line)
+        memo = ' '.join(lines)
+        fields.append(ITEMS['memo'] + memo)
     if transaction.category:
         fields.append(ITEMS['category'] + transaction.category)
     fields.append(END_OF_ENTRY)

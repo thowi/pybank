@@ -69,10 +69,10 @@ class Bank(object):
 
     """Returns the names of all accounts.
 
-    @rtype: [unicode]
-    @return: The names of all accounts.
+    @rtype: [model.Account]
+    @return: The available accounts on this bank.
     """
-    def get_account_names(self):
+    def get_accounts(self):
         raise NotImplementedError()
 
     """Returns all transactions within the given date range.
@@ -140,11 +140,11 @@ class DeutscheKreditBank(Bank):
     def __init__(self):
         self._browser = Browser()
         self._logged_in = False
-        self._account_names = None
+        self._accounts = None
 
     def login(self, username=None, password=None):
         self._logged_in = False
-        self._account_names = None
+        self._accounts = None
         
         if not username:
             username = raw_input('User: ')
@@ -157,11 +157,10 @@ class DeutscheKreditBank(Bank):
         logger.info('Loading login page...')
         browser.open(self._BASE_URL)
         
-        forms = list(browser.forms())
-        if len(forms) < 1:
-            raise FetchError('Login form not found')
-        
-        browser.select_form(nr=0)
+        try:
+            browser.select_form(name='login')
+        except mechanize.FormNotFoundError, e:
+            raise FetchError('Login form not found.')
         form = browser.form
         form['j_username'] = username
         form['j_password'] = password
@@ -176,11 +175,11 @@ class DeutscheKreditBank(Bank):
         self._logged_in = True
         logger.info('Log-in sucessful.')
 
-    def get_account_names(self):
+    def get_accounts(self):
         self._check_logged_in()
         
-        if self._account_names is not None:
-            return self._account_names
+        if self._accounts is not None:
+            return self._accounts
         
         browser = self._browser
         
@@ -195,24 +194,37 @@ class DeutscheKreditBank(Bank):
         if not details_icons:
             raise FetchError('No accounts found.')
         
-        self._account_names = []
+        self._accounts = []
         for details_icon in details_icons:
-            details_row = details_icon.parent.parent.parent
-            account_name = details_row.find('td').text
-            self._account_names.append(account_name)
+            try:
+                details_row = details_icon.parent.parent.parent
+                cells = details_row.findAll('td')
+                name = cells[0].getText()
+                balance_date_text = cells[2].getText()
+                balance_date = datetime.datetime.strptime(
+                        balance_date_text, self._DATE_FORMAT)
+                balance_text = cells[3].getText()
+                balance = self._parse_balance(balance_text)
+                if self._is_credit_card(name):
+                    account = model.CreditCard(name, balance, balance_date)
+                else:
+                    account = model.CheckingAccount(name, balance, balance_date)
+                self._accounts.append(account)
+            except ValueError:
+                logging.error('Invalid account row. %s' % details_row)
         
-        logger.info('Found %i accounts.' % len(self._account_names))
-        return self._account_names
+        logger.info('Found %i accounts.' % len(self._accounts))
+        return self._accounts
 
-    def get_transactions(self, name, start, end):
+    def get_transactions(self, account, start, end):
         self._check_logged_in()
         
-        account_names = self.get_account_names()
+        accounts = self.get_accounts()
         try:
-            account_index = account_names.index(name)
+            account_index = accounts.index(account)
         except ValueError:
-            raise FetchError('Unknown account: %s' % name)
-        is_credit_card = self._is_credit_card(name)
+            raise FetchError('Unknown account: %s' % account)
+        is_credit_card = isinstance(account, model.CreditCard)
         
         browser = self._browser
         
@@ -246,7 +258,7 @@ class DeutscheKreditBank(Bank):
         response = browser.open(csv_url)
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         csv_data = _decode_content(response.read(), content_type_header)
-        if name not in csv_data:
+        if account.name not in csv_data:
             raise FetchError('Account name not found in CSV.')
         
         # Parse CSV into transactions.
@@ -317,6 +329,12 @@ class DeutscheKreditBank(Bank):
         except ValueError, e:
             logger.debug('Skipping invalid row: %s' % row)
             return
+    
+    def _parse_balance(self, balance):
+        if balance.endswith('S'):  # Debit.
+            balance = '-' + balance
+        balance = balance.replace(' S', '').replace(' H', '')
+        return _parse_decimal_number(balance, 'de_DE')
 
     def _check_logged_in(self):
         if not self._logged_in:
@@ -330,18 +348,18 @@ The accounts for a user will be identified by the bank account number (digits)
 or the obfuscated credit card number (1234******5678).
 """
 class PostFinance(Bank):
-    _BASE_URL = 'https://e-finance.postfinance.ch/ef/secure/html/'
-    _LOGIN_PATH = '?login&p_spr_cd=4'  # 4 = English.
+    _LOGIN_URL = (
+            'https://e-finance.postfinance.ch/ef/secure/html/?login&p_spr_cd=4')
     _DATE_FORMAT = '%d.%m.%Y'
 
     def __init__(self):
         self._browser = Browser()
         self._logged_in = False
-        self._account_names = None
+        self._accounts = None
 
     def login(self, username=None, password=None):
         self._logged_in = False
-        self._account_names = None
+        self._accounts = None
 
         if not username:
             username = raw_input('E-Finance number: ')
@@ -353,13 +371,12 @@ class PostFinance(Bank):
         
         # First login phase: E-Finance number and password.
         logger.info('Loading login page...')
-        browser.open(self._BASE_URL + self._LOGIN_PATH)
+        browser.open(self._LOGIN_URL)
 
-        forms = list(browser.forms())
-        if len(forms) != 1:
-            raise FetchError('Login form not found')
-
-        browser.select_form(nr=0)
+        try:
+            browser.select_form(name='login')
+        except mechanize.FormNotFoundError, e:
+            raise FetchError('Login form not found.')
         form = browser.form
         form['p_et_nr'] = username
         form['p_passw'] = password
@@ -369,19 +386,22 @@ class PostFinance(Bank):
         xhtml = _decode_content(response.read(), content_type_header)
 
         # Second login phase: Challenge and security token.
-        soup = BeautifulSoup.BeautifulStoneSoup(xhtml)
-        challengeElement = soup.find('span', {'id': 'challenge'})
-        if not challengeElement:
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        error_element = soup.find('div', {'class': 'error'})
+        if error_element:
+            logger.error('Login failed:\n%s' % _soup_to_text(error_element))
+            raise FetchError('Login failed.')
+        challenge_element = soup.find('span', {'id': 'challenge'})
+        if not challenge_element:
             raise FetchError('Security challenge not found.')
         print 'Please enter your login token.'
-        print 'Challenge:', challengeElement.getText()
+        print 'Challenge:', challenge_element.getText()
         token = raw_input('Login token: ')
         
-        forms = list(browser.forms())
-        if len(forms) != 1:
+        try:
+            browser.select_form(name='loginXXXXXXXXXXXXXXXXXXXXXXXX')
+        except mechanize.FormNotFoundError, e:
             raise FetchError('Login token form not found.')
-        
-        browser.select_form(nr=0)
         browser.form['p_si_nr'] = token
         logger.info('Logging in with token %s...' % token)
         response = browser.submit()
@@ -394,11 +414,11 @@ class PostFinance(Bank):
         self._logged_in = True
         logger.info('Log-in sucessful.')
 
-    def get_account_names(self):
+    def get_accounts(self):
         self._check_logged_in()
 
-        if self._account_names is not None:
-            return self._account_names
+        if self._accounts is not None:
+            return self._accounts
 
         browser = self._browser
 
@@ -408,8 +428,8 @@ class PostFinance(Bank):
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         xhtml = _decode_content(response.read(), content_type_header)
 
-        soup = BeautifulSoup.BeautifulStoneSoup(xhtml)
-        account_names = []
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        accounts = []
         try:
             payment_accounts_headline = soup.find(
                     'h2', text='Payment accounts').parent
@@ -419,22 +439,36 @@ class PostFinance(Bank):
             for account_table in payment_accounts_table, asset_accounts_table:
                 account_rows = account_table.find('tbody').findAll('tr')
                 for account_row in account_rows:
-                    account_name = account_row.findAll('td')[2].getText()
-                    account_names.append(account_name)
+                    cells = account_row.findAll('td')
+                    name = cells[2].getText()
+                    acc_type = cells[4].getText()
+                    currency = cells[5].getText()
+                    balance = self._parse_balance(cells[6].getText())
+                    balance_date = datetime.datetime.now()
+                    if acc_type == 'Private':
+                        account = model.CheckingAccount(
+                                name, balance, balance_date)
+                    elif acc_type == 'E-Deposito':
+                        account = model.SavingsAccount(
+                                name, balance, balance_date)
+                    elif acc_type == 'Safe custody deposit':
+                        account = model.InvestmentsAccount(
+                                name, balance, balance_date)
+                    accounts.append(account)
         except (AttributeError, IndexError):
-            raise FetchError('Couldn\'t load account names.')
-        self._account_names = account_names
+            raise FetchError('Couldn\'t load accounts.')
+        self._accounts = accounts
         
-        logger.info('Found %i account_namess.' % len(self._account_names))
-        return self._account_names
+        logger.info('Found %i accounts.' % len(self._accounts))
+        return self._accounts
 
-    def get_transactions(self, name, start, end):
+    def get_transactions(self, account, start, end):
         self._check_logged_in()
-
-        account_names = self.get_account_names()
-        if name not in account_names:
-            raise FetchError('Unknown account: %s' % name)
-
+        
+        if (not isinstance(account, model.CheckingAccount) and
+            not isinstance(account, model.SavingsAccount)):
+            raise FetchError('Unsupported account type: %s.', type(account))
+        
         browser = self._browser
         
         # Open transactions search form.
@@ -450,26 +484,26 @@ class PostFinance(Bank):
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
         try:
-            browser.select_form(name="bewegungen")
+            browser.select_form(name='bewegungen')
         except mechanize.FormNotFoundError, e:
             raise FetchError('Transactions form not found.')
         form = browser.form
         form['p_buchdat_von'] = formatted_start
         form['p_buchdat_bis'] = formatted_end
         form['p_buch_art'] = '9',  # 9 = All transaction types.
-        form['p_lkto_nr'] = name.replace('-', ''),
+        form['p_lkto_nr'] = account.name.replace('-', ''),
         form['p_anz_buchungen'] = '100',  # 100 entries per page.
         response = browser.submit()
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         xhtml = _decode_content(response.read(), content_type_header)
 
         # Parse response.
-        if name not in xhtml:
+        if account.name not in xhtml:
             raise FetchError('Transactions search failed.')
         if 'No booking entry found' in xhtml:
             logging.info('Couldn\'t find any transactions.')
             return []
-        soup = BeautifulSoup.BeautifulStoneSoup(xhtml)
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
         try:
             table_rows = soup.find('table').find('tbody').findAll('tr')
         except AttributeError:
@@ -486,7 +520,7 @@ class PostFinance(Bank):
                         'Skipping transaction with invalid date %s.', date)
                 continue
         
-            memo = _normalize_text(cells[2].getText())
+            memo = _normalize_text(_soup_to_text(cells[2]))
             
             credit = cells[3].getText().replace('&nbsp;', '')
             debit = cells[4].getText().replace('&nbsp;', '')
@@ -506,7 +540,7 @@ class PostFinance(Bank):
 
         # More than 100 transactions?
         try:
-            browser.select_form(name="forward")
+            browser.select_form(name='forward')
             logging.warning(
                     'Found more than 100 transactions. '
                     'Please be more specific with the dates.')
@@ -516,6 +550,11 @@ class PostFinance(Bank):
         logger.info('Found %i transactions.' % len(transactions))
 
         return transactions
+
+    def _parse_balance(self, balance):
+        # Sign is at the end.
+        balance = balance[-1] + balance[:-1]
+        return _parse_decimal_number(balance, 'de_CH')
 
     def _check_logged_in(self):
         if not self._logged_in:
@@ -574,9 +613,22 @@ def _normalize_text(text):
     @return: A normalized version of the input text.
     """
     text = WHITESPACE_PATTERN.sub(' ', text)
-    if text.isupper():
-        text = string.capwords(text)
-    return text
+    lines = []
+    for line in text.splitlines():
+        line = line.strip()
+        if line.isupper():
+            line = string.capwords(line)
+        lines.append(line)
+    return '\n'.join(lines)
+
+
+def _soup_to_text(element):
+    """Recursively converts a soup element to its text content."""
+    if isinstance(element, unicode):
+        return element
+    elif isinstance(element, BeautifulSoup.Tag) and element.name == 'br':
+        return '\n'
+    return ''.join(_soup_to_text(e) for e in element.contents)
 
 
 def _parse_decimal_number(number_string, lang):

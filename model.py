@@ -13,27 +13,27 @@ class Account(object):
     @type name: unicode
     @param name: Account name.
     
-    @type transactions: (Transaction,) or None
-    @param transactions: The transactions.
-    
     @type balance: float or None
     @param balance: Balance.
     
     @type balance_date: datetime.datetime or None
     @param balance_date: Balance date.
+    
+    @type transactions: (Transaction,) or None
+    @param transactions: The transactions.
     """
     def __init__(
-            self, name, transactions=None, balance=None, balance_date=None):
+            self, name, balance=None, balance_date=None, transactions=None):
         self.name = name
+        self.balance = balance
+        self.balance_date = balance_date
         if transactions:
             self.transactions = transactions
         else:
             self.transactions = ()
-        self.balance = balance
-        self.balance_date = balance_date
     
     def __repr__(self):
-        repr = [name]
+        repr = [self.name]
         if self.transactions:
             repr.append('%i transactions' % len(self.transactions))
         if self.balance:
