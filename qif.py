@@ -55,6 +55,7 @@ INVESTMENT_ITEMS = {
 }
 
 ACCOUNT_HEADER = '!Account'
+ACCOUNT_TYPE = '!Type:'
 
 ACCOUNT_INFO = {
     'name': 'N',
@@ -105,6 +106,7 @@ def serialize_account(account):
                     account.balance_date.strftime(DATE_FORMAT))
 
     account_fields.append(END_OF_ENTRY)
+    account_fields.append(ACCOUNT_TYPE + acc_type)
     
     txns = '\n'.join(serialize_transaction(t) for t in account.transactions)
     account_fields.append(txns)
