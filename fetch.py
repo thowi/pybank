@@ -93,12 +93,12 @@ class Bank(object):
         raise NotImplementedError()
 
 
-"""Fetcher for Deutsche Kreditbank (http://www.dkb.de/).
-
-The accounts for a user will be identified by the bank account number (digits)
-or the obfuscated credit card number (1234******5678).
-"""
 class DeutscheKreditBank(Bank):
+    """Fetcher for Deutsche Kreditbank (http://www.dkb.de/).
+
+    The accounts for a user will be identified by the bank account number (digits)
+    or the obfuscated credit card number (1234******5678).
+    """
     _BASE_URL = 'https://banking.dkb.de/dkb/-'
     _OVERVIEW_PATH = (
             '?$part=DkbTransactionBanking.index.menu'
@@ -342,8 +342,8 @@ class DeutscheKreditBank(Bank):
         
 
 
-"""Fetcher for PostFinance (http://www.postfincance.ch/)."""
 class PostFinance(Bank):
+    """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _LOGIN_URL = (
             'https://e-finance.postfinance.ch/ef/secure/html/?login&p_spr_cd=4')
     _DATE_FORMAT = '%d.%m.%Y'
