@@ -297,13 +297,11 @@ class DeutscheKreditBank(Bank):
             
             account = row[5]
             if account:
-                account = int(account)
-                memo += '\nAccount: %i' % account
+                memo += '\nAccount: %s' % account
             
             clearing = row[6]
             if clearing:
-                clearing = int(clearing)
-                memo += '\nClearing: %i' % clearing
+                memo += '\nClearing: %s' % clearing
             
             amount = _parse_decimal_number(row[7], 'de_DE')
             
