@@ -342,11 +342,7 @@ class DeutscheKreditBank(Bank):
         
 
 
-"""Fetcher for PostFinance (http://www.postfincance.ch/).
-
-The accounts for a user will be identified by the bank account number (digits)
-or the obfuscated credit card number (1234******5678).
-"""
+"""Fetcher for PostFinance (http://www.postfincance.ch/)."""
 class PostFinance(Bank):
     _LOGIN_URL = (
             'https://e-finance.postfinance.ch/ef/secure/html/?login&p_spr_cd=4')
@@ -389,8 +385,10 @@ class PostFinance(Bank):
         soup = BeautifulSoup.BeautifulSoup(xhtml)
         error_element = soup.find('div', {'class': 'error'})
         if error_element:
-            logger.error('Login failed:\n%s' % _soup_to_text(error_element))
-            raise FetchError('Login failed.')
+            error_text = _soup_to_text(error_element).strip()
+            if error_text:
+                logger.error('Login failed:\n%s' % error_text)
+                raise FetchError('Login failed.')
         challenge_element = soup.find('span', {'id': 'challenge'})
         if not challenge_element:
             raise FetchError('Security challenge not found.')
@@ -399,7 +397,7 @@ class PostFinance(Bank):
         token = raw_input('Login token: ')
         
         try:
-            browser.select_form(name='loginXXXXXXXXXXXXXXXXXXXXXXXX')
+            browser.select_form(name='login')
         except mechanize.FormNotFoundError, e:
             raise FetchError('Login token form not found.')
         browser.form['p_si_nr'] = token
@@ -493,12 +491,28 @@ class PostFinance(Bank):
         form['p_buch_art'] = '9',  # 9 = All transaction types.
         form['p_lkto_nr'] = account.name.replace('-', ''),
         form['p_anz_buchungen'] = '100',  # 100 entries per page.
-        response = browser.submit()
-        content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
-        xhtml = _decode_content(response.read(), content_type_header)
+        
+        transactions = []
+        while True:
+            response = browser.submit()
+            content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+            xhtml = _decode_content(response.read(), content_type_header)
+            transactions.extend(self._extract_transactions_from_result_page(
+                    xhtml, account.name))
+            # Next page?
+            try:
+                browser.select_form(name='forward')
+                logger.info('Loading next transactions page.')
+            except mechanize.FormNotFoundError, e:
+                break
+        
+        logger.info('Found %i transactions.' % len(transactions))
 
+        return transactions
+    
+    def _extract_transactions_from_result_page(self, xhtml, account_name):
         # Parse response.
-        if account.name not in xhtml:
+        if account_name not in xhtml:
             raise FetchError('Transactions search failed.')
         if 'No booking entry found' in xhtml:
             logging.info('Couldn\'t find any transactions.')
@@ -537,20 +551,8 @@ class PostFinance(Bank):
             
             transaction = model.Transaction(date, amount, memo=memo)
             transactions.append(transaction)
-
-        # More than 100 transactions?
-        try:
-            browser.select_form(name='forward')
-            logging.warning(
-                    'Found more than 100 transactions. '
-                    'Please be more specific with the dates.')
-        except mechanize.FormNotFoundError, e:
-            pass
-        
-        logger.info('Found %i transactions.' % len(transactions))
-
-        return transactions
-
+        return transactions 
+    
     def _parse_balance(self, balance):
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
