@@ -40,8 +40,8 @@ class Usage(Exception):
     [-u username|--username=username]
     [-p password|--password=password]
     [-a account|--account=account]     Can be repeated. Default: All accounts.
-    [-f YYYY-MM-DD|--from=YYYY-MM-DD]  Default: First day of this month.
-    [-t YYYY-MM-DD|--till=YYYY-MM-DD]  Default: Today.
+    [-f YYYY-MM-DD|--from=YYYY-MM-DD]  From (inclusive). Default: First day of last month.
+    [-t YYYY-MM-DD|--till=YYYY-MM-DD]  Until (exclusive). Default: First day of this month..
     [-o outfile|--outfile=outfile]     Default: STDOUT.
         Variables will be replaced: %(bank)s %(account)s %(from)s %(till)s
     [-v|--verbose]
@@ -104,9 +104,13 @@ def _parse_args(argv):
         except ValueError:
             raise Usage('Invalid from date: %s.', from_date)
     else:
-        # Beginning of this month.
+        # Beginning of last month.
         now = datetime.datetime.now()
-        from_date = datetime.datetime(now.year, now.month, 1)
+        if now.month == 1:
+          last_month = now.replace(year=now.year-1, month=12)
+        else:
+          last_month = now.replace(month=now.month-1)
+        from_date = datetime.datetime(last_month.year, last_month.month, 1)
 
     if till_date:
         try:
@@ -114,7 +118,9 @@ def _parse_args(argv):
         except ValueError:
             raise Usage('Invalid until date: %s.', till_date)
     else:
-        till_date = datetime.datetime.now()
+      # Beginning of this month.
+      now = datetime.datetime.now()
+      till_date = now.replace(day=1)
     
     return (
         bank_name, username, password, accounts, from_date, till_date,
