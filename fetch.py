@@ -32,22 +32,22 @@ class FetchError(Exception):
 class Browser(mechanize.Browser):
     def __init__(self):
         mechanize.Browser.__init__(self)
-        
+
         self.set_handle_equiv(True)
         # Still experimental.
         #self.set_handle_gzip(True)
         self.set_handle_redirect(True)
         self.set_handle_referer(True)
         self.set_handle_robots(False)
-        
+
         # Follows refresh 0 but not hangs on refresh > 0
         #br.set_handle_refresh(mechanize._http.HTTPRefreshProcessor(), max_time=1)
-        
+
         # Want debugging messages?
         #br.set_debug_http(True)
         #br.set_debug_redirects(True)
         #br.set_debug_responses(True)
-        
+
         self.addheaders = [('User-agent', (
                 'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1) '
                 'Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1'))]
@@ -57,10 +57,10 @@ class Bank(object):
     """Logs into a bank account website.
 
     Will prompt the user if either user name or password are not defined.
-    
+
     @type username: unicode
     @param username: The user name.
-    
+
     @type password: unicode
     @param password: The password.
     """
@@ -145,18 +145,18 @@ class DeutscheKreditBank(Bank):
     def login(self, username=None, password=None):
         self._logged_in = False
         self._accounts = None
-        
+
         if not username:
             username = raw_input('User: ')
-        
+
         if not password:
             password = getpass.getpass('PIN: ')
-        
+
         browser = self._browser
-        
+
         logger.info('Loading login page...')
         browser.open(self._BASE_URL)
-        
+
         try:
             browser.select_form(name='login')
         except mechanize.FormNotFoundError, e:
@@ -168,32 +168,32 @@ class DeutscheKreditBank(Bank):
         response = browser.submit()
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         html = _decode_content(response.read(), content_type_header)
-        
+
         if 'Finanzstatus' not in html:
             raise FetchError('Login failed.')
-        
+
         self._logged_in = True
         logger.info('Log-in sucessful.')
 
     def get_accounts(self):
         self._check_logged_in()
-        
+
         if self._accounts is not None:
             return self._accounts
-        
+
         browser = self._browser
-        
+
         overview_url = urlparse.urljoin(self._BASE_URL, self._OVERVIEW_PATH)
         logger.info('Loading accounts overview...')
         response = browser.open(overview_url)
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         html = _decode_content(response.read(), content_type_header)
-        
+
         soup = BeautifulSoup.BeautifulSoup(html)
         details_icons = soup.findAll('img', {'alt': 'Details'})
         if not details_icons:
             raise FetchError('No accounts found.')
-        
+
         self._accounts = []
         for details_icon in details_icons:
             try:
@@ -212,28 +212,28 @@ class DeutscheKreditBank(Bank):
                 self._accounts.append(account)
             except ValueError:
                 logging.error('Invalid account row. %s' % details_row)
-        
+
         logger.info('Found %i accounts.' % len(self._accounts))
         return self._accounts
 
     def get_transactions(self, account, start, end):
         self._check_logged_in()
-        
+
         accounts = self.get_accounts()
         try:
             account_index = accounts.index(account)
         except ValueError:
             raise FetchError('Unknown account: %s' % account)
         is_credit_card = isinstance(account, model.CreditCard)
-        
+
         browser = self._browser
-        
+
         # Open account.
         logger.info('Loading account info...')
         account_url = urlparse.urljoin(
                 self._BASE_URL, self._ACCOUNT_PATH_PATTERN % account_index)
         browser.open(account_url)
-        
+
         # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -247,7 +247,7 @@ class DeutscheKreditBank(Bank):
                 self._BASE_URL, search_url_pattern % (
                         formatted_start, formatted_end))
         browser.open(search_url)
-        
+
         # Download CSV.
         logger.info('Downloading transactions CSV...')
         if is_credit_card:
@@ -260,20 +260,20 @@ class DeutscheKreditBank(Bank):
         csv_data = _decode_content(response.read(), content_type_header)
         if account.name not in csv_data:
             raise FetchError('Account name not found in CSV.')
-        
+
         # Parse CSV into transactions.
         transactions = self._get_transactions_account_csv(
                 csv_data, is_credit_card)
         logger.info('Found %i transactions.' % len(transactions))
-        
+
         return transactions
-    
+
     def _is_credit_card(self, name):
         return '******' in name
-    
+
     def _get_transactions_account_csv(self, csv_data, is_credit_card):
         reader = _unicode_csv_reader(csv_data.splitlines(), delimiter=';')
-        
+
         transactions = []
         for row in reader:
             if is_credit_card:
@@ -283,33 +283,33 @@ class DeutscheKreditBank(Bank):
                         row)
             if transaction:
                 transactions.append(transaction)
-        
+
         return transactions
-    
+
     def _get_transaction_from_checking_account_row(self, row):
         if len(row) != 9:
             return
-        
+
         try:
             date = datetime.datetime.strptime(row[0], self._DATE_FORMAT)
             payee = _normalize_text(row[3])
             memo = _normalize_text(row[4])
-            
+
             account = row[5]
             if account:
                 memo += '\nAccount: %s' % account
-            
+
             clearing = row[6]
             if clearing:
                 memo += '\nClearing: %s' % clearing
-            
+
             amount = _parse_decimal_number(row[7], 'de_DE')
-            
+
             return model.Transaction(date, amount, payee, memo)
         except ValueError, e:
             logger.debug('Skipping invalid row: %s' % row)
             return
-    
+
     def _get_transaction_from_credit_card_row(self, row):
         if len(row) != 7:
             return
@@ -318,16 +318,16 @@ class DeutscheKreditBank(Bank):
             date = datetime.datetime.strptime(row[2], self._DATE_FORMAT)
             memo = _normalize_text(row[3])
             amount = _parse_decimal_number(row[4], 'de_DE')
-            
+
             orig_amount = row[5]
             if orig_amount:
                 memo += '\nOriginal amount: %s' % orig_amount
-            
+
             return model.Transaction(date, amount, memo=memo)
         except ValueError, e:
             logger.debug('Skipping invalid row: %s' % row)
             return
-    
+
     def _parse_balance(self, balance):
         if balance.endswith('S'):  # Debit.
             balance = '-' + balance
@@ -337,13 +337,14 @@ class DeutscheKreditBank(Bank):
     def _check_logged_in(self):
         if not self._logged_in:
             raise FetchError('Not logged in.')
-        
+
 
 
 class PostFinance(Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _LOGIN_URL = (
-            'https://e-finance.postfinance.ch/ef/secure/html/?login&p_spr_cd=4')
+            'https://e-finance.postfinance.ch/ef/secure/html/onl_kdl_login.proceed?login'
+            '&p_spr_cd=4')
     _DATE_FORMAT = '%d.%m.%Y'
 
     def __init__(self):
@@ -362,7 +363,7 @@ class PostFinance(Bank):
             password = getpass.getpass('Password: ')
 
         browser = self._browser
-        
+
         # First login phase: E-Finance number and password.
         logger.info('Loading login page...')
         browser.open(self._LOGIN_URL)
@@ -393,7 +394,7 @@ class PostFinance(Bank):
         print 'Please enter your login token.'
         print 'Challenge:', challenge_element.getText()
         token = raw_input('Login token: ')
-        
+
         try:
             browser.select_form(name='login')
         except mechanize.FormNotFoundError, e:
@@ -402,11 +403,31 @@ class PostFinance(Bank):
         logger.info('Logging in with token %s...' % token)
         response = browser.submit()
 
+        # Logout warning?
+        content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+        xhtml = _decode_content(response.read(), content_type_header)
+        if 'Logout reminder' in xhtml:
+            logger.info('Confirming logout reminder...')
+            try:
+                browser.select_form(name='login')
+            except mechanize.FormNotFoundError, e:
+                raise FetchError('Logout reminder form not found.')
+            response = browser.submit()
+            content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+            xhtml = _decode_content(response.read(), content_type_header)
+
+        # Ensure we're using the English interface.
+        selected_language = self._extract_language_from_page(xhtml)
+        if selected_language != 'en':
+            raise FetchError(
+                    'Wrong display language. Using "%s" instead of "en".' % selected_language)
+
         # Login successful?
-        accounts_links = browser.links(text='Accounts and assets')
-        if not accounts_links:
+        try:
+            browser.find_link(text='Accounts and assets')
+        except mechanize.LinkNotFoundError, e:
             raise FetchError('Login failed.')
-        
+
         self._logged_in = True
         logger.info('Log-in sucessful.')
 
@@ -454,26 +475,26 @@ class PostFinance(Bank):
         except (AttributeError, IndexError):
             raise FetchError('Couldn\'t load accounts.')
         self._accounts = accounts
-        
+
         logger.info('Found %i accounts.' % len(self._accounts))
         return self._accounts
 
     def get_transactions(self, account, start, end):
         self._check_logged_in()
-        
+
         if (not isinstance(account, model.CheckingAccount) and
             not isinstance(account, model.SavingsAccount)):
             raise FetchError('Unsupported account type: %s.', type(account))
-        
+
         browser = self._browser
-        
+
         # Open transactions search form.
         logger.info('Opening transactions search form...')
         accounts_link = browser.find_link(text='Accounts and assets')
         browser.follow_link(accounts_link)
         transactions_link = browser.find_link(text='Transactions')
         browser.follow_link(transactions_link)
-    
+
         # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -489,7 +510,7 @@ class PostFinance(Bank):
         form['p_buch_art'] = '9',  # 9 = All transaction types.
         form['p_lkto_nr'] = account.name.replace('-', ''),
         form['p_anz_buchungen'] = '100',  # 100 entries per page.
-        
+
         transactions = []
         while True:
             response = browser.submit()
@@ -503,11 +524,11 @@ class PostFinance(Bank):
                 logger.info('Loading next transactions page.')
             except mechanize.FormNotFoundError, e:
                 break
-        
+
         logger.info('Found %i transactions.' % len(transactions))
 
         return transactions
-    
+
     def _extract_transactions_from_result_page(self, xhtml, account_name):
         # Parse response.
         if account_name not in xhtml:
@@ -523,7 +544,7 @@ class PostFinance(Bank):
         transactions = []
         for table_row in table_rows:
             cells = table_row.findAll('td')
-        
+
             date = cells[1].getText()
             try:
                 date = datetime.datetime.strptime(date, self._DATE_FORMAT)
@@ -531,9 +552,9 @@ class PostFinance(Bank):
                 logger.warning(
                         'Skipping transaction with invalid date %s.', date)
                 continue
-        
+
             memo = _normalize_text(_soup_to_text(cells[2]))
-            
+
             credit = cells[3].getText().replace('&nbsp;', '')
             debit = cells[4].getText().replace('&nbsp;', '')
             if credit:
@@ -546,11 +567,20 @@ class PostFinance(Bank):
                 logger.warning(
                         'Skipping transaction with invalid amount %s.', amount)
                 continue
-            
+
             transaction = model.Transaction(date, amount, memo=memo)
             transactions.append(transaction)
-        return transactions 
-    
+        return transactions
+
+    def _extract_language_from_page(self, xhtml):
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        try:
+            selector = soup.find('div', {'id': 'languageSelector'})
+            selected_lang = selector.find('li', {'class': 'selected'})
+            return _soup_to_text(selected_lang)
+        except AttributeError:
+            raise FetchError('Couldn\'t find selected language.')
+
     def _parse_balance(self, balance):
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
@@ -566,7 +596,7 @@ def _decode_content(content, content_type_header):
 
     @type content: str
     @param content: The encoded content.
-    
+
     @type content_type_header: str or None
     @param content_type_header: The Content-Type header, if exists.
 
@@ -603,12 +633,12 @@ def _decode_content(content, content_type_header):
 
 def _normalize_text(text):
     """Returns a normalized version of the input text.
-    
+
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
-    
+
     @type text: unicode
     @param text: The input text.
-    
+
     @rtype: unicode
     @return: A normalized version of the input text.
     """
@@ -633,18 +663,18 @@ def _soup_to_text(element):
 
 def _parse_decimal_number(number_string, lang):
     """Parses a decimal number string into a float.
-    
+
     Can also handle thousands separators.
-    
+
     @type number_string: unicode
     @param number_string: The decimal number as a string.
-    
+
     @type lang: str
     @param lang: The locale of the format.
-    
+
     @rtype: float
     @return: The parsed number.
-    
+
     @raise ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
