@@ -446,12 +446,13 @@ class PostFinance(Bank):
         xhtml = _decode_content(response.read(), content_type_header)
 
         soup = BeautifulSoup.BeautifulSoup(xhtml)
+        content = soup.find('div', id='content')
         accounts = []
         try:
-            payment_accounts_headline = soup.find(
+            payment_accounts_headline = content.find(
                     'h2', text='Payment accounts').parent
             payment_accounts_table = payment_accounts_headline.findNext('table')
-            asset_accounts_headline = soup.find('h2', text='Assets').parent
+            asset_accounts_headline = content.find('h2', text='Assets').parent
             asset_accounts_table = asset_accounts_headline.findNext('table')
             for account_table in payment_accounts_table, asset_accounts_table:
                 account_rows = account_table.find('tbody').findAll('tr')
@@ -468,9 +469,14 @@ class PostFinance(Bank):
                     elif acc_type == 'E-Deposito':
                         account = model.SavingsAccount(
                                 name, balance, balance_date)
-                    elif acc_type == 'Safe custody deposit':
+                    elif acc_type in ('E-Trading', 'Safe custody deposit'):
                         account = model.InvestmentsAccount(
                                 name, balance, balance_date)
+                    else:
+                        logger.warning(
+                                'Skipping account %s with unknown type %s.' %
+                                (name, acc_type))
+                        continue
                     accounts.append(account)
         except (AttributeError, IndexError):
             raise FetchError('Couldn\'t load accounts.')
