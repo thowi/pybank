@@ -339,13 +339,13 @@ class DeutscheKreditBank(Bank):
             raise FetchError('Not logged in.')
 
 
-
 class PostFinance(Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _LOGIN_URL = (
-            'https://e-finance.postfinance.ch/ef/secure/html/onl_kdl_login.proceed?login'
-            '&p_spr_cd=4')
+            'https://e-finance.postfinance.ch/ef/secure/html/'
+            'onl_kdl_login.proceed?login&p_spr_cd=4')
     _DATE_FORMAT = '%d.%m.%Y'
+    _CREDIT_CARD_JS_LINK_PATTERN = re.compile(r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
 
     def __init__(self):
         self._browser = Browser()
@@ -413,14 +413,16 @@ class PostFinance(Bank):
             except mechanize.FormNotFoundError, e:
                 raise FetchError('Logout reminder form not found.')
             response = browser.submit()
-            content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+            content_type_header = response.info().getheader(
+                    CONTENT_TYPE_HEADER)
             xhtml = _decode_content(response.read(), content_type_header)
 
         # Ensure we're using the English interface.
         selected_language = self._extract_language_from_page(xhtml)
         if selected_language != 'en':
             raise FetchError(
-                    'Wrong display language. Using "%s" instead of "en".' % selected_language)
+                    'Wrong display language. Using "%s" instead of "en".'
+                    % selected_language)
 
         # Login successful?
         try:
@@ -432,10 +434,19 @@ class PostFinance(Bank):
         logger.info('Log-in sucessful.')
 
     def get_accounts(self):
-        self._check_logged_in()
-
         if self._accounts is not None:
             return self._accounts
+
+        accounts = []
+        accounts += self._fetch_accounts()
+        accounts += self._fetch_credit_cards()
+        self._accounts = accounts
+
+        logger.info('Found %i accounts.' % len(self._accounts))
+        return self._accounts
+
+    def _fetch_accounts(self):
+        self._check_logged_in()
 
         browser = self._browser
 
@@ -480,28 +491,70 @@ class PostFinance(Bank):
                     accounts.append(account)
         except (AttributeError, IndexError):
             raise FetchError('Couldn\'t load accounts.')
-        self._accounts = accounts
+        return accounts
 
-        logger.info('Found %i accounts.' % len(self._accounts))
-        return self._accounts
+    def _fetch_credit_cards(self):
+        self._check_logged_in()
+
+        browser = self._browser
+
+        logger.info('Loading credit cards overview...')
+        accounts_link = browser.find_link(text='Credit cards')
+        response = browser.follow_link(accounts_link)
+        content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+        xhtml = _decode_content(response.read(), content_type_header)
+
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        content = soup.find('div', id='content')
+        accounts = []
+        try:
+            account_table = content.find('table', {'class': 'table-total'})
+            account_rows = account_table.find('tbody').findAll('tr')
+            for account_row in account_rows:
+                cells = account_row.findAll('td')
+                name = cells[1].getText().replace(' ', '')
+                acc_type = cells[2].getText()
+                currency = cells[4].getText()
+                balance = self._parse_balance(cells[5].getText())
+                balance_date = datetime.datetime.now()
+                if (acc_type.startswith('Visa') or
+                    acc_type.startswith('Master')):
+                    account = model.CreditCard(name, balance, balance_date)
+                elif acc_type == 'Account number':
+                    # This is the account associated with the credit card.
+                    # We intentionally skip it, as it pretty much contains the
+                    # same data as the credit card.
+                    continue
+                else:
+                    logger.warning(
+                            'Skipping account %s with unknown type %s.' %
+                            (name, acc_type))
+                    continue
+                accounts.append(account)
+        except (AttributeError, IndexError):
+            raise FetchError('Couldn\'t load accounts.')
+        return accounts
 
     def get_transactions(self, account, start, end):
         self._check_logged_in()
 
-        if (not isinstance(account, model.CheckingAccount) and
-            not isinstance(account, model.SavingsAccount)):
+        if (isinstance(account, model.CheckingAccount) or
+            isinstance(account, model.SavingsAccount)):
+            return self._get_account_transactions(account, start, end)
+        elif isinstance(account, model.CreditCard):
+            return self._get_credit_card_transactions(account, start, end)
+        else:
             raise FetchError('Unsupported account type: %s.', type(account))
 
+    def _get_account_transactions(self, account, start, end):
         browser = self._browser
 
-        # Open transactions search form.
         logger.info('Opening transactions search form...')
         accounts_link = browser.find_link(text='Accounts and assets')
         browser.follow_link(accounts_link)
         transactions_link = browser.find_link(text='Transactions')
         browser.follow_link(transactions_link)
 
-        # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
@@ -522,8 +575,8 @@ class PostFinance(Bank):
             response = browser.submit()
             content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
             xhtml = _decode_content(response.read(), content_type_header)
-            transactions.extend(self._extract_transactions_from_result_page(
-                    xhtml, account.name))
+            transactions += self._extract_transactions_from_result_page(
+                    xhtml, account.name)
             # Next page?
             try:
                 browser.select_form(name='forward')
@@ -552,38 +605,163 @@ class PostFinance(Bank):
             cells = table_row.findAll('td')
 
             date = cells[1].getText()
-            try:
-                date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-            except ValueError, e:
-                logger.warning(
-                        'Skipping transaction with invalid date %s.', date)
-                continue
-
-            memo = _normalize_text(_soup_to_text(cells[2]))
-
+            memo = _soup_to_text(cells[2])
             credit = cells[3].getText().replace('&nbsp;', '')
             debit = cells[4].getText().replace('&nbsp;', '')
-            if credit:
-                amount = credit
-            else:
-                amount = '-' + debit
-            try:
-                amount = _parse_decimal_number(amount, 'de_CH')
-            except ValueError, e:
-                logger.warning(
-                        'Skipping transaction with invalid amount %s.', amount)
-                continue
+            transaction = self._parse_transaction_from_text(
+                    date, memo, credit, debit)
+            if transaction:
+                transactions.append(transaction)
 
-            transaction = model.Transaction(date, amount, memo=memo)
-            transactions.append(transaction)
         return transactions
+
+    def _get_credit_card_transactions(self, account, start, end):
+        browser = self._browser
+
+        logger.info('Opening credit cards overview...')
+        accounts_link = browser.find_link(text='Credit cards')
+        response = browser.follow_link(accounts_link)
+        content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+        xhtml = _decode_content(response.read(), content_type_header)
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        content = soup.find('div', id='content')
+
+        logger.debug('Finding account reference and level...')
+        ref, level = None, None
+        # Find the table row for that account.
+        account_table = content.find('table', {'class': 'table-total'})
+        account_rows = account_table.find('tbody').findAll('tr')
+        for account_row in account_rows:
+            cells = account_row.findAll('td')
+            js_link = cells[0].find('a')
+            name = cells[1].getText().replace(' ', '')
+            if name == account.name:
+                # Extract the account reference number and level from the
+                # JavaScript link.
+                ref, level = self._extract_cc_ref_and_level(js_link['href'])
+                break
+        if not ref or not level:
+            raise FetchError('Couldn\'t find account reference and level.')
+
+        logger.info('Opening transactions...')
+        try:
+            browser.select_form(name='formbew')
+        except mechanize.FormNotFoundError, e:
+            raise FetchError('Credit card navigation form not found.')
+        form = browser.form
+        form.set_all_readonly(False)  # To allow changing hidden inputs.
+        form['p_acc_ref_nr'] = ref
+        form['p_acc_level'] = level
+
+        # The first page contains the transactions for the current period.
+        # The second page for the previous period.
+        # Probably you cannot navigate further back. I couldn't try as my
+        # account is still rather new.
+        transactions = []
+        while True:
+            response = browser.submit()
+
+            content_type_header = response.info().getheader(
+                    CONTENT_TYPE_HEADER)
+            xhtml = _decode_content(response.read(), content_type_header)
+
+            transactions += self._extract_cc_transactions(xhtml, account.name)
+
+            # Next page?
+            # Transactions are in reverse chronological order.
+            all_requested_transactions_loaded = (
+                    len(transactions) and transactions[-1].date < start)
+            if all_requested_transactions_loaded:
+                break
+            else:
+                soup = BeautifulSoup.BeautifulSoup(xhtml)
+                content = soup.find('div', id='content')
+                forward_button = content.find(
+                        'input', value='Previous billing period')
+                if not forward_button:
+                    break
+                try:
+                    browser.select_form(name='beweg1')
+                    logger.info('Loading earlier transactions page...')
+                except mechanize.FormNotFoundError, e:
+                    break
+
+        # Filter the transactions for the requested date range.
+        transactions = filter(lambda t: start <= t.date < end, transactions)
+
+        logger.info('Found %i transactions.' % len(transactions))
+
+        return transactions
+
+    def _extract_cc_ref_and_level(self, href):
+        match = self._CREDIT_CARD_JS_LINK_PATTERN.match(href)
+        if match:
+            return match.groups()
+        else:
+            raise FetchError(
+                    'Couldn\'t extract credit card reference number and level '
+                    'from JavaScript link: ' + href)
+
+    def _extract_cc_transactions(self, xhtml, account_name):
+        # Check that we're on the proper page.
+        # Format the credit card number as "xxxx xxxx xxxx xxxx".
+        formatted_account_name = '%s %s %s %s' % (
+                account_name[0:4], account_name[4:8],
+                account_name[8:12], account_name[12:16])
+        if 'Transactions' not in xhtml or formatted_account_name not in xhtml:
+            raise FetchError(
+                    'Not the proper page for credit card %s.' % account_name)
+
+        # Parse response.
+        soup = BeautifulSoup.BeautifulSoup(xhtml)
+        content = soup.find('div', id='content')
+        try:
+            table_rows = soup.find('table').find('tbody').findAll('tr')
+        except AttributeError:
+            raise FetchError('Couldn\'t find transactions table.')
+        transactions = []
+        for table_row in table_rows:
+            cells = table_row.findAll('td')
+
+            date = cells[0].getText()
+            memo = _soup_to_text(cells[2])
+            credit = cells[3].getText().replace('&nbsp;', '')
+            debit = cells[4].getText().replace('&nbsp;', '')
+            transaction = self._parse_transaction_from_text(
+                    date, memo, credit, debit)
+            if transaction:
+                transactions.append(transaction)
+
+        return transactions
+
+    def _parse_transaction_from_text(self, date, memo, credit, debit):
+        try:
+            date = datetime.datetime.strptime(date, self._DATE_FORMAT)
+        except ValueError, e:
+            logger.warning(
+                    'Skipping transaction with invalid date %s.', date)
+            return
+
+        memo = _normalize_text(memo)
+        if credit:
+            amount = credit
+        else:
+            amount = '-' + debit
+        try:
+            amount = _parse_decimal_number(amount, 'de_CH')
+        except ValueError, e:
+            logger.warning(
+                    'Skipping transaction with invalid amount %s.', amount)
+            return
+
+        return model.Transaction(date, amount, memo=memo)
 
     def _extract_language_from_page(self, xhtml):
         soup = BeautifulSoup.BeautifulSoup(xhtml)
         try:
             selector = soup.find('div', {'id': 'languageSelector'})
             selected_lang = selector.find('li', {'class': 'selected'})
-            return _soup_to_text(selected_lang)
+            return _soup_to_text(selected_lang).strip()
         except AttributeError:
             raise FetchError('Couldn\'t find selected language.')
 
