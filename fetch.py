@@ -345,7 +345,11 @@ class PostFinance(Bank):
             'https://e-finance.postfinance.ch/ef/secure/html/'
             'onl_kdl_login.proceed?login&p_spr_cd=4')
     _DATE_FORMAT = '%d.%m.%Y'
-    _CREDIT_CARD_JS_LINK_PATTERN = re.compile(r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
+    _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
+            r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
+    _CREDIT_CARD_TX_HEADER_PATTERN = re.compile(
+            r'Transactions in the (current|previous billing|'
+            'last-but-one billing) period')
 
     def __init__(self):
         self._browser = Browser()
@@ -653,10 +657,8 @@ class PostFinance(Bank):
         form['p_acc_ref_nr'] = ref
         form['p_acc_level'] = level
 
-        # The first page contains the transactions for the current period.
-        # The second page for the previous period.
-        # Probably you cannot navigate further back. I couldn't try as my
-        # account is still rather new.
+        # You can see the transactions for three periods:
+        # Current, previous and last-but-one.
         transactions = []
         while True:
             response = browser.submit()
@@ -664,27 +666,40 @@ class PostFinance(Bank):
             content_type_header = response.info().getheader(
                     CONTENT_TYPE_HEADER)
             xhtml = _decode_content(response.read(), content_type_header)
-
+            
+            # Get the period of the current page.
+            match = _CREDIT_CARD_TX_HEADER_PATTERN.match(xhtml)
+            if match:
+              current_period = match.group(1)
+            else:
+              raise FetchError(
+                      'Not a credit card transactions page %s.' % account.name)
+              
             transactions += self._extract_cc_transactions(xhtml, account.name)
 
-            # Next page?
+            # All transactions loaded or do we need to go to the next page?
             # Transactions are in reverse chronological order.
             all_requested_transactions_loaded = (
                     len(transactions) and transactions[-1].date < start)
             if all_requested_transactions_loaded:
                 break
+                
+            # Go to the next page.
+            # You can navigate to the previous period using the "beweg1" form,
+            # and to the last-but-one period using the "beweg2" form.
+            soup = BeautifulSoup.BeautifulSoup(xhtml)
+            content = soup.find('div', id='content')
+            if current_period == 'current':
+              form_name = 'beweg1'
+            elif current_period == 'previous':
+              form_name = 'beweg2'
             else:
-                soup = BeautifulSoup.BeautifulSoup(xhtml)
-                content = soup.find('div', id='content')
-                forward_button = content.find(
-                        'input', value='Previous billing period')
-                if not forward_button:
-                    break
-                try:
-                    browser.select_form(name='beweg1')
-                    logger.info('Loading earlier transactions page...')
-                except mechanize.FormNotFoundError, e:
-                    break
+              break
+            try:
+                browser.select_form(name=form_name)
+                logger.info('Loading earlier transactions page...')
+            except mechanize.FormNotFoundError, e:
+                break
 
         # Filter the transactions for the requested date range.
         transactions = filter(lambda t: start <= t.date < end, transactions)
@@ -708,9 +723,6 @@ class PostFinance(Bank):
         formatted_account_name = '%s %s %s %s' % (
                 account_name[0:4], account_name[4:8],
                 account_name[8:12], account_name[12:16])
-        if 'Transactions' not in xhtml or formatted_account_name not in xhtml:
-            raise FetchError(
-                    'Not the proper page for credit card %s.' % account_name)
 
         # Parse response.
         soup = BeautifulSoup.BeautifulSoup(xhtml)
