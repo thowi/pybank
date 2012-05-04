@@ -120,7 +120,7 @@ def _parse_args(argv):
     else:
       # Beginning of this month.
       now = datetime.datetime.now()
-      till_date = now.replace(day=1)
+      till_date = datetime.datetime(now.year, now.month, 1)
     
     return (
         bank_name, username, password, accounts, from_date, till_date,
