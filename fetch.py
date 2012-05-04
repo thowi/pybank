@@ -668,19 +668,21 @@ class PostFinance(Bank):
             xhtml = _decode_content(response.read(), content_type_header)
             
             # Get the period of the current page.
-            match = _CREDIT_CARD_TX_HEADER_PATTERN.match(xhtml)
+            match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(xhtml)
             if match:
               current_period = match.group(1)
             else:
               raise FetchError(
                       'Not a credit card transactions page %s.' % account.name)
               
+            # They should be sorted in reverse chronological order already, but
+            # let's make this explicit.
             transactions += self._extract_cc_transactions(xhtml, account.name)
+            transactions.sort(key=lambda t: t.date, reverse=True)
 
             # All transactions loaded or do we need to go to the next page?
-            # Transactions are in reverse chronological order.
             all_requested_transactions_loaded = (
-                    len(transactions) and transactions[-1].date < start)
+                    transactions and transactions[-1].date < start)
             if all_requested_transactions_loaded:
                 break
                 
@@ -699,6 +701,7 @@ class PostFinance(Bank):
                 browser.select_form(name=form_name)
                 logger.info('Loading earlier transactions page...')
             except mechanize.FormNotFoundError, e:
+                logger.info('No more earlier transactions.')
                 break
 
         # Filter the transactions for the requested date range.
