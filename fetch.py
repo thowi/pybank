@@ -659,6 +659,7 @@ class PostFinance(Bank):
 
         # You can see the transactions for three periods:
         # Current, previous and last-but-one.
+        # We always load all and post-filter.
         transactions = []
         while True:
             response = browser.submit()
@@ -674,18 +675,10 @@ class PostFinance(Bank):
             else:
               raise FetchError(
                       'Not a credit card transactions page %s.' % account.name)
+            logger.debug('Current period: ' + current_period)
               
-            # They should be sorted in reverse chronological order already, but
-            # let's make this explicit.
             transactions += self._extract_cc_transactions(xhtml, account.name)
-            transactions.sort(key=lambda t: t.date, reverse=True)
 
-            # All transactions loaded or do we need to go to the next page?
-            all_requested_transactions_loaded = (
-                    transactions and transactions[-1].date < start)
-            if all_requested_transactions_loaded:
-                break
-                
             # Go to the next page.
             # You can navigate to the previous period using the "beweg1" form,
             # and to the last-but-one period using the "beweg2" form.
@@ -693,9 +686,10 @@ class PostFinance(Bank):
             content = soup.find('div', id='content')
             if current_period == 'current':
               form_name = 'beweg1'
-            elif current_period == 'previous':
+            elif current_period == 'previous billing':
               form_name = 'beweg2'
             else:
+              logger.debug('Hit last transactions page. Exiting loop.')
               break
             try:
                 browser.select_form(name=form_name)
@@ -706,6 +700,10 @@ class PostFinance(Bank):
 
         # Filter the transactions for the requested date range.
         transactions = filter(lambda t: start <= t.date < end, transactions)
+
+        # They should be sorted in reverse chronological order already, but
+        # let's make this explicit.
+        transactions.sort(key=lambda t: t.date, reverse=True)
 
         logger.info('Found %i transactions.' % len(transactions))
 
