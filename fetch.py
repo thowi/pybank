@@ -677,7 +677,7 @@ class PostFinance(Bank):
                       'Not a credit card transactions page %s.' % account.name)
             logger.debug('Current period: ' + current_period)
               
-            transactions += self._extract_cc_transactions(xhtml, account.name)
+            transactions += self._extract_cc_transactions(xhtml)
 
             # Go to the next page.
             # You can navigate to the previous period using the "beweg1" form,
@@ -718,20 +718,20 @@ class PostFinance(Bank):
                     'Couldn\'t extract credit card reference number and level '
                     'from JavaScript link: ' + href)
 
-    def _extract_cc_transactions(self, xhtml, account_name):
-        # Check that we're on the proper page.
-        # Format the credit card number as "xxxx xxxx xxxx xxxx".
-        formatted_account_name = '%s %s %s %s' % (
-                account_name[0:4], account_name[4:8],
-                account_name[8:12], account_name[12:16])
-
+    def _extract_cc_transactions(self, xhtml):
         # Parse response.
         soup = BeautifulSoup.BeautifulSoup(xhtml)
         content = soup.find('div', id='content')
         try:
-            table_rows = soup.find('table').find('tbody').findAll('tr')
+            table = soup.find('table', {'class': 'table-total'})
+            tbody = table.find('tbody')
+            if tbody:
+                table_rows = table.find('tbody').findAll('tr')
+            else:
+                # Empty transaction list.
+                table_rows = []
         except AttributeError:
-            raise FetchError('Couldn\'t find transactions table.')
+            raise FetchError('Couldn\'t find transactions.')
         transactions = []
         for table_row in table_rows:
             cells = table_row.findAll('td')
