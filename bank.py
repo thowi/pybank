@@ -18,12 +18,13 @@ import re
 import sys
 
 import model
-import fetch
+import fetch.dkb
+import fetch.postfinance
 import qif
 
 BANK_BY_NAME = {
-    'dkb': fetch.DeutscheKreditBank,
-    'postfinance': fetch.PostFinance,
+    'dkb': fetch.dkb.DeutscheKreditBank,
+    'postfinance': fetch.postfinance.PostFinance,
 }
 DATE_FORMAT = '%Y-%m-%d'
 INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z0-9-_.]')
@@ -48,7 +49,7 @@ class Usage(Exception):
     """
     def __init__(self, msg=''):
         self.msg = msg
-    
+
     def __str__(self):
         banks = 'Available banks: %s.' % ', '.join(sorted(BANK_BY_NAME.keys()))
         return '\n'.join((self.__doc__, self.msg, banks))
@@ -63,7 +64,7 @@ def _parse_args(argv):
     till_date = None
     output_filename = None
     debug = False
-    
+
     options = 'hb:u:a:p:f:t:o:v'
     options_long = [
             'help', 'bank=', 'username=', 'password=', 'account=', 'from=',
@@ -92,7 +93,7 @@ def _parse_args(argv):
             output_filename = arg
         if opt in ('-v', '--verbose'):
             debug = True
-        
+
     if not bank_name:
         raise Usage('Must specify a bank.')
     if bank_name not in BANK_BY_NAME:
@@ -121,7 +122,7 @@ def _parse_args(argv):
       # Beginning of this month.
       now = datetime.datetime.now()
       till_date = datetime.datetime(now.year, now.month, 1)
-    
+
     return (
         bank_name, username, password, accounts, from_date, till_date,
         output_filename, debug)
@@ -134,16 +135,16 @@ def _fetch_accounts(
     bank = bank_class()
 
     bank.login(username=username, password=password)
-    
+
     available_accounts = bank.get_accounts()
     if not available_accounts:
         logger.warning('No accounts found.')
         return
-    
+
     logger.info(
             'Available accounts: %s.',
             ', '.join(unicode(a) for a in available_accounts))
-    
+
     if not account_names:
         # Download all accounts by default.
         accounts = available_accounts
@@ -157,7 +158,7 @@ def _fetch_accounts(
                 accounts.append(accounts_by_name[account_name])
             except KeyError:
                 logger.error('Account not found: %s.', account_name)
-    
+
     for account in accounts:
         logger.info('Fetching account: %s.', account.name)
         account.transactions = bank.get_transactions(
