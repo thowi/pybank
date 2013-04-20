@@ -103,7 +103,7 @@ class DeutscheKreditBank(Bank):
     _OVERVIEW_PATH = (
             '?$part=DkbTransactionBanking.index.menu'
             '&treeAction=selectNode'
-            '&node=1'
+            '&node=0'
             '&tree=menu')
     _ACCOUNT_PATH_PATTERN = (
             '?$part=DkbTransactionBanking.content.banking.FinancialStatus.'
@@ -188,23 +188,24 @@ class DeutscheKreditBank(Bank):
         response = browser.open(overview_url)
         content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
         html = _decode_content(response.read(), content_type_header)
-
         soup = BeautifulSoup.BeautifulSoup(html)
-        details_icons = soup.findAll('img', {'alt': 'Details'})
-        if not details_icons:
-            raise FetchError('No accounts found.')
 
+        accounts_table = soup.find(
+                'table', {'class': 'financialStatusTable dropdownAnchor'})
+        account_rows = accounts_table.find('tbody').findAll('tr')
         self._accounts = []
-        for details_icon in details_icons:
+        for account_row in account_rows:
             try:
-                details_row = details_icon.parent.parent.parent
-                cells = details_row.findAll('td')
-                name = cells[0].getText()
-                balance_date_text = cells[2].getText()
+                if 'sum' in account_row.get('class', ''):
+                    continue
+                headers = account_row.findAll('th')
+                cells = account_row.findAll('td')
+                name = headers[0].getText()
+                acc_type = cells[0].getText()
+                balance = self._parse_balance(headers[1].getText())
+                balance_date_text = cells[1].getText()
                 balance_date = datetime.datetime.strptime(
                         balance_date_text, self._DATE_FORMAT)
-                balance_text = cells[3].getText()
-                balance = self._parse_balance(balance_text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(name, balance, balance_date)
                 else:
@@ -342,8 +343,10 @@ class DeutscheKreditBank(Bank):
 class PostFinance(Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _LOGIN_URL = (
-            'https://e-finance.postfinance.ch/ef/secure/html/'
-            'onl_kdl_login.proceed?login&p_spr_cd=4')
+            'https://e-finance.postfinance.ch/secure/fp/html/'
+            'e-finance?login&p_spr_cd=4')
+    _OVERVIEW_URL_ENGLISH = (
+            'https://e-finance.postfinance.ch/secure/fp/html/e-finance?lang=en')
     _DATE_FORMAT = '%d.%m.%Y'
     _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
@@ -422,11 +425,21 @@ class PostFinance(Bank):
             xhtml = _decode_content(response.read(), content_type_header)
 
         # Ensure we're using the English interface.
+        import pdb; pdb.set_trace()
         selected_language = self._extract_language_from_page(xhtml)
         if selected_language != 'en':
-            raise FetchError(
-                    'Wrong display language. Using "%s" instead of "en".'
+            logger.info(
+                    'Wrong display language. Using "%s" instead of "en". '
+                    'Trying to switch to English.'
                     % selected_language)
+            response = browser.open(self._OVERVIEW_URL_ENGLISH)
+            content_type_header = response.info().getheader(CONTENT_TYPE_HEADER)
+            xhtml = _decode_content(response.read(), content_type_header)
+            selected_language = self._extract_language_from_page(xhtml)
+            if selected_language != 'en':
+                raise FetchError(
+                        'Wrong display language "%s" instead of "en".'
+                        % selected_language)
 
         # Login successful?
         try:
@@ -464,19 +477,18 @@ class PostFinance(Bank):
         content = soup.find('div', id='content')
         accounts = []
         try:
-            payment_accounts_headline = content.find(
-                    'h2', text='Payment accounts').parent
-            payment_accounts_table = payment_accounts_headline.findNext('table')
-            asset_accounts_headline = content.find('h2', text='Assets').parent
-            asset_accounts_table = asset_accounts_headline.findNext('table')
+            account_tables = content.findAll('table', 'table-total')
+            payment_accounts_table = account_tables[0]
+            asset_accounts_table = account_tables[1]
             for account_table in payment_accounts_table, asset_accounts_table:
                 account_rows = account_table.find('tbody').findAll('tr')
                 for account_row in account_rows:
                     cells = account_row.findAll('td')
-                    name = cells[2].getText()
-                    acc_type = cells[4].getText()
-                    currency = cells[5].getText()
-                    balance = self._parse_balance(cells[6].getText())
+                    name_and_type = cells[2].getText()
+                    name = name_and_type.split()[0]
+                    acc_type = ' '.join(name_and_type.split()[1:])
+                    currency = cells[4].getText()
+                    balance = self._parse_balance(cells[5].getText())
                     balance_date = datetime.datetime.now()
                     if acc_type == 'Private':
                         account = model.CheckingAccount(
@@ -667,7 +679,7 @@ class PostFinance(Bank):
             content_type_header = response.info().getheader(
                     CONTENT_TYPE_HEADER)
             xhtml = _decode_content(response.read(), content_type_header)
-            
+
             # Get the period of the current page.
             match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(xhtml)
             if match:
@@ -676,8 +688,14 @@ class PostFinance(Bank):
               raise FetchError(
                       'Not a credit card transactions page %s.' % account.name)
             logger.debug('Current period: ' + current_period)
-              
+
             transactions += self._extract_cc_transactions(xhtml)
+
+            # Add a marker transaction for the page break.
+            if (current_period in ('current', 'previous billing') and
+                len(transactions) > 0):
+                transactions.append(model.Transaction(
+                    transactions[-1].date, amount=0, memo='---'))
 
             # Go to the next page.
             # You can navigate to the previous period using the "beweg1" form,
@@ -773,7 +791,8 @@ class PostFinance(Bank):
         soup = BeautifulSoup.BeautifulSoup(xhtml)
         try:
             selector = soup.find('div', {'id': 'languageSelector'})
-            selected_lang = selector.find('li', {'class': 'selected'})
+            selected_lang = selector.find(
+                    'li', {'class': re.compile(r'\bselected\b')})
             return _soup_to_text(selected_lang).strip()
         except AttributeError:
             raise FetchError('Couldn\'t find selected language.')
