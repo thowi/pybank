@@ -238,7 +238,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             return
 
         try:
-            date = datetime.datetime.strptime(row[2], self._DATE_FORMAT)
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             memo = fetch.normalize_text(row[3])
             amount = fetch.parse_decimal_number(row[4], 'de_DE')
 
