@@ -5,18 +5,23 @@ import getpass
 import logging
 import re
 
-import BeautifulSoup
+#import pyvirtualdisplay
+from selenium import webdriver
+from selenium.common import exceptions
+from selenium.webdriver.support import ui
 
 import fetch
-import fetch.browser
+import fetch.bank
 import model
 
 
+#display = pyvirtualdisplay.Display(visible=0, size=(1024, 768))
+#display.start()
 logger = logging.getLogger(__name__)
 
 
-class PostFinance(Bank):
-    """fetch.FetchErrorr for PostFinance (http://www.postfincance.ch/)."""
+class PostFinance(fetch.bank.Bank):
+    """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _LOGIN_URL = (
             'https://e-finance.postfinance.ch/secure/fp/html/'
             'e-finance?login&p_spr_cd=4')
@@ -29,12 +34,9 @@ class PostFinance(Bank):
             r'Transactions in the (current|previous billing|'
             'last-but-one billing) period')
 
-    def __init__(self):
-        self._browser = fetch.browser.Browser()
-        self._logged_in = False
-        self._accounts = None
-
     def login(self, username=None, password=None):
+        self._browser = webdriver.Firefox()
+        self._browser.implicitly_wait(5)
         self._logged_in = False
         self._accounts = None
 
@@ -45,79 +47,68 @@ class PostFinance(Bank):
             password = getpass.getpass('Password: ')
 
         browser = self._browser
+        browser.get(self._LOGIN_URL)
 
-        # First login phase: E-Finance number and password.
-        logger.info('Loading login page...')
-        browser.open(self._LOGIN_URL)
-
+        # First login phase: User and password.
         try:
-            browser.select_form(name='login')
-        except mechanize.FormNotFoundError, e:
-            raise fetch.FetchErrorrror('Login form not found.')
-        form = browser.form
-        form['p_et_nr'] = username
-        form['p_passw'] = password
-        logger.info('Logging in with user name %s...' % username)
-        browser.submit()
-        xhtml = browser.get_decoded_response()
-
-        # Second login phase: Challenge and security token.
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
-        error_element = soup.find('div', {'class': 'error'})
-        if error_element:
-            error_text = fetch.soup_to_text(error_element).strip()
-            if error_text:
-                logger.error('Login failed:\n%s' % error_text)
-                raise fetch.FetchErrorrror('Login failed.')
-        challenge_element = soup.find('span', {'id': 'challenge'})
-        if not challenge_element:
-            raise fetch.FetchErrorrror('Security challenge not found.')
-        print 'Please enter your login token.'
-        print 'Challenge:', challenge_element.getText()
-        token = raw_input('Login token: ')
-
-        try:
-            browser.select_form(name='login')
-        except mechanize.FormNotFoundError, e:
-            raise fetch.FetchErrorrror('Login token form not found.')
-        browser.form['p_si_nr'] = token
-        logger.info('Logging in with token %s...' % token)
-        browser.submit()
-
-        # Logout warning?
-        xhtml = browser.get_decoded_response()
-        if 'Logout reminder' in xhtml:
-            logger.info('Confirming logout reminder...')
-            try:
-                browser.select_form(name='login')
-            except mechanize.FormNotFoundError, e:
-                raise fetch.FetchErrorrror('Logout reminder form not found.')
-            browser.submit()
-            xhtml = browser.get_decoded_response()
-
-        # Ensure we're using the English interface.
-        selected_language = self._extract_language_from_page(xhtml)
-        if selected_language != 'en':
-            logger.info(
-                    'Wrong display language. Using "%s" instead of "en". '
-                    'Trying to switch to English.'
-                    % selected_language)
-            browser.open(self._OVERVIEW_URL_ENGLISH)
-            xhtml = browser.get_decoded_response()
-            selected_language = self._extract_language_from_page(xhtml)
-            if selected_language != 'en':
-                raise fetch.FetchErrorrror(
-                        'Wrong display language "%s" instead of "en".'
-                        % selected_language)
+            login_form = browser.find_element_by_name('login')
+        except exceptions.NoSuchElementException, e:
+            raise fetch.FetchError('Login form not found.')
+        login_form.find_element_by_name('p_et_nr').send_keys(username)
+        login_form.find_element_by_name('p_passw').send_keys(password)
+        login_form.submit()
 
         # Login successful?
         try:
-            browser.find_link(text='Accounts and assets')
-        except mechanize.LinkNotFoundError, e:
-            raise fetch.FetchErrorrror('Login failed.')
+            error_element = browser.find_element_by_class_name('error')
+            logger.error('Login failed:\n%s' % error_element.text)
+            raise fetch.FetchError('Login failed.')
+        except exceptions.NoSuchElementException, e:
+            pass
+
+        # Second login phase: Challenge and security token.
+        try:
+            challenge_element = browser.find_element_by_id('challenge')
+        except exceptions.NoSuchElementException, e:
+            raise fetch.FetchError('Security challenge not found.')
+        print 'Challenge:', challenge_element.text
+        token = raw_input('Login token: ')
+        try:
+            login_form = browser.find_element_by_name('login')
+        except exceptions.NoSuchElementException, e:
+            raise fetch.FetchError('Login token form not found.')
+        login_form.find_element_by_name('p_si_nr').send_keys(token)
+        login_form.submit()
+
+        # Logout warning?
+        if 'Logout reminder' in browser.page_source:
+            logger.info('Confirming logout reminder...')
+            try:
+                login_form = browser.find_element_by_name('login')
+            except exceptions.NoSuchElementException, e:
+                raise fetch.FetchError('Logout reminder form not found.')
+            login_form.submit()
+
+        # Ensure we're using the English interface.
+        selected_language = self._extract_language_from_page()
+        if selected_language != 'en':
+            raise fetch.FetchError(
+                    'Wrong display language "%s" instead of "en".'
+                    % selected_language)
+
+        # Login successful?
+        try:
+            browser.find_element_by_link_text('Accounts and assets')
+        except exceptions.NoSuchElementException, e:
+            raise fetch.FetchError('Login failed.')
 
         self._logged_in = True
         logger.info('Log-in sucessful.')
+
+    def logout(self):
+        self._browser.close()
+        self._logged_in = False
+        self._accounts = None
 
     def get_accounts(self):
         if self._accounts is not None:
@@ -137,26 +128,24 @@ class PostFinance(Bank):
         browser = self._browser
 
         logger.info('Loading accounts overview...')
-        accounts_link = browser.find_link(text='Accounts and assets')
-        browser.follow_link(accounts_link)
-        xhtml = browser.get_decoded_response()
+        browser.find_element_by_link_text('Accounts and assets').click()
+        content = browser.find_element_by_id('content')
 
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
-        content = soup.find('div', id='content')
         accounts = []
         try:
-            account_tables = content.findAll('table', 'table-total')
+            account_tables = content.find_elements_by_class_name('table-total')
             payment_accounts_table = account_tables[0]
             asset_accounts_table = account_tables[1]
             for account_table in payment_accounts_table, asset_accounts_table:
-                account_rows = account_table.find('tbody').findAll('tr')
+                tbody = account_table.find_element_by_tag_name('tbody')
+                account_rows = tbody.find_elements_by_tag_name('tr')
                 for account_row in account_rows:
-                    cells = account_row.findAll('td')
-                    name_and_type = cells[2].getText()
+                    cells = account_row.find_elements_by_tag_name('td')
+                    name_and_type = cells[2].text
                     name = name_and_type.split()[0]
                     acc_type = ' '.join(name_and_type.split()[1:])
-                    currency = cells[4].getText()
-                    balance = self._parse_balance(cells[5].getText())
+                    currency = cells[4].text.strip()
+                    balance = self._parse_balance(cells[5].text.strip())
                     balance_date = datetime.datetime.now()
                     if acc_type == 'Private':
                         account = model.CheckingAccount(
@@ -164,7 +153,7 @@ class PostFinance(Bank):
                     elif acc_type == 'E-Deposito':
                         account = model.SavingsAccount(
                                 name, balance, balance_date)
-                    elif acc_type in ('E-Trading', 'Safe custody deposit'):
+                    elif acc_type in ('E-trading', 'Safe custody deposit'):
                         account = model.InvestmentsAccount(
                                 name, balance, balance_date)
                     else:
@@ -173,8 +162,8 @@ class PostFinance(Bank):
                                 (name, acc_type))
                         continue
                     accounts.append(account)
-        except (AttributeError, IndexError):
-            raise fetch.FetchErrorrror('Couldn\'t load accounts.')
+        except (exceptions.NoSuchElementException, AttributeError, IndexError):
+            raise fetch.FetchError('Couldn\'t load accounts.')
         return accounts
 
     def _fetch_credit_cards(self):
@@ -183,22 +172,20 @@ class PostFinance(Bank):
         browser = self._browser
 
         logger.info('Loading credit cards overview...')
-        accounts_link = browser.find_link(text='Credit cards')
-        browser.follow_link(accounts_link)
-        xhtml = browser.get_decoded_response()
+        browser.find_element_by_link_text('Credit cards').click()
+        content = browser.find_element_by_id('content')
 
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
-        content = soup.find('div', id='content')
         accounts = []
         try:
-            account_table = content.find('table', {'class': 'table-total'})
-            account_rows = account_table.find('tbody').findAll('tr')
+            account_table = content.find_element_by_class_name('table-total')
+            tbody = account_table.find_element_by_tag_name('tbody')
+            account_rows = tbody.find_elements_by_tag_name('tr')
             for account_row in account_rows:
-                cells = account_row.findAll('td')
-                name = cells[1].getText().replace(' ', '')
-                acc_type = cells[2].getText()
-                currency = cells[4].getText()
-                balance = self._parse_balance(cells[5].getText())
+                cells = account_row.find_elements_by_tag_name('td')
+                name = cells[1].text.replace(' ', '')
+                acc_type = cells[2].text.strip()
+                currency = cells[4].text.strip()
+                balance = self._parse_balance(cells[5].text.strip())
                 balance_date = datetime.datetime.now()
                 if (acc_type.startswith('Visa') or
                     acc_type.startswith('Master')):
@@ -214,8 +201,8 @@ class PostFinance(Bank):
                             (name, acc_type))
                     continue
                 accounts.append(account)
-        except (AttributeError, IndexError):
-            raise fetch.FetchErrorrror('Couldn\'t load accounts.')
+        except (exceptions.NoSuchElementException, AttributeError, IndexError):
+            raise fetch.FetchError('Couldn\'t load accounts.')
         return accounts
 
     def get_transactions(self, account, start, end):
@@ -227,69 +214,74 @@ class PostFinance(Bank):
         elif isinstance(account, model.CreditCard):
             return self._get_credit_card_transactions(account, start, end)
         else:
-            raise fetch.FetchErrorrror('Unsupported account type: %s.', type(account))
+            raise fetch.FetchError('Unsupported account type: %s.', type(account))
 
     def _get_account_transactions(self, account, start, end):
         browser = self._browser
 
         logger.info('Opening transactions search form...')
-        accounts_link = browser.find_link(text='Accounts and assets')
-        browser.follow_link(accounts_link)
-        transactions_link = browser.find_link(text='Transactions')
-        browser.follow_link(transactions_link)
+        browser.find_element_by_link_text('Accounts and assets').click()
+        browser.find_element_by_link_text('Transactions').click()
+        content = browser.find_element_by_id('content')
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        try:
-            browser.select_form(name='bewegungen')
-        except mechanize.FormNotFoundError, e:
-            raise fetch.FetchErrorrror('Transactions form not found.')
-        form = browser.form
-        form['p_buchdat_von'] = formatted_start
-        form['p_buchdat_bis'] = formatted_end
-        form['p_buch_art'] = '9',  # 9 = All transaction types.
-        form['p_lkto_nr'] = account.name.replace('-', ''),
-        form['p_anz_buchungen'] = '100',  # 100 entries per page.
+        form = browser.find_element_by_name('bewegungen')
+        form.find_element_by_name('p_buchdat_von').send_keys(formatted_start)
+        form.find_element_by_name('p_buchdat_bis').send_keys(formatted_end)
+        account_select = ui.Select(form.find_element_by_name('p_lkto_nr'))
+        account_select.select_by_value(account.name.replace('-', ''))
+        # 100 entries per page.
+        form.find_element_by_id('p_anz_buchungen_4').click()
 
         transactions = []
         while True:
-            browser.submit()
-            xhtml = browser.get_decoded_response()
+            form.submit()
             transactions += self._extract_transactions_from_result_page(
-                    xhtml, account.name)
+                    account.name)
             # Next page?
             try:
-                browser.select_form(name='forward')
+                form = browser.find_element_by_name('forward')
                 logger.info('Loading next transactions page.')
-            except mechanize.FormNotFoundError, e:
+            except exceptions.NoSuchElementException, e:
                 break
 
         logger.info('Found %i transactions.' % len(transactions))
 
         return transactions
 
-    def _extract_transactions_from_result_page(self, xhtml, account_name):
-        # Parse response.
-        if account_name not in xhtml:
-            raise fetch.FetchErrorrror('Transactions search failed.')
-        if 'No booking entry found' in xhtml:
-            logging.info('Couldn\'t find any transactions.')
-            return []
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
+    def _extract_transactions_from_result_page(self, account_name):
+        browser = self._browser
+
         try:
-            table_rows = soup.find('table').find('tbody').findAll('tr')
-        except AttributeError:
-            raise fetch.FetchErrorrror('Couldn\'t find transactions table.')
+            headline = browser.find_element_by_class_name(
+                    'ef-chapter-title-grey').text
+            if account_name not in headline:
+                raise fetch.FetchError('Transactions search failed.')
+        except exceptions.NoSuchElementException:
+            try:
+                error_element = browser.find_element_by_id('ef-error-message')
+                logging.info('Search failed: %s' % error_element.text)
+                return []
+            except exceptions.NoSuchElementException:
+                raise fetch.FetchError('Transactions search failed.')
+
+        content = browser.find_element_by_id('content')
+        try:
+            table = content.find_element_by_tag_name('table')
+            tbody = table.find_element_by_tag_name('tbody')
+            table_rows = tbody.find_elements_by_tag_name('tr')
+        except exceptions.NoSuchElementException:
+            raise fetch.FetchError('Couldn\'t find transactions table.')
         transactions = []
         for table_row in table_rows:
-            cells = table_row.findAll('td')
-
-            date = cells[1].getText()
-            memo = fetch.soup_to_text(cells[2])
-            credit = cells[3].getText().replace('&nbsp;', '')
-            debit = cells[4].getText().replace('&nbsp;', '')
+            cells = table_row.find_elements_by_tag_name('td')
+            date = cells[1].text.strip()
+            memo = cells[2].text.strip()
+            credit = cells[3].text.replace('&nbsp;', '').strip()
+            debit = cells[4].text.replace('&nbsp;', '').strip()
             transaction = self._parse_transaction_from_text(
                     date, memo, credit, debit)
             if transaction:
@@ -301,84 +293,79 @@ class PostFinance(Bank):
         browser = self._browser
 
         logger.info('Opening credit cards overview...')
-        accounts_link = browser.find_link(text='Credit cards')
-        browser.follow_link(accounts_link)
-        xhtml = browser.get_decoded_response()
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
-        content = soup.find('div', id='content')
+        browser.find_element_by_link_text('Credit cards').click()
+        content = browser.find_element_by_id('content')
 
-        logger.debug('Finding account reference and level...')
+        logger.debug('Finding credit card account...')
         ref, level = None, None
         # Find the table row for that account.
-        account_table = content.find('table', {'class': 'table-total'})
-        account_rows = account_table.find('tbody').findAll('tr')
+        account_table = content.find_element_by_class_name('table-total')
+        tbody = account_table.find_element_by_tag_name('tbody')
+        account_rows = tbody.find_elements_by_tag_name('tr')
+        account_found = False
         for account_row in account_rows:
-            cells = account_row.findAll('td')
-            js_link = cells[0].find('a')
-            name = cells[1].getText().replace(' ', '')
+            cells = account_row.find_elements_by_tag_name('td')
+            details_link = cells[0].find_element_by_tag_name('a')
+            name = cells[1].text.replace(' ', '')
             if name == account.name:
-                # Extract the account reference number and level from the
-                # JavaScript link.
-                ref, level = self._extract_cc_ref_and_level(js_link['href'])
+                details_link.click()
+                account_found = True
                 break
-        if not ref or not level:
-            raise fetch.FetchErrorrror('Couldn\'t find account reference and level.')
-
-        logger.info('Opening transactions...')
-        try:
-            browser.select_form(name='formbew')
-        except mechanize.FormNotFoundError, e:
-            raise fetch.FetchErrorrror('Credit card navigation form not found.')
-        form = browser.form
-        form.set_all_readonly(False)  # To allow changing hidden inputs.
-        form['p_acc_ref_nr'] = ref
-        form['p_acc_level'] = level
+        if not account_found:
+            raise fetch.FetchError('Couldn\'t find account %s.' % account)
 
         # You can see the transactions for three periods:
         # Current, previous and last-but-one.
         # We always load all and post-filter.
+        content = browser.find_element_by_id('content')
         transactions = []
         while True:
-            browser.submit()
-            xhtml = browser.get_decoded_response()
-
             # Get the period of the current page.
-            match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(xhtml)
+            page_title = content.find_element_by_class_name('page-title').text
+            match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(page_title)
             if match:
-              current_period = match.group(1)
+                current_period = match.group(1)
             else:
-              raise fetch.FetchErrorrror(
-                      'Not a credit card transactions page %s.' % account.name)
+                raise fetch.FetchError(
+                        'Not a credit card transactions page %s.' %
+                        account.name)
             logger.debug('Current period: ' + current_period)
 
-            transactions += self._extract_cc_transactions(xhtml)
+            transactions_on_page = self._extract_cc_transactions()
+            transactions += transactions_on_page
+            logger.debug(
+                    'Found %i transactions on the current page.' %
+                    len(transactions_on_page))
 
             # Add a marker transaction for the page break.
             if (current_period in ('current', 'previous billing') and
                 len(transactions) > 0):
+                logger.debug('Adding marker transaction for page break.')
                 transactions.append(model.Transaction(
-                    transactions[-1].date, amount=0, memo='---'))
+                        transactions[-1].date, amount=0, memo='---'))
 
             # Go to the next page.
             # You can navigate to the previous period using the "beweg1" form,
             # and to the last-but-one period using the "beweg2" form.
-            soup = BeautifulSoup.BeautifulSoup(xhtml)
-            content = soup.find('div', id='content')
             if current_period == 'current':
-              form_name = 'beweg1'
+                form_name = 'beweg1'
             elif current_period == 'previous billing':
-              form_name = 'beweg2'
+                form_name = 'beweg2'
             else:
-              logger.debug('Hit last transactions page. Exiting loop.')
-              break
+                logger.debug('Hit last transactions page. Exiting loop.')
+                break
             try:
-                browser.select_form(name=form_name)
+                forward_form = browser.find_element_by_name(form_name)
                 logger.info('Loading earlier transactions page...')
-            except mechanize.FormNotFoundError, e:
+                forward_form.submit()
+            except exceptions.NoSuchElementException:
                 logger.info('No more earlier transactions.')
                 break
 
         # Filter the transactions for the requested date range.
+        logger.debug(
+                'Found %i transactions before filtering for date range.' %
+                len(transactions))
         transactions = filter(lambda t: start <= t.date < end, transactions)
 
         # They should be sorted in reverse chronological order already, but
@@ -389,37 +376,26 @@ class PostFinance(Bank):
 
         return transactions
 
-    def _extract_cc_ref_and_level(self, href):
-        match = self._CREDIT_CARD_JS_LINK_PATTERN.match(href)
-        if match:
-            return match.groups()
-        else:
-            raise fetch.FetchErrorrror(
-                    'Couldn\'t extract credit card reference number and level '
-                    'from JavaScript link: ' + href)
-
-    def _extract_cc_transactions(self, xhtml):
-        # Parse response.
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
-        content = soup.find('div', id='content')
+    def _extract_cc_transactions(self):
+        browser = self._browser
+        content = browser.find_element_by_id('content')
         try:
-            table = soup.find('table', {'class': 'table-total'})
-            tbody = table.find('tbody')
-            if tbody:
-                table_rows = table.find('tbody').findAll('tr')
-            else:
-                # Empty transaction list.
-                table_rows = []
-        except AttributeError:
-            raise fetch.FetchErrorrror('Couldn\'t find transactions.')
+            table = content.find_element_by_class_name('table-total')
+        except exceptions.NoSuchElementException:
+            raise fetch.FetchError('Couldn\'t find transactions.')
+        try:
+            tbody = table.find_element_by_tag_name('tbody')
+        except exceptions.NoSuchElementException:
+            logger.debug('No transactions on current page.')
+            return []
+        table_rows = tbody.find_elements_by_tag_name('tr')
         transactions = []
         for table_row in table_rows:
-            cells = table_row.findAll('td')
-
-            date = cells[0].getText()
-            memo = fetch.soup_to_text(cells[2])
-            credit = cells[3].getText().replace('&nbsp;', '')
-            debit = cells[4].getText().replace('&nbsp;', '')
+            cells = table_row.find_elements_by_tag_name('td')
+            date = cells[0].text.strip()
+            memo = cells[2].text.strip()
+            credit = cells[3].text.replace('&nbsp;', '').strip()
+            debit = cells[4].text.replace('&nbsp;', '').strip()
             transaction = self._parse_transaction_from_text(
                     date, memo, credit, debit)
             if transaction:
@@ -449,15 +425,15 @@ class PostFinance(Bank):
 
         return model.Transaction(date, amount, memo=memo)
 
-    def _extract_language_from_page(self, xhtml):
-        soup = BeautifulSoup.BeautifulSoup(xhtml)
+    def _extract_language_from_page(self):
+        browser = self._browser
         try:
-            selector = soup.find('div', {'id': 'languageSelector'})
-            selected_lang = selector.find(
-                    'li', {'class': re.compile(r'\bselected\b')})
-            return fetch.soup_to_text(selected_lang).strip()
-        except AttributeError:
-            raise fetch.FetchErrorrror('Couldn\'t find selected language.')
+            selector_element = browser.find_element_by_id('languageSelector')
+            selected_lang = selector_element.find_element_by_class_name(
+                    'selected')
+            return selected_lang.text.strip()
+        except exceptions.NoSuchElementException, e:
+            raise fetch.FetchError('Couldn\'t find selected language.')
 
     def _parse_balance(self, balance):
         # Sign is at the end.
@@ -466,4 +442,4 @@ class PostFinance(Bank):
 
     def _check_logged_in(self):
         if not self._logged_in:
-            raise fetch.FetchErrorrror('Not logged in.')
+            raise fetch.FetchError('Not logged in.')

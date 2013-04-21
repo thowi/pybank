@@ -1,8 +1,13 @@
 #!/usr/bin/python
 
 import locale
+import re
+import string
 
 import BeautifulSoup
+
+
+WHITESPACE_PATTERN = re.compile(r' +')
 
 
 class FetchError(Exception):

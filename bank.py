@@ -167,6 +167,8 @@ def _fetch_accounts(
                 output_filename, bank_name, account.name, from_date, till_date)
         print >>output, qif.serialize_account(account).encode('utf-8')
 
+    bank.logout()
+
 
 def _open_file(output_filename, bank_name, account_name, from_date, till_date):
     if not output_filename:

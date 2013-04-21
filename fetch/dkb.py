@@ -9,6 +9,7 @@ import urlparse
 import BeautifulSoup
 
 import fetch
+import fetch.bank
 import fetch.browser
 import model
 
@@ -16,7 +17,7 @@ import model
 logger = logging.getLogger(__name__)
 
 
-class DeutscheKreditBank(Bank):
+class DeutscheKreditBank(fetch.bank.Bank):
     """Fetcher for Deutsche Kreditbank (http://www.dkb.de/).
 
     The accounts for a user will be identified by the bank account number
@@ -60,12 +61,8 @@ class DeutscheKreditBank(Bank):
             '&$event=csvExport')
     _DATE_FORMAT = '%d.%m.%Y'
 
-    def __init__(self):
-        self._browser = fetch.browser.Browser()
-        self._logged_in = False
-        self._accounts = None
-
     def login(self, username=None, password=None):
+        self._browser = fetch.browser.Browser()
         self._logged_in = False
         self._accounts = None
 
@@ -89,13 +86,18 @@ class DeutscheKreditBank(Bank):
         form['j_password'] = password
         logger.info('Logging in with user name %s...' % username)
         browser.submit()
-        html = browser.get_decoded_response(response)
+        html = browser.get_decoded_content()
 
         if 'Finanzstatus' not in html:
             raise fetch.FetchError('Login failed.')
 
         self._logged_in = True
         logger.info('Log-in sucessful.')
+
+    def logout(self):
+        self._browser.close()
+        self._logged_in = False
+        self._accounts = None
 
     def get_accounts(self):
         self._check_logged_in()
@@ -108,7 +110,7 @@ class DeutscheKreditBank(Bank):
         overview_url = urlparse.urljoin(self._BASE_URL, self._OVERVIEW_PATH)
         logger.info('Loading accounts overview...')
         browser.open(overview_url)
-        html = browser.get_decoded_response(response)
+        html = browser.get_decoded_content()
         soup = BeautifulSoup.BeautifulSoup(html)
 
         accounts_table = soup.find(
@@ -178,7 +180,7 @@ class DeutscheKreditBank(Bank):
             csv_path = self._CHECKING_ACCOUNT_CSV_PATH
         csv_url = urlparse.urljoin(self._BASE_URL, csv_path)
         browser.open(csv_url)
-        csv_data = browser.get_decoded_response(response)
+        csv_data = browser.get_decoded_content()
         if account.name not in csv_data:
             raise fetch.FetchError('Account name not found in CSV.')
 
