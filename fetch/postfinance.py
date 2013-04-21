@@ -5,7 +5,6 @@ import getpass
 import logging
 import re
 
-#import pyvirtualdisplay
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
@@ -15,8 +14,6 @@ import fetch.bank
 import model
 
 
-#display = pyvirtualdisplay.Display(visible=0, size=(1024, 768))
-#display.start()
 logger = logging.getLogger(__name__)
 
 
@@ -35,7 +32,7 @@ class PostFinance(fetch.bank.Bank):
             'last-but-one billing) period')
 
     def login(self, username=None, password=None):
-        self._browser = webdriver.Firefox()
+        self._browser = webdriver.PhantomJS()
         self._browser.implicitly_wait(5)
         self._logged_in = False
         self._accounts = None
@@ -106,7 +103,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def logout(self):
-        self._browser.close()
+        self._browser.quit()
         self._logged_in = False
         self._accounts = None
 
@@ -342,7 +339,8 @@ class PostFinance(fetch.bank.Bank):
                 len(transactions) > 0):
                 logger.debug('Adding marker transaction for page break.')
                 transactions.append(model.Transaction(
-                        transactions[-1].date, amount=0, memo='---'))
+                        transactions[-1].date, amount=0,
+                        memo='[Next billing cycle]'))
 
             # Go to the next page.
             # You can navigate to the previous period using the "beweg1" form,
