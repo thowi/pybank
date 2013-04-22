@@ -59,6 +59,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
             '?$part=DkbTransactionBanking.content.creditcard.'
             'CreditcardTransactionSearch'
             '&$event=csvExport')
+    _LOGOUT_PATH = (
+            '?$part=DkbTransactionBanking.infobar.logout-button&$event=logout')
     _DATE_FORMAT = '%d.%m.%Y'
 
     def login(self, username=None, password=None):
@@ -95,6 +97,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def logout(self):
+        self._browser.open(urlparse.urljoin(self._BASE_URL, self._LOGOUT_PATH))
+        self._browser.logout
         self._browser.close()
         self._logged_in = False
         self._accounts = None
