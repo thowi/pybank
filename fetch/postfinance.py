@@ -103,6 +103,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def logout(self):
+        self._browser.find_element_by_link_text('Logout').click()
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
