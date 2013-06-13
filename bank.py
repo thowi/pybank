@@ -17,13 +17,14 @@ import getopt
 import re
 import sys
 
-import model
 import fetch.dkb
+import fetch.ib
 import fetch.postfinance
 import qif
 
 BANK_BY_NAME = {
     'dkb': fetch.dkb.DeutscheKreditBank,
+    'interactivebrokers': fetch.ib.InteractiveBrokers,
     'postfinance': fetch.postfinance.PostFinance,
 }
 DATE_FORMAT = '%Y-%m-%d'
@@ -45,7 +46,7 @@ class Usage(Exception):
     [-t YYYY-MM-DD|--till=YYYY-MM-DD]  Until (exclusive). Default: First day of this month..
     [-o outfile|--outfile=outfile]     Default: STDOUT.
         Variables will be replaced: %(bank)s %(account)s %(from)s %(till)s
-    [-v|--verbose]
+    [-d|--debug]
     """
     def __init__(self, msg=''):
         self.msg = msg
@@ -65,12 +66,12 @@ def _parse_args(argv):
     output_filename = None
     debug = False
 
-    options = 'hb:u:a:p:f:t:o:v'
+    options = 'hb:u:a:p:f:t:o:d'
     options_long = [
             'help', 'bank=', 'username=', 'password=', 'account=', 'from=',
-            'till=', 'outfile=', 'verbose']
+            'till=', 'outfile=', 'debug']
     try:
-        opts, args = getopt.getopt(argv[1:], options, options_long)
+        opts, unused_args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error, msg:
         raise Usage(msg)
     for opt, arg in opts:
@@ -91,7 +92,7 @@ def _parse_args(argv):
             till_date = arg
         if opt in ('-o', '--outfile'):
             output_filename = arg
-        if opt in ('-v', '--verbose'):
+        if opt in ('-d', '--debug'):
             debug = True
 
     if not bank_name:
@@ -108,9 +109,9 @@ def _parse_args(argv):
         # Beginning of last month.
         now = datetime.datetime.now()
         if now.month == 1:
-          last_month = now.replace(year=now.year-1, month=12)
+            last_month = now.replace(year=now.year-1, month=12)
         else:
-          last_month = now.replace(month=now.month-1)
+            last_month = now.replace(month=now.month-1)
         from_date = datetime.datetime(last_month.year, last_month.month, 1)
 
     if till_date:
@@ -119,9 +120,9 @@ def _parse_args(argv):
         except ValueError:
             raise Usage('Invalid until date: %s.', till_date)
     else:
-      # Beginning of this month.
-      now = datetime.datetime.now()
-      till_date = datetime.datetime(now.year, now.month, 1)
+        # Beginning of this month.
+        now = datetime.datetime.now()
+        till_date = datetime.datetime(now.year, now.month, 1)
 
     return (
         bank_name, username, password, accounts, from_date, till_date,
@@ -130,9 +131,9 @@ def _parse_args(argv):
 
 def _fetch_accounts(
         bank_name, username, password, account_names, from_date, till_date,
-        output_filename):
+        output_filename, debug):
     bank_class = BANK_BY_NAME[bank_name]
-    bank = bank_class()
+    bank = bank_class(debug)
 
     bank.login(username=username, password=password)
 
@@ -206,9 +207,13 @@ def main(argv=None):
     try:
         _fetch_accounts(
                 bank_name, username, password, accounts, from_date, till_date,
-                output_filename)
-    except fetch.FetchError, e:
+                output_filename, debug)
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception, e:
         logger.error('Error while fetching transactions: %s' % e)
+        if debug:
+            import pdb; pdb.post_mortem()
         return 2
 
     return 0

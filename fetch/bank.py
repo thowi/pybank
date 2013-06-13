@@ -3,6 +3,14 @@
 class Bank(object):
     """Base class for a fetcher that logs into a bank account website."""
 
+    def __init__(self, debug=False):
+        """Create a new Bank instance.
+
+        @type debug: bool
+        @param debug: Whether to run in debug mode.
+        """
+        self._debug = debug
+        
     def login(self, username=None, password=None):
         """Will prompt the user if either user name or password are not defined.
 

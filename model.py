@@ -9,16 +9,16 @@ class Bank(object):
 
 class Account(object):
     """An account.
-    
+
     @type name: unicode
     @param name: Account name.
-    
+
     @type balance: float or None
     @param balance: Balance.
-    
+
     @type balance_date: datetime.datetime or None
     @param balance_date: Balance date.
-    
+
     @type transactions: (Transaction,) or None
     @param transactions: The transactions.
     """
@@ -31,7 +31,7 @@ class Account(object):
             self.transactions = transactions
         else:
             self.transactions = ()
-    
+
     def __str__(self):
         repr = [self.name]
         if self.transactions:
@@ -58,31 +58,194 @@ class CreditCard(Account):
 
 
 class Transaction(object):
-    """Creates a new transaction.
-    
+    """A transaction.
+
     @type date: datetime.datetime
     @param date: The date of the transaction.
-    
+
     @type amount: num
     @param amount: The amount of the transaction.
-    
-    @type payee: unicode or None
-    @param payee: The payee of the transaction, if any.
-    
+
     @type memo: unicode or None
     @param memo: The memo of the transaction, if any.
-    
+
     @type category: unicode or None
     @param category: The category of the transaction, if any.
     """
-    def __init__(self, date, amount, payee=None, memo=None, category=None):
+    def __init__(self, date, amount, memo=None, category=None):
         self.date = date
         self.amount = amount
-        self.payee = payee
         self.memo = memo
         self.category = category
-    
+
+    def __str__(self):
+        return 'Date: %s. Amount: %.2f. Memo: %s. Category: %s.' % (
+                self.date, self.amount, self.memo, self.category)
+
+
+class Payment(Transaction):
+    """A payment.
+
+    @type date: datetime.datetime
+    @param date: The date of the payment.
+
+    @type amount: num
+    @param amount: The amount of the payment.
+
+    @type payee: unicode or None
+    @param payee: The payee of the payment, if any.
+
+    @type memo: unicode or None
+    @param memo: The memo of the payment, if any.
+
+    @type category: unicode or None
+    @param category: The category of the payment, if any.
+    """
+    def __init__(self, date, amount, payee=None, memo=None, category=None):
+        super(Payment, self).__init__(date, amount, memo, category)
+        self.payee = payee
+
     def __str__(self):
         return 'Date: %s. Amount: %.2f. Payee: %s. Memo: %s. Category: %s.' % (
                 self.date, self.amount, self.payee, self.memo, self.category)
 
+
+class InvestmentSecurityTransaction(Transaction):
+    """A security transaction.
+    
+    Base class for SecurityPurchase and SecuritySale.
+
+    @type date: datetime.datetime
+    @param date: The date of the transaction.
+
+    @type symbol: str
+    @param symbol: The symbol of the security of the transaction.
+
+    @type quantity: int
+    @param quantity: The quantity of the transaction.
+
+    @type price: float
+    @param price: The price of the security of the transaction.
+
+    @type commissions: float
+    @param commissions: The commissions of the transaction.
+
+    @type amount: float
+    @param amount: The total amount of the transaction incl. commissions.
+
+    @type memo: unicode or None
+    @param memo: The memo of the transaction, if any.
+
+    @type category: unicode or None
+    @param category: The category of the transaction, if any.
+    """
+    def __init__(
+            self, date, symbol, quantity, price, commissions, amount, memo=None,
+            category=None):
+        super(InvestmentSecurityTransaction, self).__init__(
+                date, amount, memo, category)
+        self.symbol = symbol
+        self.quantity = quantity
+        self.price = price
+        self.commissions = commissions
+
+
+class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
+    """A security purchase.
+
+    See SecurityTransaction for parameters.
+    """
+    def __init__(
+            self, date, symbol, quantity, price, commissions, amount, memo=None,
+            category=None):
+        super(InvestmentSecurityPurchase, self).__init__(
+                date, symbol, quantity, price, commissions, amount, memo,
+                category)
+
+
+class InvestmentSecuritySale(InvestmentSecurityTransaction):
+    """A security sale.
+
+    See SecurityTransaction for parameters.
+    """
+    def __init__(
+            self, date, symbol, quantity, price, commissions, amount, memo=None,
+            category=None):
+        super(InvestmentSecuritySale, self).__init__(
+                date, symbol, quantity, price, commissions, amount, memo,
+                category)
+
+
+class InvestmentDividend(Transaction):
+    """A dividend.
+
+    @type date: datetime.datetime
+    @param date: The date of the dividend.
+
+    @type symbol: str
+    @param symbol: The symbol of the security of the dividend.
+
+    @type amount: float
+    @param amount: The total amount of the dividend.
+
+    @type memo: unicode or None
+    @param memo: The memo of the dividend, if any.
+
+    @type category: unicode or None
+    @param category: The category of the dividend, if any.
+    """
+    def __init__(
+            self, date, symbol, amount, memo=None, category=None):
+        super(InvestmentDividend, self).__init__(
+                date, amount, memo, category)
+        self.symbol = symbol
+
+
+class InvestmentMiscExpense(Transaction):
+    """A misc expense.
+
+    @type date: datetime.datetime
+    @param date: The date of the dividend.
+
+    @type symbol: str
+    @param symbol: The symbol of the security of the dividend.
+
+    @type amount: float
+    @param amount: The total amount of the dividend.
+
+    @type memo: unicode or None
+    @param memo: The memo of the dividend, if any.
+
+    @type category: unicode or None
+    @param category: The category of the dividend, if any.
+    """
+    def __init__(
+            self, date, symbol, amount, memo=None, category=None):
+        super(InvestmentMiscExpense, self).__init__(
+                date, amount, memo, category)
+        self.symbol = symbol
+
+
+class InvestmentMiscIncome(Transaction):
+    """A misc expense.
+
+    @type date: datetime.datetime
+    @param date: The date of the dividend.
+
+    @type symbol: str
+    @param symbol: The symbol of the security of the dividend.
+
+    @type amount: float
+    @param amount: The total amount of the dividend.
+
+    @type memo: unicode or None
+    @param memo: The memo of the dividend, if any.
+
+    @type category: unicode or None
+    @param category: The category of the dividend, if any.
+    """
+    def __init__(
+            self, date, symbol, amount, memo=None, category=None):
+        super(InvestmentMiscIncome, self).__init__(
+                date, amount, memo, category)
+        self.symbol = symbol

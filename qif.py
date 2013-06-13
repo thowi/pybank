@@ -11,6 +11,8 @@ import model
 
 DATE_FORMAT = '%x'
 AMOUNT_FORMAT = '%.2f'
+PRICE_FORMAT = '%.2f'
+COMMISSIONS_FORMAT = '%.2f'
 
 TYPES = {
     'bank': 'Bank',
@@ -42,16 +44,28 @@ INVESTMENT_ITEMS = {
     'date': 'D',
     'action': 'N',
     'security': 'Y',
-    'price': '!',
+    'price': 'I',
     'quantity': 'Q',
     'amount': 'T',
     'cleared status': 'C',
     'payee': 'P',
     'memo': 'M',
     'commission': 'O',
-    'category': 'L',
     'account': 'L',
     'amount transferred': '$',
+}
+
+INVESTMENT_ACTION_TYPES = {
+    'buy': 'Buy',
+    'sell': 'Sell',
+    'transfer cash in': 'XIn',
+    'transfer cash out': 'XOut',
+    'shares in': 'ShrsIn',
+    'shares out': 'ShrsOut',    
+    'dividend': 'Div',
+    'misc expense': 'MiscExp',
+    'misc income': 'MiscInc',
+    'stock split': 'StkSplit',
 }
 
 ACCOUNT_HEADER = '!Account'
@@ -63,7 +77,7 @@ ACCOUNT_INFO = {
     'description': 'D',
     'limit': 'L',
     'balance date': '/',
-    'balance amount': '$',
+    'balance amount': '$',  # SEEFinance uses 'B'
 }
 
 # CATEGORY_LIST = {}
@@ -83,11 +97,11 @@ END_OF_ENTRY = '^'
 """
 def serialize_account(account):
     account_fields = []
-    
+
     account_fields.append(ACCOUNT_HEADER)
-    
+
     account_fields.append(ACCOUNT_INFO['name'] + account.name)
-    
+
     if isinstance(account, model.CreditCard):
         acc_type = TYPES['credit card']
     elif isinstance(account, model.InvestmentsAccount):
@@ -95,7 +109,7 @@ def serialize_account(account):
     else:
         acc_type = TYPES['bank']
     account_fields.append(ACCOUNT_INFO['type'] + acc_type)
-    
+
     if account.balance is not None:
         account_fields.append(
                 ACCOUNT_INFO['balance amount'] +
@@ -107,7 +121,7 @@ def serialize_account(account):
 
     account_fields.append(END_OF_ENTRY)
     account_fields.append(ACCOUNT_TYPE + acc_type)
-    
+
     txns = '\n'.join(serialize_transaction(t) for t in account.transactions)
     account_fields.append(txns)
 
@@ -123,26 +137,97 @@ def serialize_account(account):
 @return: The QIF serialization of the transaction.
 """
 def serialize_transaction(transaction):
+    if isinstance(transaction, model.Payment):
+        return serialize_payment(transaction)
+    elif isinstance(transaction, model.InvestmentSecurityPurchase):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['buy'])
+    elif isinstance(transaction, model.InvestmentSecuritySale):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['sell'])
+    elif isinstance(transaction, model.InvestmentDividend):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['dividend'])
+    elif isinstance(transaction, model.InvestmentMiscExpense):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['misc expense'])
+    elif isinstance(transaction, model.InvestmentMiscIncome):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['misc income'])
+
+
+"""Serializes a payment to the QIF format.
+
+@type payment: model.Payment
+@param payment: The payment to serialize
+
+@rtype: unicode
+@return: The QIF serialization of the payment.
+"""
+def serialize_payment(payment):
     fields = []
-    
-    fields.append(ITEMS['date'] + transaction.date.strftime(DATE_FORMAT))
-    fields.append(ITEMS['amount'] + (AMOUNT_FORMAT % transaction.amount))
-    if transaction.payee:
-        fields.append(ITEMS['payee'] + transaction.payee)
+
+    fields.append(ITEMS['date'] + payment.date.strftime(DATE_FORMAT))
+    fields.append(ITEMS['amount'] + (AMOUNT_FORMAT % payment.amount))
+
+    if payment.payee:
+        fields.append(ITEMS['payee'] + payment.payee)
+    if payment.memo:
+        fields.append(ITEMS['memo'] + format_memo_(payment.memo))
+    if payment.category:
+        fields.append(ITEMS['category'] + payment.category)
+    fields.append(END_OF_ENTRY)
+
+    return '\n'.join(fields)
+
+
+"""Serializes a investment transaction to the QIF format.
+
+@type transaction: model.InvestmentTransaction
+@param transaction: The investment transaction to serialize.
+
+@type action: str
+@param action: The "action" of the transaction to serialize.
+
+@rtype: unicode
+@return: The QIF serialization of the investment transaction.
+"""
+def serialize_investment_transaction(transaction, action):
+    fields = []
+
+    fields.append(INVESTMENT_ITEMS['action'] + action)
+    fields.append(
+            INVESTMENT_ITEMS['date'] + transaction.date.strftime(DATE_FORMAT))
+    fields.append(
+            INVESTMENT_ITEMS['security'] + transaction.symbol)
+    fields.append(
+            INVESTMENT_ITEMS['amount'] + (AMOUNT_FORMAT % transaction.amount))
     if transaction.memo:
-        lines = []
-        for line in transaction.memo.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            if not line.endswith('.') and not line.endswith(':'):
-                line += '.'
-            lines.append(line)
-        memo = ' '.join(lines)
-        fields.append(ITEMS['memo'] + memo)
+        fields.append(ITEMS['memo'] + format_memo_(transaction.memo))
     if transaction.category:
         fields.append(ITEMS['category'] + transaction.category)
+    if hasattr(transaction, 'quantity'):
+        fields.append(
+                INVESTMENT_ITEMS['quantity'] + str(transaction.quantity))
+    if hasattr(transaction, 'price'):
+        fields.append(
+                INVESTMENT_ITEMS['price'] + (PRICE_FORMAT % transaction.price))
+    if hasattr(transaction, 'commissions'):
+        fields.append(
+                INVESTMENT_ITEMS['commission'] +
+                (COMMISSIONS_FORMAT % transaction.commissions))
     fields.append(END_OF_ENTRY)
-    
-    return '\n'.join(fields) 
 
+    return '\n'.join(fields)
+
+
+def format_memo_(memo):
+    lines = []
+    for line in memo.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if not line.endswith('.') and not line.endswith(':'):
+            line += '.'
+        lines.append(line)
+    return ' '.join(lines)

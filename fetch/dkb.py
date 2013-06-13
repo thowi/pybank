@@ -8,7 +8,6 @@ import urlparse
 
 import BeautifulSoup
 
-import fetch
 import fetch.bank
 import fetch.browser
 import model
@@ -98,7 +97,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def logout(self):
         self._browser.open(urlparse.urljoin(self._BASE_URL, self._LOGOUT_PATH))
-        self._browser.logout
         self._browser.close()
         self._logged_in = False
         self._accounts = None
@@ -232,8 +230,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
             amount = fetch.parse_decimal_number(row[7], 'de_DE')
 
-            return model.Transaction(date, amount, payee, memo)
-        except ValueError, e:
+            return model.Payment(date, amount, payee, memo)
+        except ValueError:
             logger.debug('Skipping invalid row: %s' % row)
             return
 
@@ -250,8 +248,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
             if orig_amount:
                 memo += '\nOriginal amount: %s' % orig_amount
 
-            return model.Transaction(date, amount, memo=memo)
-        except ValueError, e:
+            return model.Payment(date, amount, memo=memo)
+        except ValueError:
             logger.debug('Skipping invalid row: %s' % row)
             return
 

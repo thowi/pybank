@@ -9,7 +9,6 @@ from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
 
-import fetch
 import fetch.bank
 import model
 
@@ -32,10 +31,17 @@ class PostFinance(fetch.bank.Bank):
             'last-but-one billing) period')
 
     def login(self, username=None, password=None):
-        self._browser = webdriver.PhantomJS()
-        self._browser.implicitly_wait(5)
+        if self._debug:
+            self._browser = webdriver.Firefox()
+        else:
+            self._browser = webdriver.PhantomJS()
+        self._browser.implicitly_wait(10)
+        self._browser.set_window_size(800, 800)
         self._logged_in = False
         self._accounts = None
+
+        browser = self._browser
+        browser.get(self._LOGIN_URL)
 
         if not username:
             username = raw_input('E-Finance number: ')
@@ -43,13 +49,10 @@ class PostFinance(fetch.bank.Bank):
         if not password:
             password = getpass.getpass('Password: ')
 
-        browser = self._browser
-        browser.get(self._LOGIN_URL)
-
         # First login phase: User and password.
         try:
             login_form = browser.find_element_by_name('login')
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login form not found.')
         login_form.find_element_by_name('p_et_nr').send_keys(username)
         login_form.find_element_by_name('p_passw').send_keys(password)
@@ -60,19 +63,19 @@ class PostFinance(fetch.bank.Bank):
             error_element = browser.find_element_by_class_name('error')
             logger.error('Login failed:\n%s' % error_element.text)
             raise fetch.FetchError('Login failed.')
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             pass
 
         # Second login phase: Challenge and security token.
         try:
             challenge_element = browser.find_element_by_id('challenge')
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Security challenge not found.')
         print 'Challenge:', challenge_element.text
         token = raw_input('Login token: ')
         try:
             login_form = browser.find_element_by_name('login')
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login token form not found.')
         login_form.find_element_by_name('p_si_nr').send_keys(token)
         login_form.submit()
@@ -82,7 +85,7 @@ class PostFinance(fetch.bank.Bank):
             logger.info('Confirming logout reminder...')
             try:
                 login_form = browser.find_element_by_name('login')
-            except exceptions.NoSuchElementException, e:
+            except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Logout reminder form not found.')
             login_form.submit()
 
@@ -96,14 +99,14 @@ class PostFinance(fetch.bank.Bank):
         # Login successful?
         try:
             browser.find_element_by_link_text('Accounts and assets')
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login failed.')
 
         self._logged_in = True
         logger.info('Log-in sucessful.')
 
     def logout(self):
-        self._browser.find_element_by_link_text('Logout').click()
+        self._browser.find_element_by_id('logoutLink').click()
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
@@ -220,7 +223,6 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening transactions search form...')
         browser.find_element_by_link_text('Accounts and assets').click()
         browser.find_element_by_link_text('Transactions').click()
-        content = browser.find_element_by_id('content')
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -243,7 +245,7 @@ class PostFinance(fetch.bank.Bank):
             try:
                 form = browser.find_element_by_name('forward')
                 logger.info('Loading next transactions page.')
-            except exceptions.NoSuchElementException, e:
+            except exceptions.NoSuchElementException:
                 break
 
         logger.info('Found %i transactions.' % len(transactions))
@@ -295,7 +297,6 @@ class PostFinance(fetch.bank.Bank):
         content = browser.find_element_by_id('content')
 
         logger.debug('Finding credit card account...')
-        ref, level = None, None
         # Find the table row for that account.
         account_table = content.find_element_by_class_name('table-total')
         tbody = account_table.find_element_by_tag_name('tbody')
@@ -339,7 +340,7 @@ class PostFinance(fetch.bank.Bank):
             if (current_period in ('current', 'previous billing') and
                 len(transactions) > 0):
                 logger.debug('Adding marker transaction for page break.')
-                transactions.append(model.Transaction(
+                transactions.append(model.Payment(
                         transactions[-1].date, amount=0,
                         memo='[Next billing cycle]'))
 
@@ -392,6 +393,7 @@ class PostFinance(fetch.bank.Bank):
         for table_row in table_rows:
             cells = table_row.find_elements_by_tag_name('td')
             date = cells[0].text.strip()
+            billing_month = cells[1].text.strip()
             memo = cells[2].text.strip()
             credit = cells[3].text.replace('&nbsp;', '').strip()
             debit = cells[4].text.replace('&nbsp;', '').strip()
@@ -405,7 +407,7 @@ class PostFinance(fetch.bank.Bank):
     def _parse_transaction_from_text(self, date, memo, credit, debit):
         try:
             date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-        except ValueError, e:
+        except ValueError:
             logger.warning(
                     'Skipping transaction with invalid date %s.', date)
             return
@@ -417,12 +419,12 @@ class PostFinance(fetch.bank.Bank):
             amount = '-' + debit
         try:
             amount = fetch.parse_decimal_number(amount, 'de_CH')
-        except ValueError, e:
+        except ValueError:
             logger.warning(
                     'Skipping transaction with invalid amount %s.', amount)
             return
 
-        return model.Transaction(date, amount, memo=memo)
+        return model.Payment(date, amount, memo=memo)
 
     def _extract_language_from_page(self):
         browser = self._browser
@@ -431,7 +433,7 @@ class PostFinance(fetch.bank.Bank):
             selected_lang = selector_element.find_element_by_class_name(
                     'selected')
             return selected_lang.text.strip()
-        except exceptions.NoSuchElementException, e:
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find selected language.')
 
     def _parse_balance(self, balance):
