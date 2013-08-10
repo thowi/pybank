@@ -29,7 +29,9 @@ class InteractiveBrokers(fetch.bank.Bank):
         if self._debug:
             self._browser = webdriver.Firefox()
         else:
-            self._browser = webdriver.PhantomJS()
+            # TODO: Fix the login and enable PhantomJs.
+            #self._browser = webdriver.PhantomJS()
+            self._browser = webdriver.Firefox()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
         self._logged_in = False
@@ -88,7 +90,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser.switch_to_default_content()
         browser.switch_to_frame('header')
         browser.find_element_by_link_text('Logout').click()
-        
+
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -131,7 +133,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 name = '%s.%s' % (account_name, currency)
                 accounts.append(model.InvestmentsAccount(name, balance, today))
             self._close_activity_statement()
-            
+
         return accounts
 
     def _get_currencies_and_balances_from_activity_statement(
@@ -163,7 +165,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         end_inclusive = end - datetime.timedelta(1)
         self._open_activity_statement(account_name, start, end_inclusive)
-        
+
         trades = self._get_trades_from_activity_statement(account_name)
         withholding_tax = self._get_withholding_tax_from_activity_statement(
                 account_name)
@@ -202,7 +204,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                     logger.warning(
                             'Skipping transaction with invalid date %s.', date)
                     continue
-                quantity = int(cells[3].getText())
+                quantity = self._parse_int(cells[3].getText())
                 price = self._parse_float(cells[4].getText())
                 proceeds = self._parse_float(cells[6].getText())
                 commissions_and_tax = self._parse_float(cells[7].getText())
@@ -369,12 +371,12 @@ class InteractiveBrokers(fetch.bank.Bank):
             matching_options = self._browser.find_elements_by_xpath(
                     '//form[@name="view_stmt"]//select[@name="%s"]/'
                     'option[@value="%s"]' % (
-                     select_element.get_attribute('name'), 
+                     select_element.get_attribute('name'),
                      formatted_adjusted_date))
             if matching_options:
                 select.select_by_value(formatted_adjusted_date)
                 break
-        
+
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
     def _close_activity_statement(self):
@@ -385,16 +387,17 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Wait for the report to load.
         self._browser.find_element_by_id(
                 'tblAccountInformation_' + account_name)
-        
+
         # We're using BeautifulSoup to parse the HTML directly, as using
         # WebDriver proved to be unreliable (hidden elements) and slow.
         html = self._browser.page_source
         soup = BeautifulSoup.BeautifulSoup(html)
-        
+
         table_id = 'tbl%s_%s' % (table_name, account_name)
         table = soup.find('table', {'id': table_id})
         if not table:
-            raise fetch.FetchError('Couldn\'t find %s table.' % table_id)
+            logger.debug('Couldn\'t find %s table.' % table_id)
+            return []
         tbody = table.find('tbody')
         return tbody.findAll('tr')
 
@@ -467,6 +470,9 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _parse_float(self, string):
         return float(string.replace(',', ''))
+
+    def _parse_int(self, string):
+        return int(string.replace(',', ''))
 
     def _check_logged_in(self):
         if not self._logged_in:
