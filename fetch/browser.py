@@ -33,8 +33,8 @@ class Browser(mechanize.Browser):
         #self.set_debug_responses(True)
 
         self.addheaders = [('User-agent', (
-                'Mozilla/5.0 (X11; U; Linux i686; en-US; rv:1.9.0.1) '
-                'Gecko/2008071615 Fedora/3.0.1-1.fc9 Firefox/3.0.1'))]
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.8; rv:16.0) '
+                'Gecko/20100101 Firefox/16.0'))]
 
     def _decode_content(self, content, content_type_header):
         """Returns the content of a urlfetch.fetch() response as unicode.

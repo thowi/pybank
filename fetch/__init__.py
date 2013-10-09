@@ -6,7 +6,6 @@ import re
 import string
 import time
 
-import BeautifulSoup
 from selenium.common import exceptions
 
 

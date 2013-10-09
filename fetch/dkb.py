@@ -1,15 +1,14 @@
 #!/usr/bin/python
-
-import csv
+# coding: utf-8
+ 
 import datetime
 import getpass
 import logging
-import urlparse
 
-import BeautifulSoup
+from selenium import webdriver
+from selenium.common import exceptions
 
 import fetch.bank
-import fetch.browser
 import model
 
 
@@ -23,47 +22,25 @@ class DeutscheKreditBank(fetch.bank.Bank):
     (digits) or the obfuscated credit card number (1234******5678).
     """
     _BASE_URL = 'https://banking.dkb.de/dkb/-'
-    _OVERVIEW_PATH = (
-            '?$part=DkbTransactionBanking.index.menu'
-            '&treeAction=selectNode'
-            '&node=0'
-            '&tree=menu')
-    _ACCOUNT_PATH_PATTERN = (
-            '?$part=DkbTransactionBanking.content.banking.FinancialStatus.'
-            'FinancialStatus'
-            '&$event=paymentTransaction'
-            '&row=%i'
-            '&table=cashTable')
-    _CHECKING_ACCOUNT_SEARCH_PATTERN = (
-            '?slBankAccount=0'
-            '&slTransactionStatus=0'
-            '&slSearchPeriod=3'
-            '&searchPeriodRadio=1'
-            '&transactionDate=%s'
-            '&toTransactionDate=%s'
-            '&$part=DkbTransactionBanking.content.banking.Transactions.Search'
-            '&$event=search')
     _CHECKING_ACCOUNT_CSV_PATH = (
             '?$part=DkbTransactionBanking.content.banking.Transactions.Search'
             '&$event=csvExport')
-    _CREDIT_CARD_SEARCH_PATTERN = (
-            '?slCreditCard=0'
-            '&searchPeriod=0'
-            '&postingDate=%s'
-            '&toPostingDate=%s'
-            '&$part=DkbTransactionBanking.content.creditcard.'
-            'CreditcardTransactionSearch'
-            '&$event=search')
     _CREDIT_CARD_CSV_PATH = (
             '?$part=DkbTransactionBanking.content.creditcard.'
             'CreditcardTransactionSearch'
             '&$event=csvExport')
-    _LOGOUT_PATH = (
-            '?$part=DkbTransactionBanking.infobar.logout-button&$event=logout')
     _DATE_FORMAT = '%d.%m.%Y'
+    _DATE_FORMAT_SHORT = '%d.%m.%y'
+    _WEBDRIVER_TIMEOUT = 10
 
     def login(self, username=None, password=None):
-        self._browser = fetch.browser.Browser()
+        if self._debug:
+            self._browser = webdriver.Firefox()
+        else:
+            self._browser = webdriver.PhantomJS()
+        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        self._browser.set_window_size(800, 800)
+        
         self._logged_in = False
         self._accounts = None
 
@@ -76,28 +53,36 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser = self._browser
 
         logger.info('Loading login page...')
-        browser.open(self._BASE_URL)
+        browser.get(self._BASE_URL)
 
+        # Login.
         try:
-            browser.select_form(name='login')
-        except mechanize.FormNotFoundError, e:
+            login_form = browser.find_element_by_class_name('anmeldung')
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login form not found.')
-        form = browser.form
-        form['j_username'] = username
-        form['j_password'] = password
+        username_input = login_form.find_element_by_css_selector(
+                'input[maxlength="16"]')
+        username_input.send_keys(username)
+        password_input = login_form.find_element_by_css_selector(
+                'input[type="password"]')
+        password_input.send_keys(password)
         logger.info('Logging in with user name %s...' % username)
-        browser.submit()
-        html = browser.get_decoded_content()
-
-        if 'Finanzstatus' not in html:
+        submit_button = login_form.find_element_by_css_selector(
+                'input[value="Anmelden"]')
+        submit_button.click()
+        
+        # Login successful?
+        status_link = browser.find_element_by_link_text('Finanzstatus')
+        if not status_link:
             raise fetch.FetchError('Login failed.')
 
         self._logged_in = True
+        self._main_window_handle = browser.current_window_handle
         logger.info('Log-in sucessful.')
 
     def logout(self):
-        self._browser.open(urlparse.urljoin(self._BASE_URL, self._LOGOUT_PATH))
-        self._browser.close()
+        self._browser.find_element_by_id('logout').click()
+        self._browser.quit()
         self._logged_in = False
         self._accounts = None
 
@@ -109,149 +94,205 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         browser = self._browser
 
-        overview_url = urlparse.urljoin(self._BASE_URL, self._OVERVIEW_PATH)
         logger.info('Loading accounts overview...')
-        browser.open(overview_url)
-        html = browser.get_decoded_content()
-        soup = BeautifulSoup.BeautifulSoup(html)
-
-        accounts_table = soup.find(
-                'table', {'class': 'financialStatusTable dropdownAnchor'})
-        account_rows = accounts_table.find('tbody').findAll('tr')
+        browser.find_element_by_link_text('Finanzstatus').click()
+        
+        accounts_section = browser.find_element_by_id('finanzstatus_gruppen')
+        account_rows = accounts_section \
+                .find_element_by_tag_name('tbody') \
+                .find_elements_by_tag_name('tr')
+        # Skip first (header) and last (summary) row.
+        account_rows = account_rows[1:-1]
         self._accounts = []
         for account_row in account_rows:
             try:
-                if 'sum' in account_row.get('class', ''):
-                    continue
-                headers = account_row.findAll('th')
-                cells = account_row.findAll('td')
-                name = headers[0].getText()
-                acc_type = cells[0].getText()
-                balance = self._parse_balance(headers[1].getText())
-                balance_date_text = cells[1].getText()
-                balance_date = datetime.datetime.strptime(
-                        balance_date_text, self._DATE_FORMAT)
+                cells = account_row.find_elements_by_tag_name('td')
+                name = cells[0].text
+                unused_acc_type = cells[1].text
+                balance_date = self._parse_date(cells[2].text)
+                balance = self._parse_balance(cells[3].text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(name, balance, balance_date)
                 else:
                     account = model.CheckingAccount(name, balance, balance_date)
                 self._accounts.append(account)
             except ValueError:
-                logging.error('Invalid account row. %s' % details_row)
+                logging.error('Invalid account row. %s' % account_row)
 
         logger.info('Found %i accounts.' % len(self._accounts))
         return self._accounts
 
     def get_transactions(self, account, start, end):
-        self._check_logged_in()
-
-        accounts = self.get_accounts()
-        try:
-            account_index = accounts.index(account)
-        except ValueError:
-            raise fetch.FetchError('Unknown account: %s' % account)
         is_credit_card = isinstance(account, model.CreditCard)
-
+        if is_credit_card:
+            return self._get_credit_card_transactions(account, start, end)
+        else:
+            return self._get_checking_account_transactions(account, start, end)
+        
+    def _get_checking_account_transactions(self, account, start, end):
+        self._check_logged_in()
         browser = self._browser
 
-        # Open account.
-        logger.info('Loading account info...')
-        account_url = urlparse.urljoin(
-                self._BASE_URL, self._ACCOUNT_PATH_PATTERN % account_index)
-        browser.open(account_url)
-
+        logger.info('Opening checking account transactions page...')
+        browser.find_element_by_link_text(u'Finanzstatus').click()
+        browser.find_element_by_link_text(u'Kontoumsätze').click()
+        
         # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        if is_credit_card:
-            search_url_pattern = self._CREDIT_CARD_SEARCH_PATTERN
-        else:
-            search_url_pattern = self._CHECKING_ACCOUNT_SEARCH_PATTERN
-        search_url = urlparse.urljoin(
-                self._BASE_URL, search_url_pattern % (
-                        formatted_start, formatted_end))
-        browser.open(search_url)
+        # TODO: Support multiple accounts.
+        content = browser.find_element_by_class_name('form-related')
+        form = content.find_element_by_tag_name('form')
+        inputs = form.find_elements_by_css_selector('input[maxlength="10"]')
+        inputs[0].click()
+        inputs[0].clear()
+        inputs[0].send_keys(formatted_start)
+        inputs[1].click()
+        inputs[1].clear()
+        inputs[1].send_keys(formatted_end)
+        form.find_element_by_css_selector(
+                u'input[title="Umsätze anzeigen"]').click()
 
-        # Download CSV.
-        logger.info('Downloading transactions CSV...')
-        if is_credit_card:
-            csv_path = self._CREDIT_CARD_CSV_PATH
-        else:
-            csv_path = self._CHECKING_ACCOUNT_CSV_PATH
-        csv_url = urlparse.urljoin(self._BASE_URL, csv_path)
-        browser.open(csv_url)
-        csv_data = browser.get_decoded_content()
-        if account.name not in csv_data:
-            raise fetch.FetchError('Account name not found in CSV.')
+        # Switch to print view to avoid pagination.
+        self._switch_to_print_view_window()
+        
+        if account.name not in browser.find_element_by_tag_name('body').text:
+            raise fetch.FetchError('Account name not found in result page.')
 
-        # Parse CSV into transactions.
-        transactions = self._get_transactions_account_csv(
-                csv_data, is_credit_card)
+        # Parse result page into transactions.
+        logger.info('Extracting transaction...')
+        transactions = self._get_transactions_from_checking_account_statement()
         logger.info('Found %i transactions.' % len(transactions))
+        browser.close()
+        browser.switch_to_window(self._main_window_handle)
 
         return transactions
 
+    def _get_credit_card_transactions(self, account, start, end):
+        self._check_logged_in()
+        browser = self._browser
+
+        logger.info('Opening credit card transactions page...')
+        browser.find_element_by_link_text('Finanzstatus').click()
+        browser.find_element_by_link_text(u'Kreditkartenumsätze').click()
+        
+        # Perform search.
+        logger.info('Performing transactions search...')
+        formatted_start = start.strftime(self._DATE_FORMAT)
+        end_inclusive = end - datetime.timedelta(1)
+        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        form.find_element_by_name('postingDate').send_keys(formatted_start)
+        form.find_element_by_name('toPostingDate').send_keys(formatted_end)
+        form.find_element_by_id('searchbutton').click()
+
+        # Switch to print view to avoid pagination.
+        self._switch_to_print_view_window()
+        
+        body_text = browser.find_element_by_tag_name('body').text
+        if u'Kreditkartenumsätze' not in body_text:
+            raise fetch.FetchError('Not a credit card search result page.')
+
+        # Parse result page into transactions.
+        logger.info('Extracting transaction...')
+        transactions = self._get_transactions_from_credit_card_statement()
+        logger.info('Found %i transactions.' % len(transactions))
+        browser.close()
+        browser.switch_to_window(self._main_window_handle)
+
+        return transactions
+
+    def _get_transactions_from_checking_account_statement(self):
+        transactions = []
+        table = self._browser.find_element_by_tag_name('table')
+        rows = table.find_elements_by_tag_name('tr')
+        # Skip header row.
+        rows = rows[1:]
+        for row in rows:
+            try:
+                cells = row.find_elements_by_tag_name('td')
+                
+                # Date. First row is entry date, second is value date.
+                date_text = cells[0].text.split('\n')[1]
+                date = self._parse_date(date_text)
+                
+                # Payee and memo.
+                details_lines = fetch.normalize_text(cells[1].text).split('\n')
+                unused_transaction_type = details_lines[0]
+                payee = details_lines[1]
+                memo = '\n'.join(details_lines[2:])
+                payee_lines = cells[2].text.split('\n') + ['']
+                payee_account, payee_clearing = payee_lines[:2]
+                if payee_account:
+                    memo += '\nAccount: %s' % payee_account
+                if payee_clearing:
+                    memo += '\nClearing: %s' % payee_clearing
+                
+                # Amount
+                amount = fetch.parse_decimal_number(cells[3].text, 'de_DE')
+                
+                transactions.append(model.Payment(date, amount, payee, memo))
+            except ValueError, e:
+                logger.warning(
+                        'Skipping invalid row: %s. Error: %s' % (row.text, e))
+                raise
+
+        return transactions
+    
+    def _get_transactions_from_credit_card_statement(self):
+        transactions = []
+        table = self._browser.find_element_by_tag_name('table')
+        rows = table.find_elements_by_tag_name('tr')
+        # Skip header row.
+        rows = rows[1:]
+        for row in rows:
+            try:
+                cells = row.find_elements_by_tag_name('td')
+                
+                # Date. First row is value date, second is voucher date.
+                date_text = cells[1].text.split('\n')[0]
+                date = self._parse_date(date_text)
+                
+                # Memo.
+                memo = fetch.normalize_text(cells[2].text)
+                
+                # Amount.
+                amounts = cells[3].text.split('\n')
+                amount = fetch.parse_decimal_number(amounts[0], 'de_DE')
+                
+                # Currency.
+                currencies = cells[4].text.split('\n')
+                if len(currencies) > 1 and len(amounts) > 1:
+                    original_amount = fetch.parse_decimal_number(
+                            amounts[1], 'de_DE')
+                    original_currency = currencies[1]
+                    memo += '\nOriginal amount: %s %.2f' % (
+                            original_currency, original_amount)
+                    
+                transactions.append(model.Payment(date, amount, memo=memo))
+            except ValueError, e:
+                logger.warning(
+                        'Skipping invalid row: %s. Error: %s' % (row.text, e))
+                raise
+
+        return transactions
+    
+    def _switch_to_print_view_window(self):
+        logger.debug('Switching to print view...')
+        browser = self._browser
+        browser.find_element_by_css_selector('*[title="Drucken"]').click()
+        for handle in browser.window_handles:
+            if handle != self._main_window_handle:
+                browser.switch_to_window(handle)
+                break
+        if browser.current_window_handle == self._main_window_handle:
+            raise fetch.FetchError('Print view window not found.')
+    
     def _is_credit_card(self, name):
         return '******' in name
-
-    def _get_transactions_account_csv(self, csv_data, is_credit_card):
-        reader = _unicode_csv_reader(csv_data.splitlines(), delimiter=';')
-
-        transactions = []
-        for row in reader:
-            if is_credit_card:
-                transaction = self._get_transaction_from_credit_card_row(row)
-            else:
-                transaction = self._get_transaction_from_checking_account_row(
-                        row)
-            if transaction:
-                transactions.append(transaction)
-
-        return transactions
-
-    def _get_transaction_from_checking_account_row(self, row):
-        if len(row) != 9:
-            return
-
-        try:
-            date = datetime.datetime.strptime(row[0], self._DATE_FORMAT)
-            payee = fetch.normalize_text(row[3])
-            memo = fetch.normalize_text(row[4])
-
-            account = row[5]
-            if account:
-                memo += '\nAccount: %s' % account
-
-            clearing = row[6]
-            if clearing:
-                memo += '\nClearing: %s' % clearing
-
-            amount = fetch.parse_decimal_number(row[7], 'de_DE')
-
-            return model.Payment(date, amount, payee, memo)
-        except ValueError:
-            logger.debug('Skipping invalid row: %s' % row)
-            return
-
-    def _get_transaction_from_credit_card_row(self, row):
-        if len(row) != 7:
-            return
-
-        try:
-            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
-            memo = fetch.normalize_text(row[3])
-            amount = fetch.parse_decimal_number(row[4], 'de_DE')
-
-            orig_amount = row[5]
-            if orig_amount:
-                memo += '\nOriginal amount: %s' % orig_amount
-
-            return model.Payment(date, amount, memo=memo)
-        except ValueError:
-            logger.debug('Skipping invalid row: %s' % row)
-            return
 
     def _parse_balance(self, balance):
         if balance.endswith('S'):  # Debit.
@@ -259,20 +300,13 @@ class DeutscheKreditBank(fetch.bank.Bank):
         balance = balance.replace(' S', '').replace(' H', '')
         return fetch.parse_decimal_number(balance, 'de_DE')
 
+    def _parse_date(self, date_string):
+        try:
+            return datetime.datetime.strptime(date_string, self._DATE_FORMAT)
+        except ValueError:
+            return datetime.datetime.strptime(
+                    date_string, self._DATE_FORMAT_SHORT)
+
     def _check_logged_in(self):
         if not self._logged_in:
             raise fetch.FetchError('Not logged in.')
-
-
-def _unicode_csv_reader(unicode_csv_data, dialect=csv.excel, **kwargs):
-    # csv.py doesn't do Unicode; encode temporarily as UTF-8.
-    csv_reader = csv.reader(
-            _utf_8_encoder(unicode_csv_data), dialect=dialect, **kwargs)
-    for row in csv_reader:
-        # Decode UTF-8 back to Unicode, cell by cell.
-        yield [unicode(cell, 'utf-8') for cell in row]
-
-
-def _utf_8_encoder(unicode_csv_data):
-    for line in unicode_csv_data:
-        yield line.encode('utf-8')
