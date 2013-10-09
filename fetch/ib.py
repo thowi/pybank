@@ -34,6 +34,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             self._browser = webdriver.Firefox()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
+        
         self._logged_in = False
         self._accounts_cache = None
         self._transactions_cache = {}
@@ -255,7 +256,10 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_dividends_from_activity_statement(self, account_name):
         logger.debug('Extracting dividends...')
 
-        table_rows = self._find_transaction_rows('Dividends', account_name)
+        dividend_rows = self._find_transaction_rows('Dividends', account_name)
+        div_lieu_rows = self._find_transaction_rows(
+                'PaymentInLieuOfDividends', account_name)
+        table_rows = dividend_rows + div_lieu_rows
         rows_by_currency = self._group_rows_by_currency(
                 table_rows, expected_num_columns=4)
         transactions_by_currency = {}
@@ -277,7 +281,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 memo = description
 
                 transaction = model.InvestmentDividend(
-                        date, symbol , amount, memo)
+                        date, symbol, amount, memo)
                 transactions.append(transaction)
 
         return transactions_by_currency
@@ -339,10 +343,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Select simple report.
         type_select = ui.Select(form.find_element_by_name('templateId'))
         type_select.select_by_value('S')  # S = simple.
+        # Changing the report type will block the page using an overlay.
+        self._wait_for_unblocked()
 
         # Select date range.
         period_select = ui.Select(form.find_element_by_name('activityPeriod'))
         period_select.select_by_value('R')  # R = range.
+        # Changing the period type will block the page using an overlay.
+        self._wait_for_unblocked()
         from_date_element = form.find_element_by_name('fromDate')
         to_date_element = form.find_element_by_name('toDate')
         self._select_date_in_activity_statement(from_date_element, start)
@@ -377,6 +385,18 @@ class InteractiveBrokers(fetch.bank.Bank):
                 select.select_by_value(formatted_adjusted_date)
                 break
 
+        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+    
+    def _wait_for_unblocked(self):
+        """Waits for the current page to be unblocked."""
+        # Disable waiting for elements to speed up the operation.
+        self._browser.implicitly_wait(0)
+
+        browser = self._browser
+        find_overlay = lambda: browser.find_element_by_class_name('blockUI')
+        ui_is_unblocked = lambda: not fetch.is_element_present(find_overlay)
+        fetch.wait_until(ui_is_unblocked)
+        
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
     def _close_activity_statement(self):

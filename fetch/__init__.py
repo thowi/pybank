@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
+import datetime
 import locale
 import re
 import string
+import time
 
 import BeautifulSoup
+from selenium.common import exceptions
 
 
 WHITESPACE_PATTERN = re.compile(r' +')
@@ -63,10 +66,54 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def soup_to_text(element):
-    """Recursively converts a soup element to its text content."""
-    if isinstance(element, unicode):
-        return element
-    elif isinstance(element, BeautifulSoup.Tag) and element.name == 'br':
-        return '\n'
-    return ''.join(soup_to_text(e) for e in element.contents)
+def is_element_present(lookup_callable):
+    """Returns whether the lookup was successful or a NoSuchElementException was
+    caught.
+    
+    @type lookup_callable: callable
+    @param lookup_callable: The lookup to execute.
+    
+    @rtype: bool
+    @return: Returns whether the lookup was successful.
+    """
+    try:
+        lookup_callable()
+        return True
+    except exceptions.NoSuchElementException:
+        return False
+
+
+# Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
+def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
+    """Waits for the condition to become true.
+    
+    @type condition: callable
+    @param condition: The condition to check periodically.
+
+    @type timeout_s: int
+    @param timeout_s: The timeout.
+
+    @type sleep_s: float
+    @param sleep_s: The time to sleep between the tries.
+    
+    @type pass_exceptions: bool
+    @param pass_exceptions: Whether to raise any caught exceptions.
+    """
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout_s)
+    while datetime.datetime.now() < end_time:
+        try:
+            if condition():
+                return
+        except Exception, e:
+            if pass_exceptions:
+                raise e
+            else:
+                pass
+        time.sleep(sleep_s)
+
+    raise OperationTimeoutError("Operation timed out.")
+
+
+class OperationTimeoutError(Exception):
+    """Thrown when a wait function times out."""
+    pass
