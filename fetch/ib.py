@@ -205,11 +205,11 @@ class InteractiveBrokers(fetch.bank.Bank):
                     logger.warning(
                             'Skipping transaction with invalid date %s.', date)
                     continue
-                unused_exchange = self._parse_int(cells[2].getText())
+                unused_exchange = cells[2].getText()
                 quantity = self._parse_int(cells[3].getText())
                 price = self._parse_float(cells[4].getText())
-                proceeds = self._parse_float(cells[6].getText())
-                commissions_and_tax = self._parse_float(cells[7].getText())
+                proceeds = self._parse_float(cells[5].getText())
+                commissions_and_tax = self._parse_float(cells[6].getText())
                 amount = proceeds + commissions_and_tax
 
                 if quantity >= 0:
@@ -425,7 +425,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         if not table_container:
             logger.debug('Couldn\'t find %s table.' % table_id)
             return []
-        return table_container.find('table').find('tbody').findAll('tr')
+        return table_container.find('table').findAll('tr')
         
     def _group_rows_by_currency(self, table_rows, expected_num_columns):
         """Groups the table rows by currency.
