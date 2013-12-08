@@ -131,10 +131,17 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Loading accounts overview...')
         browser.find_element_by_link_text('Accounts and assets').click()
         content = browser.find_element_by_id('content')
+        
+        # Expand Assets list, if required.
+        asset_accounts = content.find_element_by_class_name('assetaccounts')
+        if 'multiple-items-minimized' in asset_accounts.get_attribute('class'):
+            asset_accounts.find_element_by_class_name('aa-button-open').click()
 
         accounts = []
         try:
-            account_tables = content.find_elements_by_class_name('table-total')
+            assets_widget = content.find_element_by_class_name('assets-widget')
+            account_tables = assets_widget.find_elements_by_class_name(
+                'table-total')
             payment_accounts_table = account_tables[0]
             asset_accounts_table = account_tables[1]
             for account_table in payment_accounts_table, asset_accounts_table:
