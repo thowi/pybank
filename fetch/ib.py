@@ -143,7 +143,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         table_rows = self._find_transaction_rows('CashReport', account_name)
         rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=7)
+                table_rows, expected_num_columns=6)
         currencies_and_balances = []
         for currency, rows in rows_by_currency.items():
             if currency == 'Base Currency Summary':
@@ -190,7 +190,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         table_rows = self._find_transaction_rows('Transactions', account_name)
         rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=12)
+                table_rows, expected_num_columns=10)
         transactions_by_currency = {}
         for currency, rows in rows_by_currency.items():
             transactions = []
@@ -205,6 +205,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                     logger.warning(
                             'Skipping transaction with invalid date %s.', date)
                     continue
+                unused_exchange = self._parse_int(cells[2].getText())
                 quantity = self._parse_int(cells[3].getText())
                 price = self._parse_float(cells[4].getText())
                 proceeds = self._parse_float(cells[6].getText())
@@ -321,8 +322,11 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser = self._browser
         browser.switch_to_default_content()
         browser.switch_to_frame('header')
-        browser.find_element_by_id('Reports').click()
+        # Hover Reports.
+        reports_menu = browser.find_element_by_link_text('Reports')
+        webdriver.ActionChains(browser).move_to_element(reports_menu).perform()
         browser.find_element_by_link_text('Activity').click()
+        browser.find_element_by_link_text('Statements').click()
         browser.switch_to_default_content()
         browser.switch_to_frame('content')
 
@@ -359,6 +363,9 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.debug('Opening activity statement report...')
         browser.find_element_by_css_selector('.button.continue').click()
         browser.switch_to_window('report')
+        
+        # Expand all sections.
+        browser.find_element_by_link_text('Expand All').click()
 
     def _select_date_in_activity_statement(self, select_element, date):
         """Tries to select the specified date.
@@ -406,21 +413,20 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _find_transaction_rows(self, table_name, account_name):
         # Wait for the report to load.
         self._browser.find_element_by_id(
-                'tblAccountInformation_' + account_name)
+                'tblAccountInformation_' + account_name + 'Body')
 
         # We're using BeautifulSoup to parse the HTML directly, as using
         # WebDriver proved to be unreliable (hidden elements) and slow.
         html = self._browser.page_source
         soup = BeautifulSoup.BeautifulSoup(html)
 
-        table_id = 'tbl%s_%s' % (table_name, account_name)
-        table = soup.find('table', {'id': table_id})
-        if not table:
+        table_id = 'tbl%s_%sBody' % (table_name, account_name)
+        table_container = soup.find('div', {'id': table_id})
+        if not table_container:
             logger.debug('Couldn\'t find %s table.' % table_id)
             return []
-        tbody = table.find('tbody')
-        return tbody.findAll('tr')
-
+        return table_container.find('table').find('tbody').findAll('tr')
+        
     def _group_rows_by_currency(self, table_rows, expected_num_columns):
         """Groups the table rows by currency.
 
@@ -444,11 +450,11 @@ class InteractiveBrokers(fetch.bank.Bank):
 
             # Header row?
             if len(cells) == 0:
-                logger.debug('Skipping empty table row.')
+                logger.debug('Skipping empty table or header row.')
                 continue
 
             # New currency?
-            if len(cells) == 1 and cells[0]['class'] == 'currencyHeader':
+            if len(cells) == 1 and 'currencyHeader ' in cells[0]['class']:
                 currency = cells[0].getText()
                 continue
 
