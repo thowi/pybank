@@ -10,9 +10,9 @@ See http://www.respmech.com/mym2qifw/qif_new.htm for the spec.
 import model
 
 DATE_FORMAT = '%x'
-AMOUNT_FORMAT = '%.2f'
-PRICE_FORMAT = '%.2f'
-COMMISSIONS_FORMAT = '%.2f'
+AMOUNT_FORMAT = '%.4f'
+PRICE_FORMAT = '%.4f'
+COMMISSIONS_FORMAT = '%.4f'
 
 TYPES = {
     'bank': 'Bank',
