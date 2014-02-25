@@ -107,7 +107,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         for account_row in account_rows:
             try:
                 cells = account_row.find_elements_by_tag_name('td')
-                name = cells[0].text
+                name = cells[0].find_element_by_tag_name('strong').text
                 unused_acc_type = cells[1].text
                 balance_date = self._parse_date(cells[2].text)
                 balance = self._parse_balance(cells[3].text)
