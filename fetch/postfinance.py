@@ -24,6 +24,7 @@ class PostFinance(fetch.bank.Bank):
     _OVERVIEW_URL_ENGLISH = (
             'https://e-finance.postfinance.ch/secure/fp/html/e-finance?lang=en')
     _DATE_FORMAT = '%d.%m.%Y'
+    _ACCLIST_NAME_PATTERN = re.compile(r'([A-Z]{2}[0-9 ]{6,})')
     _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
     _CREDIT_CARD_TX_HEADER_PATTERN = re.compile(
@@ -131,7 +132,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Loading accounts overview...')
         browser.find_element_by_link_text('Accounts and assets').click()
         content = browser.find_element_by_id('content')
-        
+
         # Expand Assets list, if required.
         asset_accounts = content.find_element_by_class_name('assetaccounts')
         if 'multiple-items-minimized' in asset_accounts.get_attribute('class'):
@@ -149,21 +150,22 @@ class PostFinance(fetch.bank.Bank):
                 account_rows = tbody.find_elements_by_tag_name('tr')
                 for account_row in account_rows:
                     cells = account_row.find_elements_by_tag_name('td')
-                    name_and_type = cells[2].text
-                    name = name_and_type.split()[0]
-                    acc_type = ' '.join(name_and_type.split()[1:])
-                    currency = cells[4].text.strip()
-                    balance = self._parse_balance(cells[5].text.strip())
+                    acc_info = cells[2].text
+                    name = self._ACCLIST_NAME_PATTERN.findall(acc_info)[0] \
+                            .replace(' ', '')
+                    acc_type = acc_info.split()[-2]
+                    currency = cells[3].text.strip()
+                    balance = self._parse_balance(cells[4].text.strip())
                     balance_date = datetime.datetime.now()
                     if acc_type == 'Private':
                         account = model.CheckingAccount(
-                                name, balance, balance_date)
-                    elif acc_type == 'E-Deposito':
+                                name, currency, balance, balance_date)
+                    elif acc_type == 'E-savings':
                         account = model.SavingsAccount(
-                                name, balance, balance_date)
+                                name, currency, balance, balance_date)
                     elif acc_type in ('E-trading', 'Safe custody deposit'):
                         account = model.InvestmentsAccount(
-                                name, balance, balance_date)
+                                name, currency, balance, balance_date)
                     else:
                         logger.warning(
                                 'Skipping account %s with unknown type %s.' %
@@ -197,7 +199,8 @@ class PostFinance(fetch.bank.Bank):
                 balance_date = datetime.datetime.now()
                 if (acc_type.startswith('Visa') or
                     acc_type.startswith('Master')):
-                    account = model.CreditCard(name, balance, balance_date)
+                    account = model.CreditCard(
+                            name, currency, balance, balance_date)
                 elif acc_type == 'Account number':
                     # This is the account associated with the credit card.
                     # We intentionally skip it, as it pretty much contains the
@@ -239,7 +242,7 @@ class PostFinance(fetch.bank.Bank):
         form.find_element_by_name('p_buchdat_von').send_keys(formatted_start)
         form.find_element_by_name('p_buchdat_bis').send_keys(formatted_end)
         account_select = ui.Select(form.find_element_by_name('p_lkto_nr'))
-        account_select.select_by_value(account.name.replace('-', ''))
+        account_select.select_by_value(account.name[-9:])
         # 100 entries per page.
         form.find_element_by_id('p_anz_buchungen_4').click()
 
@@ -265,7 +268,7 @@ class PostFinance(fetch.bank.Bank):
         try:
             headline = browser.find_element_by_class_name(
                     'ef-chapter-title-grey').text
-            if account_name not in headline:
+            if self._format_iban(account_name) not in headline:
                 raise fetch.FetchError('Transactions search failed.')
         except exceptions.NoSuchElementException:
             try:
@@ -447,6 +450,14 @@ class PostFinance(fetch.bank.Bank):
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
         return fetch.parse_decimal_number(balance, 'de_CH')
+    
+    def _format_iban(self, iban):
+        parts = []
+        index = 0
+        while index < len(iban):
+            parts.append(iban[index:index + 4])
+            index += 4
+        return ' '.join(parts)
 
     def _check_logged_in(self):
         if not self._logged_in:

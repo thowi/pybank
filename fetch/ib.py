@@ -82,6 +82,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login failed.')
 
+        self._wait_for_unblocked()
         self._logged_in = True
         self._main_window_handle = browser.current_window_handle
         logger.info('Log-in sucessful.')
@@ -132,7 +133,8 @@ class InteractiveBrokers(fetch.bank.Bank):
                             account_name)
             for currency, balance in currencies_and_balances:
                 name = '%s.%s' % (account_name, currency)
-                accounts.append(model.InvestmentsAccount(name, balance, today))
+                accounts.append(model.InvestmentsAccount(
+                        name, currency, balance, today))
             self._close_activity_statement()
 
         return accounts

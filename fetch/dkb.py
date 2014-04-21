@@ -112,9 +112,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 balance_date = self._parse_date(cells[2].text)
                 balance = self._parse_balance(cells[3].text)
                 if self._is_credit_card(name):
-                    account = model.CreditCard(name, balance, balance_date)
+                    account = model.CreditCard(
+                            name, 'EUR', balance, balance_date)
                 else:
-                    account = model.CheckingAccount(name, balance, balance_date)
+                    account = model.CheckingAccount(
+                            name, 'EUR', balance, balance_date)
                 self._accounts.append(account)
             except ValueError:
                 logging.error('Invalid account row. %s' % account_row)

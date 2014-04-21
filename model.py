@@ -13,6 +13,9 @@ class Account(object):
     @type name: unicode
     @param name: Account name.
 
+    @type currency: unicode or None
+    @param currency: Currency symbol (usually 3-letter uppercase).
+
     @type balance: float or None
     @param balance: Balance.
 
@@ -23,8 +26,10 @@ class Account(object):
     @param transactions: The transactions.
     """
     def __init__(
-            self, name, balance=None, balance_date=None, transactions=None):
+            self, name, currency=None, balance=None, balance_date=None,
+            transactions=None):
         self.name = name
+        self.currency = currency
         self.balance = balance
         self.balance_date = balance_date
         if transactions:
@@ -112,7 +117,7 @@ class Payment(Transaction):
 
 class InvestmentSecurityTransaction(Transaction):
     """A security transaction.
-    
+
     Base class for SecurityPurchase and SecuritySale.
 
     @type date: datetime.datetime
