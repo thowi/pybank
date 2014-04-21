@@ -5,6 +5,7 @@ import datetime
 import getpass
 import logging
 import tempfile
+import time
 
 import BeautifulSoup
 from selenium import webdriver
@@ -82,9 +83,12 @@ class InteractiveBrokers(fetch.bank.Bank):
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login failed.')
 
-        self._wait_for_unblocked()
-        self._logged_in = True
+        # It is a bit silly to just sleep here, but other approaches failed, so
+        # this is a simple fix.
+        time.sleep(10)
+        
         self._main_window_handle = browser.current_window_handle
+        self._logged_in = True
         logger.info('Log-in sucessful.')
 
     def logout(self):
@@ -350,13 +354,13 @@ class InteractiveBrokers(fetch.bank.Bank):
         type_select = ui.Select(form.find_element_by_name('templateId'))
         type_select.select_by_value('S')  # S = simple.
         # Changing the report type will block the page using an overlay.
-        self._wait_for_unblocked()
+        self._wait_to_finish_loading()
 
         # Select date range.
         period_select = ui.Select(form.find_element_by_name('activityPeriod'))
         period_select.select_by_value('R')  # R = range.
         # Changing the period type will block the page using an overlay.
-        self._wait_for_unblocked()
+        self._wait_to_finish_loading()
         from_date_element = form.find_element_by_name('fromDate')
         to_date_element = form.find_element_by_name('toDate')
         self._select_date_in_activity_statement(from_date_element, start)
@@ -396,8 +400,8 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
     
-    def _wait_for_unblocked(self):
-        """Waits for the current page to be unblocked."""
+    def _wait_to_finish_loading(self):
+        """Waits for the loading indicator to disappear on the current page."""
         # Disable waiting for elements to speed up the operation.
         self._browser.implicitly_wait(0)
 
