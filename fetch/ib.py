@@ -35,7 +35,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             self._browser = webdriver.Firefox()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
-        
+
         self._logged_in = False
         self._accounts_cache = None
         self._transactions_cache = {}
@@ -56,26 +56,32 @@ class InteractiveBrokers(fetch.bank.Bank):
             raise fetch.FetchError('Login form not found.')
         login_form.find_element_by_name('user_name').send_keys(username)
         login_form.find_element_by_name('password').send_keys(password)
-        login_form.submit()
 
-        # Login successful?
-        error_element = browser.find_element_by_class_name('errorMsg')
-        error_message = error_element.text
-        if error_message:
-            logger.error('Login failed:\n%s' % error_message)
-            raise fetch.FetchError('Login failed.')
+        # TODO: Fix the login. Submitting the form doesn't work.
+#         login_form.submit()
+#
+#         # Login successful?
+#         error_element = browser.find_element_by_class_name('errorMsg')
+#         error_message = error_element.text
+#         if error_message:
+#             logger.error('Login failed:\n%s' % error_message)
+#             raise fetch.FetchError('Login failed.')
+#
+#         # Second login phase: Challenge and security token.
+#         challenge_container = browser.find_element_by_id('chlgtext')
+#         # Wait for the image to load, take a screenshot.
+#         unused_challenge_img = challenge_container.find_element_by_tag_name(
+#                 'img')
+#         screenshot_temp_filename = tempfile.mkstemp()[1]
+#         browser.get_screenshot_as_file(screenshot_temp_filename)
+#         print 'See screenshot for challenge:', screenshot_temp_filename
+#         token = raw_input('Login token: ')
+#         login_form.find_element_by_name('chlginput').send_keys(token)
+#         login_form.submit()
 
-        # Second login phase: Challenge and security token.
-        challenge_container = browser.find_element_by_id('chlgtext')
-        # Wait for the image to load, take a screenshot.
-        unused_challenge_img = challenge_container.find_element_by_tag_name(
-                'img')
-        screenshot_temp_filename = tempfile.mkstemp()[1]
-        browser.get_screenshot_as_file(screenshot_temp_filename)
-        print 'See screenshot for challenge:', screenshot_temp_filename
-        token = raw_input('Login token: ')
-        login_form.find_element_by_name('chlginput').send_keys(token)
-        login_form.submit()
+        print "Automatic log-in doesn't work yet."
+        print "Please log-in manually and press enter."
+        raw_input()
 
         # Login successful?
         try:
@@ -86,7 +92,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
         time.sleep(10)
-        
+
         self._main_window_handle = browser.current_window_handle
         self._logged_in = True
         logger.info('Log-in sucessful.')
@@ -114,32 +120,25 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._check_logged_in()
         browser = self._browser
 
-        self._go_to_activity_statements()
+        logger.debug('Getting account name...')
+        browser.switch_to_default_content()
+        browser.switch_to_frame('footer')
+        account_name = browser.find_element_by_id('theAccountId').text.strip()
+        browser.switch_to_default_content()
+        browser.switch_to_frame('content')
 
-        # Get activity statements form.
-        try:
-            form = browser.find_element_by_name('view_stmt')
-        except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Activity statements form not found.')
-
-        logger.debug('Getting accounts from activity statements form...')
-        account_select = form.find_element_by_name('accounts')
-        account_options = account_select.find_elements_by_tag_name('option')
-        account_names = [o.get_attribute('value') for o in account_options]
-
-        # Get currencies and balances in each account.
+        logger.debug('Getting balances from activity statement...')
         today = datetime.datetime.today()
         accounts = []
-        for account_name in account_names:
-            self._open_activity_statement(account_name, today, today)
-            currencies_and_balances = \
-                    self._get_currencies_and_balances_from_activity_statement(
-                            account_name)
-            for currency, balance in currencies_and_balances:
-                name = '%s.%s' % (account_name, currency)
-                accounts.append(model.InvestmentsAccount(
-                        name, currency, balance, today))
-            self._close_activity_statement()
+        self._open_activity_statement(account_name, today, today)
+        currencies_and_balances = \
+                self._get_currencies_and_balances_from_activity_statement(
+                        account_name)
+        for currency, balance in currencies_and_balances:
+            name = '%s.%s' % (account_name, currency)
+            accounts.append(model.InvestmentsAccount(
+                    name, currency, balance, today))
+        self._close_activity_statement()
 
         return accounts
 
@@ -347,8 +346,10 @@ class InteractiveBrokers(fetch.bank.Bank):
             raise fetch.FetchError('Activity statements form not found.')
 
         # Select account.
-        account_select = ui.Select(form.find_element_by_name('accounts'))
-        account_select.select_by_value(account_name)
+        # NOTE: There is no account select box, at least when you have only one
+        # account.
+        #account_select = ui.Select(form.find_element_by_name('accounts'))
+        #account_select.select_by_value(account_name)
 
         # Select simple report.
         type_select = ui.Select(form.find_element_by_name('templateId'))
@@ -369,7 +370,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.debug('Opening activity statement report...')
         browser.find_element_by_css_selector('.button.continue').click()
         browser.switch_to_window('report')
-        
+
         # Expand all sections.
         browser.find_element_by_link_text('Expand All').click()
 
@@ -399,7 +400,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 break
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-    
+
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
         # Disable waiting for elements to speed up the operation.
@@ -409,7 +410,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         find_overlay = lambda: browser.find_element_by_class_name('blockUI')
         ui_is_unblocked = lambda: not fetch.is_element_present(find_overlay)
         fetch.wait_until(ui_is_unblocked)
-        
+
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
     def _close_activity_statement(self):
@@ -429,10 +430,12 @@ class InteractiveBrokers(fetch.bank.Bank):
         table_id = 'tbl%s_%sBody' % (table_name, account_name)
         table_container = soup.find('div', {'id': table_id})
         if not table_container:
-            logger.debug('Couldn\'t find %s table.' % table_id)
+            logger.debug(
+                    'Couldn\'t find %s table. Maybe there are no transactions '
+                    'of that type?' % table_id)
             return []
         return table_container.find('table').findAll('tr')
-        
+
     def _group_rows_by_currency(self, table_rows, expected_num_columns):
         """Groups the table rows by currency.
 
