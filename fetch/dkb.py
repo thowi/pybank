@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # coding: utf-8
- 
+
 import datetime
 import getpass
 import logging
@@ -40,7 +40,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             self._browser = webdriver.PhantomJS()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
-        
+
         self._logged_in = False
         self._accounts = None
 
@@ -67,10 +67,13 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 'input[type="password"]')
         password_input.send_keys(password)
         logger.info('Logging in with user name %s...' % username)
-        submit_button = login_form.find_element_by_css_selector(
+        submit_buttons = login_form.find_elements_by_css_selector(
                 'input[value="Anmelden"]')
-        submit_button.click()
-        
+        # Hovering the first submit button will show the second button...
+        webdriver.ActionChains(browser).move_to_element(
+                submit_buttons[0]).perform()
+        submit_buttons[1].click()
+
         # Login successful?
         status_link = browser.find_element_by_link_text('Finanzstatus')
         if not status_link:
@@ -96,7 +99,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         logger.info('Loading accounts overview...')
         browser.find_element_by_link_text('Finanzstatus').click()
-        
+
         accounts_section = browser.find_element_by_id('finanzstatus_gruppen')
         account_rows = accounts_section \
                 .find_element_by_tag_name('tbody') \
@@ -130,7 +133,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             return self._get_credit_card_transactions(account, start, end)
         else:
             return self._get_checking_account_transactions(account, start, end)
-        
+
     def _get_checking_account_transactions(self, account, start, end):
         self._check_logged_in()
         browser = self._browser
@@ -138,7 +141,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Opening checking account transactions page...')
         browser.find_element_by_link_text(u'Finanzstatus').click()
         browser.find_element_by_link_text(u'Kontoumsätze').click()
-        
+
         # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -159,7 +162,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
-        
+
         if account.name not in browser.find_element_by_tag_name('body').text:
             raise fetch.FetchError('Account name not found in result page.')
 
@@ -179,7 +182,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Opening credit card transactions page...')
         browser.find_element_by_link_text('Finanzstatus').click()
         browser.find_element_by_link_text(u'Kreditkartenumsätze').click()
-        
+
         # Perform search.
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -193,7 +196,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
-        
+
         body_text = browser.find_element_by_tag_name('body').text
         if u'Kreditkartenumsätze' not in body_text:
             raise fetch.FetchError('Not a credit card search result page.')
@@ -216,11 +219,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
         for row in rows:
             try:
                 cells = row.find_elements_by_tag_name('td')
-                
+
                 # Date. First row is entry date, second is value date.
                 date_text = cells[0].text.split('\n')[1]
                 date = self._parse_date(date_text)
-                
+
                 # Payee and memo.
                 details_lines = fetch.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
@@ -232,10 +235,10 @@ class DeutscheKreditBank(fetch.bank.Bank):
                     memo += '\nAccount: %s' % payee_account
                 if payee_clearing:
                     memo += '\nClearing: %s' % payee_clearing
-                
+
                 # Amount
                 amount = fetch.parse_decimal_number(cells[3].text, 'de_DE')
-                
+
                 transactions.append(model.Payment(date, amount, payee, memo))
             except ValueError, e:
                 logger.warning(
@@ -243,7 +246,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 raise
 
         return transactions
-    
+
     def _get_transactions_from_credit_card_statement(self):
         transactions = []
         table = self._browser.find_element_by_tag_name('table')
@@ -253,18 +256,18 @@ class DeutscheKreditBank(fetch.bank.Bank):
         for row in rows:
             try:
                 cells = row.find_elements_by_tag_name('td')
-                
+
                 # Date. First row is value date, second is voucher date.
                 date_text = cells[1].text.split('\n')[0]
                 date = self._parse_date(date_text)
-                
+
                 # Memo.
                 memo = fetch.normalize_text(cells[2].text)
-                
+
                 # Amount.
                 amounts = cells[3].text.split('\n')
                 amount = fetch.parse_decimal_number(amounts[0], 'de_DE')
-                
+
                 # Currency.
                 currencies = cells[4].text.split('\n')
                 if len(currencies) > 1 and len(amounts) > 1:
@@ -273,7 +276,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                     original_currency = currencies[1]
                     memo += '\nOriginal amount: %s %.2f' % (
                             original_currency, original_amount)
-                    
+
                 transactions.append(model.Payment(date, amount, memo=memo))
             except ValueError, e:
                 logger.warning(
@@ -281,7 +284,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 raise
 
         return transactions
-    
+
     def _switch_to_print_view_window(self):
         logger.debug('Switching to print view...')
         browser = self._browser
@@ -292,7 +295,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 break
         if browser.current_window_handle == self._main_window_handle:
             raise fetch.FetchError('Print view window not found.')
-    
+
     def _is_credit_card(self, name):
         return '******' in name
 
