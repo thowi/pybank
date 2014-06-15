@@ -153,7 +153,7 @@ class PostFinance(fetch.bank.Bank):
                     acc_info = cells[2].text
                     name = self._ACCLIST_NAME_PATTERN.findall(acc_info)[0] \
                             .replace(' ', '')
-                    acc_type = acc_info.split()[-2]
+                    acc_type = acc_info.split()[-1]
                     currency = cells[3].text.strip()
                     balance = self._parse_balance(cells[4].text.strip())
                     balance_date = datetime.datetime.now()
@@ -450,7 +450,7 @@ class PostFinance(fetch.bank.Bank):
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
         return fetch.parse_decimal_number(balance, 'de_CH')
-    
+
     def _format_iban(self, iban):
         parts = []
         index = 0
