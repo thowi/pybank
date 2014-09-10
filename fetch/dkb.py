@@ -57,22 +57,16 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         # Login.
         try:
-            login_form = browser.find_element_by_class_name('anmeldung')
+            login_form = browser.find_element_by_id('login')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login form not found.')
-        username_input = login_form.find_element_by_css_selector(
-                'input[maxlength="16"]')
+        username_input = login_form.find_element_by_id('loginInputSelector')
         username_input.send_keys(username)
-        password_input = login_form.find_element_by_css_selector(
-                'input[type="password"]')
+        password_input = login_form.find_element_by_id('pinInputSelector')
         password_input.send_keys(password)
         logger.info('Logging in with user name %s...' % username)
-        submit_buttons = login_form.find_elements_by_css_selector(
-                'input[value="Anmelden"]')
-        # Hovering the first submit button will show the second button...
-        webdriver.ActionChains(browser).move_to_element(
-                submit_buttons[0]).perform()
-        submit_buttons[1].click()
+        submit_button = login_form.find_element_by_id('buttonlogin')
+        submit_button.click()
 
         # Login successful?
         status_link = browser.find_element_by_link_text('Finanzstatus')
@@ -100,12 +94,14 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Loading accounts overview...')
         browser.find_element_by_link_text('Finanzstatus').click()
 
-        accounts_section = browser.find_element_by_id('finanzstatus_gruppen')
+        accounts_section = browser.find_element_by_class_name(
+                'financialStatusModule')
         account_rows = accounts_section \
                 .find_element_by_tag_name('tbody') \
                 .find_elements_by_tag_name('tr')
-        # Skip first (header) and last (summary) row.
-        account_rows = account_rows[1:-1]
+        # Skip last (summary) row.
+        import pdb; pdb.set_trace()
+        account_rows.pop()
         self._accounts = []
         for account_row in account_rows:
             try:
@@ -113,7 +109,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 name = cells[0].find_element_by_tag_name('strong').text
                 unused_acc_type = cells[1].text
                 balance_date = self._parse_date(cells[2].text)
-                balance = self._parse_balance(cells[3].text)
+                balance_cell = account_row.find_element_by_tag_name('th')
+                balance = self._parse_balance(balance_cell.text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(
                             name, 'EUR', balance, balance_date)
@@ -148,17 +145,17 @@ class DeutscheKreditBank(fetch.bank.Bank):
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
         # TODO: Support multiple accounts.
-        content = browser.find_element_by_class_name('form-related')
+        content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
-        inputs = form.find_elements_by_css_selector('input[maxlength="10"]')
-        inputs[0].click()
-        inputs[0].clear()
-        inputs[0].send_keys(formatted_start)
-        inputs[1].click()
-        inputs[1].clear()
-        inputs[1].send_keys(formatted_end)
-        form.find_element_by_css_selector(
-                u'input[title="Umsätze anzeigen"]').click()
+        from_input = form.find_element_by_name('transactionDate')
+        from_input.click()
+        from_input.clear()
+        from_input.send_keys(formatted_start)
+        to_input = form.find_element_by_name('toTransactionDate')
+        to_input.click()
+        to_input.clear()
+        to_input.send_keys(formatted_end)
+        form.find_element_by_id('searchbutton').click()
 
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
@@ -288,7 +285,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
     def _switch_to_print_view_window(self):
         logger.debug('Switching to print view...')
         browser = self._browser
-        browser.find_element_by_css_selector('*[title="Drucken"]').click()
+        browser.find_element_by_css_selector('[title="Drucken"]').click()
         for handle in browser.window_handles:
             if handle != self._main_window_handle:
                 browser.switch_to_window(handle)
