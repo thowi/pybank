@@ -100,7 +100,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 .find_element_by_tag_name('tbody') \
                 .find_elements_by_tag_name('tr')
         # Skip last (summary) row.
-        import pdb; pdb.set_trace()
         account_rows.pop()
         self._accounts = []
         for account_row in account_rows:
