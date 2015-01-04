@@ -65,27 +65,38 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
+def get_element_or_none(lookup_callable):
+    """Returns the element for the lookup or None if not found.
+
+    @type lookup_callable: callable
+    @param lookup_callable: The lookup to execute.
+
+    @rtype: Element or None
+    @return: The element for the lookup or None if not found.
+    """
+    try:
+        return lookup_callable()
+    except exceptions.NoSuchElementException:
+        return None
+
+
 def is_element_present(lookup_callable):
     """Returns whether the lookup was successful or a NoSuchElementException was
     caught.
-    
+
     @type lookup_callable: callable
     @param lookup_callable: The lookup to execute.
-    
+
     @rtype: bool
     @return: Returns whether the lookup was successful.
     """
-    try:
-        lookup_callable()
-        return True
-    except exceptions.NoSuchElementException:
-        return False
+    return get_element_or_none(lookup_callable) is not None
 
 
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
 def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
     """Waits for the condition to become true.
-    
+
     @type condition: callable
     @param condition: The condition to check periodically.
 
@@ -94,7 +105,7 @@ def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
 
     @type sleep_s: float
     @param sleep_s: The time to sleep between the tries.
-    
+
     @type pass_exceptions: bool
     @param pass_exceptions: Whether to raise any caught exceptions.
     """

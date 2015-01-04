@@ -4,9 +4,12 @@
 import datetime
 import getpass
 import logging
+import time
 
 from selenium import webdriver
 from selenium.common import exceptions
+from selenium.webdriver.common.keys import Keys
+from selenium.webdriver.support import ui
 
 import fetch.bank
 import model
@@ -186,8 +189,31 @@ class DeutscheKreditBank(fetch.bank.Bank):
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
         content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
-        form.find_element_by_name('postingDate').send_keys(formatted_start)
-        form.find_element_by_name('toPostingDate').send_keys(formatted_end)
+        account_select_element = self._get_element_or_none(
+                lambda: form.find_element_by_name('slCreditCard'), wait_time=0)
+        if account_select_element:
+            account_select = ui.Select(account_select_element)
+            account_select.select_by_visible_text(
+                    account.name + ' / Kreditkarte')
+            # Selecting a credit card will reload the page.
+            # Wait a little. Load the form again.
+            time.sleep(5)
+            content = browser.find_element_by_class_name('content')
+            form = content.find_element_by_tag_name('form')
+        # Search for a data range.
+        form.find_element_by_id('searchPeriod.0').click()
+        # Click/send_keys wasn't reliable when the browser window was in the
+        # background. Setting the value directly.
+        from_input = form.find_element_by_name('postingDate')
+        from_input.click()
+        browser.execute_script(
+                'document.getElementById("%s").value = "%s")' %
+                (from_input.get_attribute('id'), formatted_start))
+        to_input = form.find_element_by_name('toPostingDate')
+        to_input.click()
+        browser.execute_script(
+                'document.getElementById("%s").value = "%s")' %
+                (to_input.get_attribute('id'), formatted_end))
         form.find_element_by_id('searchbutton').click()
 
         # Switch to print view to avoid pagination.
@@ -196,6 +222,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
         body_text = browser.find_element_by_tag_name('body').text
         if u'Kreditkartenumsätze' not in body_text:
             raise fetch.FetchError('Not a credit card search result page.')
+        if u'Kreditkarte ' + account.name not in body_text:
+            raise fetch.FetchError('Wrong credit card search result page.')
 
         # Parse result page into transactions.
         logger.info('Extracting transaction...')
@@ -311,3 +339,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
     def _check_logged_in(self):
         if not self._logged_in:
             raise fetch.FetchError('Not logged in.')
+
+    def _get_element_or_none(self, lookup_callable, wait_time=None):
+        if wait_time is not None:
+            self._browser.implicitly_wait(0)
+        result = fetch.get_element_or_none(lookup_callable)
+        if wait_time is not None:
+            self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        return result
