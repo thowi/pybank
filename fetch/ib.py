@@ -403,15 +403,15 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
-        # Disable waiting for elements to speed up the operation.
-        self._browser.implicitly_wait(0)
-
         browser = self._browser
+        # Disable waiting for elements to speed up the operation.
+        browser.implicitly_wait(0)
+
         find_overlay = lambda: browser.find_element_by_class_name('blockUI')
         ui_is_unblocked = lambda: not fetch.is_element_present(find_overlay)
         fetch.wait_until(ui_is_unblocked)
 
-        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
     def _close_activity_statement(self):
         self._browser.close()
