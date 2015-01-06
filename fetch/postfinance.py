@@ -4,6 +4,7 @@ import datetime
 import getpass
 import logging
 import re
+import urlparse
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -18,13 +19,10 @@ logger = logging.getLogger(__name__)
 
 class PostFinance(fetch.bank.Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
-    _LOGIN_URL = (
-            'https://e-finance.postfinance.ch/secure/fp/html/'
-            'e-finance?login&p_spr_cd=4')
-    _OVERVIEW_URL_ENGLISH = (
-            'https://e-finance.postfinance.ch/secure/fp/html/e-finance?lang=en')
+    _BASE_URL = 'https://www.postfinance.ch/ap/ba/fp/html/e-finance/'
+    _LOGIN_URL = _BASE_URL + 'home?login&p_spr_cd=4'
+    _ASSETS_URL = _BASE_URL + 'assets'
     _DATE_FORMAT = '%d.%m.%Y'
-    _ACCLIST_NAME_PATTERN = re.compile(r'([A-Z]{2}[0-9 ]{6,})')
     _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
     _CREDIT_CARD_TX_HEADER_PATTERN = re.compile(
@@ -59,19 +57,16 @@ class PostFinance(fetch.bank.Bank):
         login_form.find_element_by_name('p_passw').send_keys(password)
         login_form.submit()
 
-        # Login successful?
-        try:
-            error_element = browser.find_element_by_class_name('error')
-            logger.error('Login failed:\n%s' % error_element.text)
-            raise fetch.FetchError('Login failed.')
-        except exceptions.NoSuchElementException:
-            pass
-
         # Second login phase: Challenge and security token.
         try:
             challenge_element = browser.find_element_by_id('challenge')
         except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Security challenge not found.')
+            try:
+                error_element = browser.find_element_by_class_name('error')
+                logger.error('Login failed:\n%s' % error_element.text)
+                raise fetch.FetchError('Login failed.')
+            except exceptions.NoSuchElementException:
+                raise fetch.FetchError('Security challenge not found.')
         print 'Challenge:', challenge_element.text
         token = raw_input('Login token: ')
         try:
@@ -91,15 +86,11 @@ class PostFinance(fetch.bank.Bank):
             login_form.submit()
 
         # Ensure we're using the English interface.
-        selected_language = self._extract_language_from_page()
-        if selected_language != 'en':
-            raise fetch.FetchError(
-                    'Wrong display language "%s" instead of "en".'
-                    % selected_language)
+        self._select_english_language()
 
         # Login successful?
         try:
-            browser.find_element_by_link_text('Accounts and assets')
+            browser.find_element_by_link_text('Logout')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Login failed.')
 
@@ -107,7 +98,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def logout(self):
-        self._browser.find_element_by_id('logoutLink').click()
+        self._browser.find_element_by_link_text('Logout').click()
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
@@ -130,50 +121,42 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
 
         logger.info('Loading accounts overview...')
-        browser.find_element_by_link_text('Accounts and assets').click()
-        content = browser.find_element_by_id('content')
-
-        # Expand Assets list, if required.
-        asset_accounts = content.find_element_by_class_name('assetaccounts')
-        if 'multiple-items-minimized' in asset_accounts.get_attribute('class'):
-            asset_accounts.find_element_by_class_name('aa-button-open').click()
+        self._go_to_assets()
+        assets_overview = self._get_tile_by_title('Overview of your assets')
+        assets_overview.find_element_by_link_text('Detailed overview').click()
+        content = browser.find_element_by_class_name('detail_page')
 
         accounts = []
         try:
-            assets_widget = content.find_element_by_class_name('assets-widget')
-            account_tables = assets_widget.find_elements_by_class_name(
-                'table-total')
-            payment_accounts_table = account_tables[0]
-            asset_accounts_table = account_tables[1]
-            for account_table in payment_accounts_table, asset_accounts_table:
-                tbody = account_table.find_element_by_tag_name('tbody')
-                account_rows = tbody.find_elements_by_tag_name('tr')
-                for account_row in account_rows:
-                    cells = account_row.find_elements_by_tag_name('td')
-                    acc_info = cells[2].text
-                    name = self._ACCLIST_NAME_PATTERN.findall(acc_info)[0] \
-                            .replace(' ', '')
-                    acc_type = acc_info.split()[-1]
-                    currency = cells[3].text.strip()
-                    balance = self._parse_balance(cells[4].text.strip())
-                    balance_date = datetime.datetime.now()
-                    if acc_type == 'Private':
-                        account = model.CheckingAccount(
-                                name, currency, balance, balance_date)
-                    elif acc_type == 'E-savings':
-                        account = model.SavingsAccount(
-                                name, currency, balance, balance_date)
-                    elif acc_type in ('E-trading', 'Safe custody deposit'):
-                        account = model.InvestmentsAccount(
-                                name, currency, balance, balance_date)
-                    else:
-                        logger.warning(
-                                'Skipping account %s with unknown type %s.' %
-                                (name, acc_type))
-                        continue
-                    accounts.append(account)
+            account_rows = content.find_elements_by_tag_name('tr')
+            for account_row in account_rows:
+                cells = account_row.find_elements_by_tag_name('td')
+                if len(cells) != 7:
+                    continue
+                acc_number = cells[2].text
+                acc_type = cells[4].text
+                name = acc_number.replace(' ', '')
+                currency = cells[5].text.strip()
+                balance = self._parse_balance(cells[6].text.strip())
+                balance_date = datetime.datetime.now()
+                if acc_type == 'Private':
+                    account = model.CheckingAccount(
+                            name, currency, balance, balance_date)
+                elif acc_type == 'E-savings':
+                    account = model.SavingsAccount(
+                            name, currency, balance, balance_date)
+                elif acc_type in ('E-trading', 'Safe custody deposit'):
+                    account = model.InvestmentsAccount(
+                            name, currency, balance, balance_date)
+                else:
+                    logger.warning(
+                            'Skipping account %s with unknown type %s.' %
+                            (name, acc_type))
+                    continue
+                accounts.append(account)
         except (exceptions.NoSuchElementException, AttributeError, IndexError):
             raise fetch.FetchError('Couldn\'t load accounts.')
+        self._close_tile()
         return accounts
 
     def _fetch_credit_cards(self):
@@ -182,8 +165,10 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
 
         logger.info('Loading credit cards overview...')
-        browser.find_element_by_link_text('Credit cards').click()
-        content = browser.find_element_by_id('content')
+        self._go_to_assets()
+        assets_overview = self._get_tile_by_title('Credit card')
+        assets_overview.find_element_by_link_text('Detailed overview').click()
+        content = browser.find_element_by_class_name('detail_page')
 
         accounts = []
         try:
@@ -214,6 +199,7 @@ class PostFinance(fetch.bank.Bank):
                 accounts.append(account)
         except (exceptions.NoSuchElementException, AttributeError, IndexError):
             raise fetch.FetchError('Couldn\'t load accounts.')
+        self._close_tile()
         return accounts
 
     def get_transactions(self, account, start, end):
@@ -231,14 +217,18 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
 
         logger.info('Opening transactions search form...')
-        browser.find_element_by_link_text('Accounts and assets').click()
-        browser.find_element_by_link_text('Transactions').click()
+        self._go_to_assets()
+        # We can go to any payment account to proceed to the custom search.
+        assets_overview = self._get_tile_by_title('Payment account')
+        assets_overview.find_element_by_link_text('Transactions').click()
+        content = browser.find_element_by_class_name('detail_page')
+        content.find_element_by_class_name('adjust_search').click()
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        form = browser.find_element_by_name('bewegungen')
+        form = browser.find_element_by_id('pfform-bewegungen')
         form.find_element_by_name('p_buchdat_von').send_keys(formatted_start)
         form.find_element_by_name('p_buchdat_bis').send_keys(formatted_end)
         account_select = ui.Select(form.find_element_by_name('p_lkto_nr'))
@@ -247,29 +237,32 @@ class PostFinance(fetch.bank.Bank):
         form.find_element_by_id('p_anz_buchungen_4').click()
 
         transactions = []
+        self._get_button_by_text('Search').click()
         while True:
-            form.submit()
+            self._wait_to_finish_loading()
             transactions += self._extract_transactions_from_result_page(
                     account.name)
             # Next page?
             try:
-                form = browser.find_element_by_name('forward')
                 logger.info('Loading next transactions page.')
+                self._get_button_by_text('Next').click()
+                #content.find_element_by_id('Button1').click()  # Next
             except exceptions.NoSuchElementException:
                 break
 
         logger.info('Found %i transactions.' % len(transactions))
 
+        self._close_tile()
         return transactions
 
     def _extract_transactions_from_result_page(self, account_name):
         browser = self._browser
 
         try:
-            headline = browser.find_element_by_class_name(
-                    'ef-chapter-title-grey').text
-            if self._format_iban(account_name) not in headline:
-                raise fetch.FetchError('Transactions search failed.')
+            heading = browser.find_element_by_class_name('chapter-title-grey')
+            if self._format_iban(account_name) not in heading.text:
+                raise fetch.FetchError(
+                        'Transactions search failed: Wrong account.')
         except exceptions.NoSuchElementException:
             try:
                 error_element = browser.find_element_by_id('ef-error-message')
@@ -278,7 +271,7 @@ class PostFinance(fetch.bank.Bank):
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Transactions search failed.')
 
-        content = browser.find_element_by_id('content')
+        content = browser.find_element_by_class_name('detail_page')
         try:
             table = content.find_element_by_tag_name('table')
             tbody = table.find_element_by_tag_name('tbody')
@@ -303,32 +296,29 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
 
         logger.info('Opening credit cards overview...')
-        browser.find_element_by_link_text('Credit cards').click()
-        content = browser.find_element_by_id('content')
+        self._go_to_assets()
+        assets_overview = self._get_tile_by_title('Credit card')
+        assets_overview.find_element_by_link_text('Detailed overview').click()
+        content = browser.find_element_by_class_name('detail_page')
 
         logger.debug('Finding credit card account...')
         # Find the table row for that account.
-        account_table = content.find_element_by_class_name('table-total')
-        tbody = account_table.find_element_by_tag_name('tbody')
-        account_rows = tbody.find_elements_by_tag_name('tr')
-        account_found = False
-        for account_row in account_rows:
-            cells = account_row.find_elements_by_tag_name('td')
-            details_link = cells[0].find_element_by_tag_name('a')
-            name = cells[1].text.replace(' ', '')
-            if name == account.name:
-                details_link.click()
-                account_found = True
-                break
-        if not account_found:
+        try:
+            table = content.find_element_by_class_name('table-total')
+            formatted_account_name = self._format_cc_account_name(account.name)
+            row = table.find_element_by_xpath(
+                    "//td[text() = '%s']/ancestor::tr" % formatted_account_name)
+            row.find_element_by_tag_name('a').click()
+        except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find account %s.' % account)
 
         # You can see the transactions for three periods:
         # Current, previous and last-but-one.
         # We always load all and post-filter.
-        content = browser.find_element_by_id('content')
         transactions = []
         while True:
+            self._wait_to_finish_loading()
+
             # Get the period of the current page.
             page_title = content.find_element_by_class_name('page-title').text
             match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(page_title)
@@ -355,19 +345,16 @@ class PostFinance(fetch.bank.Bank):
                         memo='[Next billing cycle]'))
 
             # Go to the next page.
-            # You can navigate to the previous period using the "beweg1" form,
-            # and to the last-but-one period using the "beweg2" form.
-            if current_period == 'current':
-                form_name = 'beweg1'
-            elif current_period == 'previous billing':
-                form_name = 'beweg2'
-            else:
-                logger.debug('Hit last transactions page. Exiting loop.')
-                break
+            logger.info('Loading earlier transactions page...')
             try:
-                forward_form = browser.find_element_by_name(form_name)
-                logger.info('Loading earlier transactions page...')
-                forward_form.submit()
+                if current_period == 'current':
+                    self._get_button_by_text('Previous billing period').click()
+                elif current_period == 'previous billing':
+                    self._get_button_by_text('Last-but-one billing period') \
+                    .click()
+                else:
+                    logger.debug('Hit last transactions page. Exiting loop.')
+                    break
             except exceptions.NoSuchElementException:
                 logger.info('No more earlier transactions.')
                 break
@@ -384,11 +371,12 @@ class PostFinance(fetch.bank.Bank):
 
         logger.info('Found %i transactions.' % len(transactions))
 
+        self._close_tile()
         return transactions
 
     def _extract_cc_transactions(self):
         browser = self._browser
-        content = browser.find_element_by_id('content')
+        content = browser.find_element_by_class_name('detail_page')
         try:
             table = content.find_element_by_class_name('table-total')
         except exceptions.NoSuchElementException:
@@ -405,6 +393,8 @@ class PostFinance(fetch.bank.Bank):
             date = cells[0].text.strip()
             billing_month = cells[1].text.strip()
             memo = cells[2].text.strip()
+            if billing_month:
+                memo += 'Billing month: ' + billing_month
             credit = cells[3].text.replace('&nbsp;', '').strip()
             debit = cells[4].text.replace('&nbsp;', '').strip()
             transaction = self._parse_transaction_from_text(
@@ -436,29 +426,54 @@ class PostFinance(fetch.bank.Bank):
 
         return model.Payment(date, amount, memo=memo)
 
-    def _extract_language_from_page(self):
+    def _select_english_language(self):
         browser = self._browser
-        try:
-            selector_element = browser.find_element_by_id('languageSelector')
-            selected_lang = selector_element.find_element_by_class_name(
-                    'selected')
-            return selected_lang.text.strip()
-        except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Couldn\'t find selected language.')
+        url = urlparse.urlparse(browser.current_url)
+        english_url = urlparse.urlunparse(url[:3] + ('', 'lang=en', ''))
+        browser.get(english_url)
+
+    def _go_to_assets(self):
+        self._browser.get(self._ASSETS_URL)
+
+    def _close_tile(self):
+        self._browser.find_element_by_link_text('Close').click()
+
+    def _wait_to_finish_loading(self):
+        """Waits for the loading indicator to disappear on the current page."""
+        loader = self._browser.find_element_by_id('loader')
+        ui_is_unblocked = lambda: not loader.is_displayed()
+        fetch.wait_until(ui_is_unblocked)
 
     def _parse_balance(self, balance):
+        # A Unicode minus might be used.
+        balance = balance.replace(u'\u2212', '-')
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
         return fetch.parse_decimal_number(balance, 'de_CH')
 
     def _format_iban(self, iban):
+        return self._format_string_into_blocks(iban, 4)
+
+    def _format_cc_account_name(self, account_name):
+        return self._format_string_into_blocks(account_name, 4)
+
+    def _format_string_into_blocks(self, string, block_length, separator=' '):
         parts = []
         index = 0
-        while index < len(iban):
-            parts.append(iban[index:index + 4])
-            index += 4
-        return ' '.join(parts)
+        while index < len(string):
+            parts.append(string[index:index + block_length])
+            index += block_length
+        return separator.join(parts)
 
     def _check_logged_in(self):
         if not self._logged_in:
             raise fetch.FetchError('Not logged in.')
+
+    def _get_button_by_text(self, text):
+        return self._browser.find_element_by_xpath(
+                "//input[@type = 'button' and normalize-space(@value) = '%s']" %
+                text)
+
+    def _get_tile_by_title(self, title):
+        return self._browser.find_element_by_xpath(
+                "//*[normalize-space(text()) = '%s']/ancestor::li" % title)
