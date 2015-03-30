@@ -109,9 +109,9 @@ def _parse_args(argv):
         # Beginning of last month.
         now = datetime.datetime.now()
         if now.month == 1:
-            last_month = now.replace(year=now.year-1, month=12)
+            last_month = now.replace(year=now.year-1, month=12, day=1)
         else:
-            last_month = now.replace(month=now.month-1)
+            last_month = now.replace(month=now.month-1, day=1)
         from_date = datetime.datetime(last_month.year, last_month.month, 1)
 
     if till_date:
