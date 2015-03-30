@@ -207,12 +207,12 @@ class DeutscheKreditBank(fetch.bank.Bank):
         from_input = form.find_element_by_name('postingDate')
         from_input.click()
         browser.execute_script(
-                'document.getElementById("%s").value = "%s")' %
+                'document.getElementById("%s").value = "%s"' %
                 (from_input.get_attribute('id'), formatted_start))
         to_input = form.find_element_by_name('toPostingDate')
         to_input.click()
         browser.execute_script(
-                'document.getElementById("%s").value = "%s")' %
+                'document.getElementById("%s").value = "%s"' %
                 (to_input.get_attribute('id'), formatted_end))
         form.find_element_by_id('searchbutton').click()
 
