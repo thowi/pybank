@@ -25,9 +25,8 @@ class PostFinance(fetch.bank.Bank):
     _DATE_FORMAT = '%d.%m.%Y'
     _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
-    _CREDIT_CARD_TX_HEADER_PATTERN = re.compile(
-            r'Transactions in the (current|previous billing|'
-            'last-but-one billing) period')
+    _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
+            r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
 
     def login(self, username=None, password=None):
         if self._debug:
@@ -77,7 +76,7 @@ class PostFinance(fetch.bank.Bank):
         login_form.submit()
 
         # Logout warning?
-        if 'Logout reminder' in browser.page_source:
+        if 'Increased security when logging out' in browser.page_source:
             logger.info('Confirming logout reminder...')
             try:
                 login_form = browser.find_element_by_name('login')
@@ -172,25 +171,20 @@ class PostFinance(fetch.bank.Bank):
 
         accounts = []
         try:
-            account_table = content.find_element_by_class_name('table-total')
+            account_table = content.find_element_by_id('kreditkarte_u1')
             tbody = account_table.find_element_by_tag_name('tbody')
             account_rows = tbody.find_elements_by_tag_name('tr')
             for account_row in account_rows:
                 cells = account_row.find_elements_by_tag_name('td')
-                name = cells[1].text.replace(' ', '')
-                acc_type = cells[2].text.strip()
-                currency = cells[4].text.strip()
-                balance = self._parse_balance(cells[5].text.strip())
+                acc_type = cells[1].text.strip()
+                name = cells[2].text.replace(' ', '')
+                currency = cells[5].text.strip()
+                balance = self._parse_balance(cells[6].text.strip())
                 balance_date = datetime.datetime.now()
                 if (acc_type.startswith('Visa') or
                     acc_type.startswith('Master')):
                     account = model.CreditCard(
                             name, currency, balance, balance_date)
-                elif acc_type == 'Account number':
-                    # This is the account associated with the credit card.
-                    # We intentionally skip it, as it pretty much contains the
-                    # same data as the credit card.
-                    continue
                 else:
                     logger.warning(
                             'Skipping account %s with unknown type %s.' %
@@ -222,7 +216,7 @@ class PostFinance(fetch.bank.Bank):
         assets_overview = self._get_tile_by_title('Payment account')
         assets_overview.find_element_by_link_text('Transactions').click()
         content = browser.find_element_by_class_name('detail_page')
-        content.find_element_by_class_name('adjust_search').click()
+        content.find_element_by_link_text('Search options').click()
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -231,8 +225,12 @@ class PostFinance(fetch.bank.Bank):
         form = browser.find_element_by_id('pfform-bewegungen')
         form.find_element_by_name('p_buchdat_von').send_keys(formatted_start)
         form.find_element_by_name('p_buchdat_bis').send_keys(formatted_end)
-        account_select = ui.Select(form.find_element_by_name('p_lkto_nr'))
-        account_select.select_by_value(account.name[-9:])
+        # The search form is not using a standard <select>, but some custom
+        # HTML. Luckily, they use a hidden <input> to store the selected
+        # account.
+        browser.execute_script(
+                'document.getElementsByName("p_lkto_nr")[0].value = "%s"' %
+                account.name[-9:])
         # 100 entries per page.
         form.find_element_by_id('p_anz_buchungen_4').click()
 
@@ -304,7 +302,7 @@ class PostFinance(fetch.bank.Bank):
         logger.debug('Finding credit card account...')
         # Find the table row for that account.
         try:
-            table = content.find_element_by_class_name('table-total')
+            table = content.find_element_by_id('kreditkarte_u1')
             formatted_account_name = self._format_cc_account_name(account.name)
             row = table.find_element_by_xpath(
                     "//td[text() = '%s']/ancestor::tr" % formatted_account_name)
@@ -318,17 +316,34 @@ class PostFinance(fetch.bank.Bank):
         transactions = []
         while True:
             self._wait_to_finish_loading()
+            # Also wait for the content to load.
+            content.find_element_by_xpath(
+                    "//h1[@class = 'page-title page-title-top']"
+                    "/span[text() = 'Transactions']")
+            content.find_element_by_class_name('content-pane') \
+                    .find_element_by_tag_name('table')
 
             # Get the period of the current page.
-            page_title = content.find_element_by_class_name('page-title').text
-            match = self._CREDIT_CARD_TX_HEADER_PATTERN.search(page_title)
-            if match:
-                current_period = match.group(1)
+            period = content.find_element_by_class_name('page-title') \
+                .find_element_by_class_name('add-information').text
+            if period == 'Current accounting period':
+                # Just use "now", which is an inaccurate hack, but works for our
+                # purposes.
+                start_date = end_date = datetime.datetime.now()
             else:
-                raise fetch.FetchError(
-                        'Not a credit card transactions page %s.' %
-                        account.name)
-            logger.debug('Current period: ' + current_period)
+                match = self._CREDIT_CARD_DATE_RANGE_PATTERN.search(period)
+                if match:
+                    start_date_str = match.group(1)
+                    end_date_str = match.group(2)
+                    start_date = datetime.datetime.strptime(
+                            start_date_str, self._DATE_FORMAT)
+                    end_date = datetime.datetime.strptime(
+                            end_date_str, self._DATE_FORMAT)
+                else:
+                    raise fetch.FetchError(
+                            'Not a credit card transactions page %s.' %
+                            account.name)
+            logger.debug('Current period: ' + period)
 
             transactions_on_page = self._extract_cc_transactions()
             transactions += transactions_on_page
@@ -336,28 +351,27 @@ class PostFinance(fetch.bank.Bank):
                     'Found %i transactions on the current page.' %
                     len(transactions_on_page))
 
-            # Add a marker transaction for the page break.
-            if (current_period in ('current', 'previous billing') and
-                len(transactions) > 0):
+            # Are we done yet?
+            if start_date <= start:
+                logger.info('Should have loaded enough transaction pages.')
+                break
+            else:
                 logger.debug('Adding marker transaction for page break.')
                 transactions.append(model.Payment(
                         transactions[-1].date, amount=0,
                         memo='[Next billing cycle]'))
 
-            # Go to the next page.
-            logger.info('Loading earlier transactions page...')
-            try:
-                if current_period == 'current':
-                    self._get_button_by_text('Previous billing period').click()
-                elif current_period == 'previous billing':
-                    self._get_button_by_text('Last-but-one billing period') \
-                    .click()
-                else:
-                    logger.debug('Hit last transactions page. Exiting loop.')
-                    break
-            except exceptions.NoSuchElementException:
+            # Load earlier transactions.
+            date_select_el = content.find_element_by_class_name('buttons') \
+                    .find_element_by_tag_name('select')
+            next_option = date_select_el.find_element_by_xpath(
+                    "option[text() = '%s']/following-sibling::option" % period)
+            if not next_option:
                 logger.info('No more earlier transactions.')
                 break
+            logger.info('Loading earlier transactions page...')
+            date_select = ui.Select(date_select_el)
+            date_select.select_by_value(next_option.get_attribute('value'))
 
         # Filter the transactions for the requested date range.
         logger.debug(
@@ -376,9 +390,9 @@ class PostFinance(fetch.bank.Bank):
 
     def _extract_cc_transactions(self):
         browser = self._browser
-        content = browser.find_element_by_class_name('detail_page')
+        content = browser.find_element_by_class_name('content-pane')
         try:
-            table = content.find_element_by_class_name('table-total')
+            table = content.find_element_by_tag_name('table')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find transactions.')
         try:
@@ -389,14 +403,11 @@ class PostFinance(fetch.bank.Bank):
         table_rows = tbody.find_elements_by_tag_name('tr')
         transactions = []
         for table_row in table_rows:
+            date = table_row.find_elements_by_tag_name('th')[0].text.strip()
             cells = table_row.find_elements_by_tag_name('td')
-            date = cells[0].text.strip()
-            billing_month = cells[1].text.strip()
-            memo = cells[2].text.strip()
-            if billing_month:
-                memo += 'Billing month: ' + billing_month
-            credit = cells[3].text.replace('&nbsp;', '').strip()
-            debit = cells[4].text.replace('&nbsp;', '').strip()
+            memo = cells[0].text.strip()
+            credit = cells[1].text.replace('&nbsp;', '').strip()
+            debit = cells[2].text.replace('&nbsp;', '').strip()
             transaction = self._parse_transaction_from_text(
                     date, memo, credit, debit)
             if transaction:
