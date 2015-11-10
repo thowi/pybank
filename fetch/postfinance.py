@@ -27,6 +27,7 @@ class PostFinance(fetch.bank.Bank):
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
     _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
             r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
+    _AMOUNT_SANITIZER_PATTERN = re.compile(u'&nbsp;|\u2212|-|\+| ')
 
     def login(self, username=None, password=None):
         if self._debug:
@@ -257,7 +258,7 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
 
         try:
-            heading = browser.find_element_by_class_name('chapter-title-grey')
+            heading = browser.find_element_by_class_name('paragraph-title')
             if self._format_iban(account_name) not in heading.text:
                 raise fetch.FetchError(
                         'Transactions search failed: Wrong account.')
@@ -281,8 +282,8 @@ class PostFinance(fetch.bank.Bank):
             cells = table_row.find_elements_by_tag_name('td')
             date = cells[1].text.strip()
             memo = cells[2].text.strip()
-            credit = cells[3].text.replace('&nbsp;', '').strip()
-            debit = cells[4].text.replace('&nbsp;', '').strip()
+            credit = self._sanitize_amount(cells[3].text)
+            debit = self._sanitize_amount(cells[4].text)
             transaction = self._parse_transaction_from_text(
                     date, memo, credit, debit)
             if transaction:
@@ -406,14 +407,17 @@ class PostFinance(fetch.bank.Bank):
             date = table_row.find_elements_by_tag_name('th')[0].text.strip()
             cells = table_row.find_elements_by_tag_name('td')
             memo = cells[0].text.strip()
-            credit = cells[1].text.replace('&nbsp;', '').strip()
-            debit = cells[2].text.replace('&nbsp;', '').strip()
+            credit = self._sanitize_amount(cells[1].text)
+            debit = self._sanitize_amount(cells[2].text)
             transaction = self._parse_transaction_from_text(
                     date, memo, credit, debit)
             if transaction:
                 transactions.append(transaction)
 
         return transactions
+
+    def _sanitize_amount(self, amount_text):
+        return self._AMOUNT_SANITIZER_PATTERN.sub('', amount_text)
 
     def _parse_transaction_from_text(self, date, memo, credit, debit):
         try:
