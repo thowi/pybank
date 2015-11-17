@@ -166,7 +166,10 @@ def _fetch_accounts(
                 account, from_date, till_date)
         output = _open_file(
                 output_filename, bank_name, account.name, from_date, till_date)
-        print >>output, qif.serialize_account(account).encode('utf-8')
+        try:
+            print >>output, qif.serialize_account(account).encode('utf-8')
+        except qif.SerializationError, e:
+                logger.error('Serialization error: %s.', e)
 
     bank.logout()
 

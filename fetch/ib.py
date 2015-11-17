@@ -146,7 +146,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             self, account_name):
         logger.debug('Extracting currencies and balances...')
 
-        table_rows = self._find_transaction_rows('CashReport', account_name)
+        table_rows = self._find_cash_rows(account_name)
         rows_by_currency = self._group_rows_by_currency(
                 table_rows, expected_num_columns=6)
         currencies_and_balances = []
@@ -163,6 +163,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     def get_transactions(self, account, start, end):
         account_name, currency = self._split_account_name(account.name)
         cache_key = account_name, start, end
+        # TODO: Actually store data in the cache. This is a no-op right now.
         cached_transactions = self._transactions_cache.get(cache_key)
         if cached_transactions:
             return cached_transactions[currency]
@@ -172,6 +173,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         end_inclusive = end - datetime.timedelta(1)
         self._open_activity_statement(account_name, start, end_inclusive)
 
+        transfers = self._get_transfers_from_activity_statement(account_name)
         trades = self._get_trades_from_activity_statement(account_name)
         withholding_tax = self._get_withholding_tax_from_activity_statement(
                 account_name)
@@ -180,7 +182,8 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         # We're only interested in the current currency.
         transactions = []
-        for category in trades, withholding_tax, dividends, other_fees:
+        for category in (
+                transfers, trades, withholding_tax, dividends, other_fees):
             transactions_by_currency = category.get(currency)
             if transactions_by_currency:
                 transactions += transactions_by_currency
@@ -190,12 +193,39 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.info('Found %i transactions.' % len(transactions))
         return transactions
 
+    def _get_transfers_from_activity_statement(self, account_name):
+        logger.debug('Extracting transfers...')
+
+        table_rows = self._find_transfer_rows(account_name)
+        rows_by_currency = self._group_rows_by_currency(
+                table_rows, expected_num_columns=4)
+        transactions_by_currency = {}
+        for currency, rows in rows_by_currency.items():
+            transactions = []
+            transactions_by_currency[currency] = transactions
+            for cells in rows:
+                date = cells[0].getText()
+                try:
+                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
+                except ValueError:
+                    logger.warning(
+                            'Skipping transfer with invalid date %s.', date)
+                    continue
+                description = cells[1].getText()
+                amount = self._parse_float(cells[2].getText())
+                unused_code = cells[3].getText()
+
+                transaction = model.Payment(date, amount, payee=account_name)
+                transactions.append(transaction)
+
+        return transactions_by_currency
+
     def _get_trades_from_activity_statement(self, account_name):
         logger.debug('Extracting trades...')
 
-        table_rows = self._find_transaction_rows('Transactions', account_name)
+        table_rows = self._find_trade_rows(account_name)
         rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=10)
+                table_rows, expected_num_columns=9)
         transactions_by_currency = {}
         for currency, rows in rows_by_currency.items():
             transactions = []
@@ -210,11 +240,10 @@ class InteractiveBrokers(fetch.bank.Bank):
                     logger.warning(
                             'Skipping transaction with invalid date %s.', date)
                     continue
-                unused_exchange = cells[2].getText()
-                quantity = self._parse_int(cells[3].getText())
-                price = self._parse_float(cells[4].getText())
-                proceeds = self._parse_float(cells[5].getText())
-                commissions_and_tax = self._parse_float(cells[6].getText())
+                quantity = self._parse_int(cells[2].getText())
+                price = self._parse_float(cells[3].getText())
+                proceeds = self._parse_float(cells[4].getText())
+                commissions_and_tax = self._parse_float(cells[5].getText())
                 amount = proceeds + commissions_and_tax
 
                 if quantity >= 0:
@@ -232,7 +261,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_withholding_tax_from_activity_statement(self, account_name):
         logger.debug('Extracting withholding tax...')
 
-        table_rows = self._find_transaction_rows('WithholdingTax', account_name)
+        table_rows = self._find_withholding_tax_rows(account_name)
         rows_by_currency = self._group_rows_by_currency(
                 table_rows, expected_num_columns=4)
         transactions_by_currency = {}
@@ -262,9 +291,8 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_dividends_from_activity_statement(self, account_name):
         logger.debug('Extracting dividends...')
 
-        dividend_rows = self._find_transaction_rows('Dividends', account_name)
-        div_lieu_rows = self._find_transaction_rows(
-                'PaymentInLieuOfDividends', account_name)
+        dividend_rows = self._find_dividend_rows(account_name)
+        div_lieu_rows = self._find_in_lieu_of_dividend_rows(account_name)
         table_rows = dividend_rows + div_lieu_rows
         rows_by_currency = self._group_rows_by_currency(
                 table_rows, expected_num_columns=4)
@@ -295,7 +323,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_other_fees_from_activity_statement(self, account_name):
         logger.debug('Extracting other fees...')
 
-        table_rows = self._find_transaction_rows('OtherFees', account_name)
+        table_rows = self._find_other_fee_rows(account_name)
         rows_by_currency = self._group_rows_by_currency(
                 table_rows, expected_num_columns=4)
         transactions_by_currency = {}
@@ -417,8 +445,37 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._browser.close()
         self._browser.switch_to_window(self._main_window_handle)
 
-    def _find_transaction_rows(self, table_name, account_name):
-        # Wait for the report to load.
+    def _find_transfer_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblDepositsWithdrawals_%sBody' % account_name, account_name)
+
+    def _find_cash_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblCashReport_%sBody' % account_name, account_name)
+
+    def _find_trade_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblTransactions_%sBody' % account_name, account_name)
+
+    def _find_withholding_tax_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblWithholdingTax_%sBody' % account_name, account_name)
+
+    def _find_dividend_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblDividends_%sBody' % account_name, account_name)
+
+    def _find_in_lieu_of_dividend_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblPaymentInLieuOfDividends_%sBody' % account_name,
+                account_name)
+
+    def _find_other_fee_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblOtherFees_%sBody' % account_name, account_name)
+
+    def _find_transaction_rows(self, table_container_id, account_name):
+
         self._browser.find_element_by_id(
                 'tblAccountInformation_' + account_name + 'Body')
 
@@ -427,12 +484,11 @@ class InteractiveBrokers(fetch.bank.Bank):
         html = self._browser.page_source
         soup = BeautifulSoup.BeautifulSoup(html)
 
-        table_id = 'tbl%s_%sBody' % (table_name, account_name)
-        table_container = soup.find('div', {'id': table_id})
+        table_container = soup.find('div', {'id': table_container_id})
         if not table_container:
             logger.debug(
                     'Couldn\'t find %s table. Maybe there are no transactions '
-                    'of that type?' % table_id)
+                    'of that type?' % table_container_id)
             return []
         return table_container.find('table').findAll('tr')
 
@@ -486,7 +542,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 continue
 
             rows_by_currency[currency].append(cells)
-            logger.debug('Added new row.')
+            logger.debug('Added new row for currency %s.' % currency)
 
         return rows_by_currency
 

@@ -61,7 +61,7 @@ INVESTMENT_ACTION_TYPES = {
     'transfer cash in': 'XIn',
     'transfer cash out': 'XOut',
     'shares in': 'ShrsIn',
-    'shares out': 'ShrsOut',    
+    'shares out': 'ShrsOut',
     'dividend': 'Div',
     'misc expense': 'MiscExp',
     'misc income': 'MiscInc',
@@ -85,6 +85,10 @@ ACCOUNT_INFO = {
 # MEMORIZED_TRANSACTION_LIST = {}
 
 END_OF_ENTRY = '^'
+
+
+class SerializationError(Exception):
+    """An error while serializing the data."""
 
 
 """Serializes an account to the QIF format.
@@ -135,6 +139,8 @@ def serialize_account(account):
 
 @rtype: unicode
 @return: The QIF serialization of the transaction.
+
+@raise SerializationError: For unknown transaction types.
 """
 def serialize_transaction(transaction):
     if isinstance(transaction, model.Payment):
@@ -154,6 +160,8 @@ def serialize_transaction(transaction):
     elif isinstance(transaction, model.InvestmentMiscIncome):
         return serialize_investment_transaction(
                 transaction, INVESTMENT_ACTION_TYPES['misc income'])
+    else:
+        raise SerializationError('Unknown transaction type: ' + transaction)
 
 
 """Serializes a payment to the QIF format.
