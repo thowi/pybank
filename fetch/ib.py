@@ -24,7 +24,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     _ACTIVITY_FORM_DATE_FORMAT = '%Y%m%d'
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
-    _WEBDRIVER_TIMEOUT = 20
+    _WEBDRIVER_TIMEOUT = 30
 
     def login(self, username=None, password=None):
         if self._debug:
