@@ -42,7 +42,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         else:
             self._browser = webdriver.PhantomJS()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-        self._browser.set_window_size(800, 800)
+        self._browser.set_window_size(1000, 800)
 
         self._logged_in = False
         self._accounts = None
@@ -70,6 +70,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Logging in with user name %s...' % username)
         submit_button = login_form.find_element_by_id('buttonlogin')
         submit_button.click()
+        self._wait_to_finish_loading()
 
         # Login successful?
         status_link = browser.find_element_by_link_text('Finanzstatus')
@@ -96,6 +97,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         logger.info('Loading accounts overview...')
         browser.find_element_by_link_text('Finanzstatus').click()
+        self._wait_to_finish_loading()
 
         accounts_section = browser.find_element_by_class_name(
                 'financialStatusModule')
@@ -139,7 +141,9 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         logger.info('Opening checking account transactions page...')
         browser.find_element_by_link_text(u'Finanzstatus').click()
+        self._wait_to_finish_loading()
         browser.find_element_by_link_text(u'Kontoumsätze').click()
+        self._wait_to_finish_loading()
 
         # Perform search.
         logger.info('Performing transactions search...')
@@ -158,6 +162,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         to_input.clear()
         to_input.send_keys(formatted_end)
         form.find_element_by_id('searchbutton').click()
+        self._wait_to_finish_loading()
 
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
@@ -180,7 +185,9 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         logger.info('Opening credit card transactions page...')
         browser.find_element_by_link_text('Finanzstatus').click()
+        self._wait_to_finish_loading()
         browser.find_element_by_link_text(u'Kreditkartenumsätze').click()
+        self._wait_to_finish_loading()
 
         # Perform search.
         logger.info('Performing transactions search...')
@@ -215,6 +222,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 'document.getElementById("%s").value = "%s"' %
                 (to_input.get_attribute('id'), formatted_end))
         form.find_element_by_id('searchbutton').click()
+        self._wait_to_finish_loading()
 
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
@@ -251,8 +259,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 # Payee and memo.
                 details_lines = fetch.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
-                payee = details_lines[1]
-                memo = '\n'.join(details_lines[2:])
+                payee = details_lines[1:1]  # This line might not exist.
+                memo = '\n'.join(details_lines[2:])  # Might be empty.
                 payee_lines = cells[2].text.split('\n') + ['']
                 payee_account, payee_clearing = payee_lines[:2]
                 if payee_account:
@@ -347,3 +355,15 @@ class DeutscheKreditBank(fetch.bank.Bank):
         if wait_time is not None:
             self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         return result
+
+    def _wait_to_finish_loading(self):
+        """Waits for the loading indicator to disappear on the current page."""
+        browser = self._browser
+        # Disable waiting for elements to speed up the operation.
+        browser.implicitly_wait(0)
+
+        overlay = lambda: browser.find_element_by_class_name('ajax_loading')
+        ui_is_unblocked = lambda: not fetch.is_element_displayed(overlay)
+        fetch.wait_until(ui_is_unblocked)
+
+        browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)

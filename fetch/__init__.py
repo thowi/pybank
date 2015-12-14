@@ -93,6 +93,20 @@ def is_element_present(lookup_callable):
     return get_element_or_none(lookup_callable) is not None
 
 
+def is_element_displayed(lookup_callable):
+    """Returns whether the lookup was successful, the element was found, and it
+    is displayed.
+
+    @type lookup_callable: callable
+    @param lookup_callable: The lookup to execute.
+
+    @rtype: bool
+    @return: Returns whether the was found and is displayed.
+    """
+    element = get_element_or_none(lookup_callable)
+    return element is not None and element.is_displayed()
+
+
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
 def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
     """Waits for the condition to become true.
