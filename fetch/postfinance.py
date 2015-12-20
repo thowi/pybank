@@ -321,12 +321,13 @@ class PostFinance(fetch.bank.Bank):
             content.find_element_by_xpath(
                     "//h1[@class = 'page-title page-title-top']"
                     "/span[text() = 'Transactions']")
-            content.find_element_by_class_name('content-pane') \
+            content.find_element_by_class_name('content-pane-wrapper') \
+                    .find_element_by_class_name('content-pane') \
                     .find_element_by_tag_name('table')
 
             # Get the period of the current page.
             period = content.find_element_by_class_name('page-title') \
-                .find_element_by_class_name('add-information').text
+                    .find_element_by_class_name('add-information').text
             if period == 'Current accounting period':
                 # Just use "now", which is an inaccurate hack, but works for our
                 # purposes.
@@ -391,7 +392,8 @@ class PostFinance(fetch.bank.Bank):
 
     def _extract_cc_transactions(self):
         browser = self._browser
-        content = browser.find_element_by_class_name('content-pane')
+        content = browser.find_element_by_class_name('content-pane-wrapper') \
+                .find_element_by_class_name('content-pane')
         try:
             table = content.find_element_by_tag_name('table')
         except exceptions.NoSuchElementException:
@@ -455,7 +457,7 @@ class PostFinance(fetch.bank.Bank):
 
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
-        loader = self._browser.find_element_by_id('loader')
+        loader = self._browser.find_element_by_class_name('is-loading')
         ui_is_unblocked = lambda: not loader.is_displayed()
         fetch.wait_until(ui_is_unblocked)
 
