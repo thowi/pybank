@@ -363,7 +363,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser.implicitly_wait(0)
 
         overlay = lambda: browser.find_element_by_class_name('ajax_loading')
-        ui_is_unblocked = lambda: not fetch.is_element_displayed(overlay)
-        fetch.wait_until(ui_is_unblocked)
+        fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)

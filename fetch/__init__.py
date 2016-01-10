@@ -2,6 +2,7 @@
 
 import datetime
 import locale
+import logging
 import re
 import string
 import time
@@ -10,6 +11,8 @@ from selenium.common import exceptions
 
 
 WHITESPACE_PATTERN = re.compile(r' +')
+
+logger = logging.getLogger(__name__)
 
 
 class FetchError(Exception):
@@ -107,8 +110,26 @@ def is_element_displayed(lookup_callable):
     return element is not None and element.is_displayed()
 
 
+def wait_for_element_to_appear_and_disappear(lookup_callable):
+    """Waits for an element to appear and then disappear.
+
+    If the element doesn't appear it is assumed to be gone already.
+
+    @type lookup_callable: callable
+    @param lookup_callable: The lookup to find the element.
+    """
+    element_displayed = lambda: is_element_displayed(lookup_callable)
+    try:
+        wait_until(element_displayed, timeout_s=2)
+    except OperationTimeoutError:
+        # The element probably disappeared already.
+        pass
+    element_disappeared = lambda: not element_displayed()
+    wait_until(element_disappeared)
+
+
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
-def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
+def wait_until(condition, timeout_s=10, sleep_s=0.5, raise_exceptions=False):
     """Waits for the condition to become true.
 
     @type condition: callable
@@ -120,8 +141,8 @@ def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
     @type sleep_s: float
     @param sleep_s: The time to sleep between the tries.
 
-    @type pass_exceptions: bool
-    @param pass_exceptions: Whether to raise any caught exceptions.
+    @type raise_exceptions: bool
+    @param raise_exceptions: Whether to raise any caught exceptions.
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout_s)
     while datetime.datetime.now() < end_time:
@@ -129,9 +150,10 @@ def wait_until(condition, timeout_s=10, sleep_s=0.5, pass_exceptions=False):
             if condition():
                 return
         except Exception, e:
-            if pass_exceptions:
+            if raise_exceptions:
                 raise e
             else:
+                logger.info('Suppressing exception: ' + str(e))
                 pass
         time.sleep(sleep_s)
 

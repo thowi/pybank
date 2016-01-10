@@ -435,9 +435,8 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Disable waiting for elements to speed up the operation.
         browser.implicitly_wait(0)
 
-        find_overlay = lambda: browser.find_element_by_class_name('blockUI')
-        ui_is_unblocked = lambda: not fetch.is_element_present(find_overlay)
-        fetch.wait_until(ui_is_unblocked)
+        overlay = lambda: browser.find_element_by_class_name('blockUI')
+        fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 

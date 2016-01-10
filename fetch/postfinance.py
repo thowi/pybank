@@ -28,13 +28,14 @@ class PostFinance(fetch.bank.Bank):
     _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
             r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
     _AMOUNT_SANITIZER_PATTERN = re.compile(u'&nbsp;|\u2212|-|\+| ')
+    _WEBDRIVER_TIMEOUT = 10
 
     def login(self, username=None, password=None):
         if self._debug:
             self._browser = webdriver.Firefox()
         else:
             self._browser = webdriver.PhantomJS()
-        self._browser.implicitly_wait(10)
+        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
         self._logged_in = False
         self._accounts = None
@@ -168,8 +169,9 @@ class PostFinance(fetch.bank.Bank):
         self._go_to_assets()
         assets_overview = self._get_tile_by_title('Credit card')
         assets_overview.find_element_by_link_text('Detailed overview').click()
-        content = browser.find_element_by_class_name('detail_page')
+        self._wait_to_finish_loading()
 
+        content = browser.find_element_by_class_name('detail_page')
         accounts = []
         try:
             account_table = content.find_element_by_id('kreditkarte_u1')
@@ -216,8 +218,10 @@ class PostFinance(fetch.bank.Bank):
         # We can go to any payment account to proceed to the custom search.
         assets_overview = self._get_tile_by_title('Payment account')
         assets_overview.find_element_by_link_text('Transactions').click()
+        self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
         content.find_element_by_link_text('Search options').click()
+        self._wait_to_finish_loading()
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -237,14 +241,15 @@ class PostFinance(fetch.bank.Bank):
 
         transactions = []
         self._get_button_by_text('Search').click()
+        self._wait_to_finish_loading()
         while True:
-            self._wait_to_finish_loading()
             transactions += self._extract_transactions_from_result_page(
                     account.name)
             # Next page?
             try:
                 logger.info('Loading next transactions page.')
                 self._get_button_by_text('Next').click()
+                self._wait_to_finish_loading()
                 #content.find_element_by_id('Button1').click()  # Next
             except exceptions.NoSuchElementException:
                 break
@@ -265,7 +270,7 @@ class PostFinance(fetch.bank.Bank):
         except exceptions.NoSuchElementException:
             try:
                 error_element = browser.find_element_by_id('ef-error-message')
-                logging.info('Search failed: %s' % error_element.text)
+                logging.info('Search failed: ' + error_element.text)
                 return []
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Transactions search failed.')
@@ -298,6 +303,7 @@ class PostFinance(fetch.bank.Bank):
         self._go_to_assets()
         assets_overview = self._get_tile_by_title('Credit card')
         assets_overview.find_element_by_link_text('Detailed overview').click()
+        self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
         logger.debug('Finding credit card account...')
@@ -308,6 +314,7 @@ class PostFinance(fetch.bank.Bank):
             row = table.find_element_by_xpath(
                     "//td[text() = '%s']/ancestor::tr" % formatted_account_name)
             row.find_element_by_tag_name('a').click()
+            self._wait_to_finish_loading()
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find account %s.' % account)
 
@@ -316,7 +323,6 @@ class PostFinance(fetch.bank.Bank):
         # We always load all and post-filter.
         transactions = []
         while True:
-            self._wait_to_finish_loading()
             # Also wait for the content to load.
             content.find_element_by_xpath(
                     "//h1[@class = 'page-title page-title-top']"
@@ -359,9 +365,10 @@ class PostFinance(fetch.bank.Bank):
                 break
             else:
                 logger.debug('Adding marker transaction for page break.')
-                transactions.append(model.Payment(
-                        transactions[-1].date, amount=0,
-                        memo='[Next billing cycle]'))
+                if transactions:
+                    transactions.append(model.Payment(
+                            transactions[-1].date, amount=0,
+                            memo='[Next billing cycle]'))
 
             # Load earlier transactions.
             date_select_el = content.find_element_by_class_name('buttons') \
@@ -374,6 +381,7 @@ class PostFinance(fetch.bank.Bank):
             logger.info('Loading earlier transactions page...')
             date_select = ui.Select(date_select_el)
             date_select.select_by_value(next_option.get_attribute('value'))
+            self._wait_to_finish_loading()
 
         # Filter the transactions for the requested date range.
         logger.debug(
@@ -451,15 +459,21 @@ class PostFinance(fetch.bank.Bank):
 
     def _go_to_assets(self):
         self._browser.get(self._ASSETS_URL)
+        self._wait_to_finish_loading()
 
     def _close_tile(self):
         self._browser.find_element_by_link_text('Close').click()
 
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
-        loader = self._browser.find_element_by_class_name('is-loading')
-        ui_is_unblocked = lambda: not loader.is_displayed()
-        fetch.wait_until(ui_is_unblocked)
+        browser = self._browser
+        # The loading overlay should be there pretty fast.
+        browser.implicitly_wait(0)
+
+        overlay = lambda: browser.find_element_by_class_name('is-loading')
+        fetch.wait_for_element_to_appear_and_disappear(overlay)
+
+        browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
     def _parse_balance(self, balance):
         # A Unicode minus might be used.
