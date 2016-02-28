@@ -25,13 +25,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
     (digits) or the obfuscated credit card number (1234******5678).
     """
     _BASE_URL = 'https://banking.dkb.de/dkb/-'
-    _CHECKING_ACCOUNT_CSV_PATH = (
-            '?$part=DkbTransactionBanking.content.banking.Transactions.Search'
-            '&$event=csvExport')
-    _CREDIT_CARD_CSV_PATH = (
-            '?$part=DkbTransactionBanking.content.creditcard.'
-            'CreditcardTransactionSearch'
-            '&$event=csvExport')
     _DATE_FORMAT = '%d.%m.%Y'
     _DATE_FORMAT_SHORT = '%d.%m.%y'
     _WEBDRIVER_TIMEOUT = 10
