@@ -252,7 +252,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 # Payee and memo.
                 details_lines = fetch.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
-                payee = details_lines[1:1]  # This line might not exist.
+                payee = details_lines[1:2]  # This line might not exist.
                 memo = '\n'.join(details_lines[2:])  # Might be empty.
                 payee_lines = cells[2].text.split('\n') + ['']
                 payee_account, payee_clearing = payee_lines[:2]
