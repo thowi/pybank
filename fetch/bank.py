@@ -1,5 +1,11 @@
 #!/usr/bin/python
 
+import logging
+import pickle
+
+logger = logging.getLogger(__name__)
+
+
 class Bank(object):
     """Base class for a fetcher that logs into a bank account website."""
 
@@ -10,7 +16,7 @@ class Bank(object):
         @param debug: Whether to run in debug mode.
         """
         self._debug = debug
-        
+
     def login(self, username=None, password=None):
         """Will prompt the user if either user name or password are not defined.
 
@@ -51,3 +57,46 @@ class Bank(object):
         """
         raise NotImplementedError()
 
+    def _get_cookies_filename(self, username):
+        return self.__class__.__name__ + '_' + username + '.cookies'
+
+    def save_cookies(self, browser, username):
+        """Saves the seesion cookies into a file.
+
+        @type browser: selenium.webdriver
+        @param browser: The browser instance.
+
+        @type username: str
+        @param str: The username that owns the session.
+        """
+        cookies_filename = self._get_cookies_filename(username)
+        logger.info('Saving cookies to %s...' % cookies_filename)
+        pickle.dump(browser.get_cookies(), open(cookies_filename, 'wb'))
+
+    def ask_and_restore_cookies(self, browser, username):
+        """Checks if cookies were found for a session and asks to restore them.
+
+        @type browser: selenium.webdriver
+        @param browser: The browser instance.
+
+        @type username: str
+        @param str: The username that owned the session.
+
+        @rtype bool
+        @return: True if any cookies were restored. False otherwise.
+        """
+        cookies_filename = self._get_cookies_filename(username)
+        logger.info('Reading cookies from %s...' % cookies_filename)
+        try:
+            cookies = pickle.load(open(cookies_filename, 'rb'))
+        except IOError:
+            logger.info('No cookies found.')
+            return False
+        restore = raw_input(
+                'A previous session was found for this user. Restore? [yN] ')
+        if restore == 'y':
+            logger.info('Restoring cookies...')
+            for cookie in cookies:
+                browser.add_cookie(cookie)
+            return True
+        return False

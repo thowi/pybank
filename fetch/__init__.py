@@ -68,6 +68,17 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
+def find_element_by_title(parent, title):
+    return parent.find_element_by_xpath(
+            ".//*[normalize-space(@title) = '%s']" % title)
+
+
+def find_button_by_text(parent, text):
+    return parent.find_element_by_xpath(
+            ".//input[@type = 'button' and normalize-space(@value) = '%s']" %
+            text)
+
+
 def get_element_or_none(lookup_callable):
     """Returns the element for the lookup or None if not found.
 

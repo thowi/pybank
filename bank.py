@@ -171,7 +171,9 @@ def _fetch_accounts(
         except qif.SerializationError, e:
                 logger.error('Serialization error: %s.', e)
 
-    bank.logout()
+    logout = raw_input('Logout? [yN] ')
+    if logout == 'y':
+        bank.logout()
 
 
 def _open_file(output_filename, bank_name, account_name, from_date, till_date):

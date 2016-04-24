@@ -46,56 +46,62 @@ class InteractiveBrokers(fetch.bank.Bank):
         if not username:
             username = raw_input('User name: ')
 
-        if not password:
-            password = getpass.getpass('Password: ')
+        if self.ask_and_restore_cookies(browser, username):
+            browser.refresh()
 
-        # First login phase: User and password.
-        try:
-            login_form = browser.find_element_by_name('loginform')
-        except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Login form not found.')
-        login_form.find_element_by_name('user_name').send_keys(username)
-        login_form.find_element_by_name('password').send_keys(password)
+        if not self._is_logged_in():
+            if not password:
+                password = getpass.getpass('Password: ')
 
-        # TODO: Fix the login. Submitting the form doesn't work.
-#         login_form.submit()
-#
-#         # Login successful?
-#         error_element = browser.find_element_by_class_name('errorMsg')
-#         error_message = error_element.text
-#         if error_message:
-#             logger.error('Login failed:\n%s' % error_message)
-#             raise fetch.FetchError('Login failed.')
-#
-#         # Second login phase: Challenge and security token.
-#         challenge_container = browser.find_element_by_id('chlgtext')
-#         # Wait for the image to load, take a screenshot.
-#         unused_challenge_img = challenge_container.find_element_by_tag_name(
-#                 'img')
-#         screenshot_temp_filename = tempfile.mkstemp()[1]
-#         browser.get_screenshot_as_file(screenshot_temp_filename)
-#         print 'See screenshot for challenge:', screenshot_temp_filename
-#         token = raw_input('Login token: ')
-#         login_form.find_element_by_name('chlginput').send_keys(token)
-#         login_form.submit()
+            # First login phase: User and password.
+            try:
+                login_form = browser.find_element_by_name('loginform')
+            except exceptions.NoSuchElementException:
+                raise fetch.FetchError('Login form not found.')
+            login_form.find_element_by_name('user_name').send_keys(username)
+            login_form.find_element_by_name('password').send_keys(password)
 
-        print "Automatic log-in doesn't work yet."
-        print "Please log-in manually and press enter."
-        raw_input()
+            # TODO: Fix the login. Submitting the form doesn't work.
+    #         login_form.submit()
+    #
+    #         # Login successful?
+    #         error_element = browser.find_element_by_class_name('errorMsg')
+    #         error_message = error_element.text
+    #         if error_message:
+    #             logger.error('Login failed:\n%s' % error_message)
+    #             raise fetch.FetchError('Login failed.')
+    #
+    #         # Second login phase: Challenge and security token.
+    #         challenge_container = browser.find_element_by_id('chlgtext')
+    #         # Wait for the image to load, take a screenshot.
+    #         unused_challenge_img = challenge_container.find_element_by_tag_name(
+    #                 'img')
+    #         screenshot_temp_filename = tempfile.mkstemp()[1]
+    #         browser.get_screenshot_as_file(screenshot_temp_filename)
+    #         print 'See screenshot for challenge:', screenshot_temp_filename
+    #         token = raw_input('Login token: ')
+    #         login_form.find_element_by_name('chlginput').send_keys(token)
+    #         login_form.submit()
 
-        # Login successful?
-        try:
-            browser.find_element_by_id('mainFrameSet')
-        except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Login failed.')
+            print "Automatic log-in doesn't work yet."
+            print "Please log-in manually and press enter."
+            raw_input()
+
+            if not self._is_logged_in():
+                raise fetch.FetchError('Login failed.')
 
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
         time.sleep(10)
 
-        self._main_window_handle = browser.current_window_handle
+        self.save_cookies(browser, username)
         self._logged_in = True
+        self._main_window_handle = browser.current_window_handle
         logger.info('Log-in sucessful.')
+
+    def _is_logged_in(self):
+        return fetch.is_element_present(
+                lambda: self._browser.find_element_by_id('mainFrameSet'))
 
     def logout(self):
         browser = self._browser

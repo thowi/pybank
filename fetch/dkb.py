@@ -36,43 +36,47 @@ class DeutscheKreditBank(fetch.bank.Bank):
             self._browser = webdriver.PhantomJS()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(1000, 800)
+        browser = self._browser
 
         self._logged_in = False
         self._accounts = None
 
-        if not username:
-            username = raw_input('User: ')
-
-        if not password:
-            password = getpass.getpass('PIN: ')
-
-        browser = self._browser
-
         logger.info('Loading login page...')
         browser.get(self._BASE_URL)
 
-        # Login.
-        try:
-            login_form = browser.find_element_by_id('login')
-        except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Login form not found.')
-        username_input = login_form.find_element_by_id('loginInputSelector')
-        username_input.send_keys(username)
-        password_input = login_form.find_element_by_id('pinInputSelector')
-        password_input.send_keys(password)
-        logger.info('Logging in with user name %s...' % username)
-        submit_button = login_form.find_element_by_id('buttonlogin')
-        submit_button.click()
-        self._wait_to_finish_loading()
+        if not username:
+            username = raw_input('User: ')
 
-        # Login successful?
-        status_link = browser.find_element_by_link_text('Finanzstatus')
-        if not status_link:
-            raise fetch.FetchError('Login failed.')
+        if self.ask_and_restore_cookies(browser, username):
+            browser.refresh()
 
+        if not self._is_logged_in():
+            if not password:
+                password = getpass.getpass('PIN: ')
+            try:
+                login_form = browser.find_element_by_id('login')
+            except exceptions.NoSuchElementException:
+                raise fetch.FetchError('Login form not found.')
+            username_input = login_form.find_element_by_id('loginInputSelector')
+            username_input.send_keys(username)
+            password_input = login_form.find_element_by_id('pinInputSelector')
+            password_input.send_keys(password)
+            logger.info('Logging in with user name %s...' % username)
+            submit_button = login_form.find_element_by_id('buttonlogin')
+            submit_button.click()
+            self._wait_to_finish_loading()
+
+            if not self._is_logged_in():
+                raise fetch.FetchError('Login failed.')
+
+        self.save_cookies(browser, username)
         self._logged_in = True
         self._main_window_handle = browser.current_window_handle
         logger.info('Log-in sucessful.')
+
+    def _is_logged_in(self):
+        return fetch.is_element_present(
+                lambda: self._browser.find_element_by_link_text('Finanzstatus'))
 
     def logout(self):
         self._browser.find_element_by_id('logout').click()
@@ -252,7 +256,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 # Payee and memo.
                 details_lines = fetch.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
-                payee = details_lines[1:2]  # This line might not exist.
+                payee = '\n'.join(details_lines[1:2])  # This line might not exist.
                 memo = '\n'.join(details_lines[2:])  # Might be empty.
                 payee_lines = cells[2].text.split('\n') + ['']
                 payee_account, payee_clearing = payee_lines[:2]
