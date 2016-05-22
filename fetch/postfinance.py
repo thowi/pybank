@@ -138,37 +138,44 @@ class PostFinance(fetch.bank.Bank):
 
         accounts = []
         try:
-            account_tbodies = content.find_elements_by_tag_name('tbody')
-            account_rows = []
-            for account_tbody in account_tbodies:
-                account_rows += account_tbody.find_elements_by_tag_name('tr')
-            for account_row in account_rows:
-                ths = account_row.find_elements_by_tag_name('th')
-                tds = account_row.find_elements_by_tag_name('td')
-                if len(ths) != 1 or len(tds) != 3:
-                    continue
-                acc_number = ths[0].find_element_by_tag_name('div') \
-                        .find_element_by_tag_name('div').text.replace(' ', '')
-                acc_type = tds[0].text
-                # TODO: Extract actual currency.
-                currency = 'CHF'
-                balance = self._parse_balance(tds[1].text.strip())
-                balance_date = datetime.datetime.now()
-                if acc_type == 'Private':
-                    account = model.CheckingAccount(
-                            acc_number, currency, balance, balance_date)
-                elif acc_type == 'E-savings account':
-                    account = model.SavingsAccount(
-                            acc_number, currency, balance, balance_date)
-                elif acc_type in ('E-trading', 'Safe custody deposit'):
-                    account = model.InvestmentsAccount(
-                            acc_number, currency, balance, balance_date)
-                else:
-                    logger.warning(
-                            'Skipping account %s with unknown type %s.' %
-                            (acc_number, acc_type))
-                    continue
-                accounts.append(account)
+            payment_accounts_table = content.find_element_by_xpath(
+                    ".//h2[text() = 'Payment accounts']/..//table")
+            assets_table = content.find_element_by_xpath(
+                    ".//h2[text() = 'Assets']/..//table")
+            for account_table in payment_accounts_table, assets_table:
+                account_tbody = account_table.find_element_by_tag_name('tbody')
+                account_rows = account_tbody.find_elements_by_tag_name('tr')
+                col_by_text = self._get_column_indizes_by_header_text(
+                        account_table)
+                for account_row in account_rows:
+                    tds = account_row.find_elements_by_tag_name('td')
+                    account_name_cell = tds[col_by_text['Account']]
+                    acc_number = account_name_cell \
+                            .find_element_by_tag_name('div') \
+                            .find_element_by_tag_name('div') \
+                            .text.replace(' ', '')
+                    account_type_cell = tds[col_by_text['Type']]
+                    acc_type = account_type_cell.text
+                    # TODO: Extract actual currency.
+                    currency = 'CHF'
+                    balance_cell = tds[col_by_text['Balance in CHF']]
+                    balance = self._parse_balance(balance_cell.text.strip())
+                    balance_date = datetime.datetime.now()
+                    if acc_type == 'Private':
+                        account = model.CheckingAccount(
+                                acc_number, currency, balance, balance_date)
+                    elif acc_type == 'E-savings account':
+                        account = model.SavingsAccount(
+                                acc_number, currency, balance, balance_date)
+                    elif acc_type in ('E-trading', 'Safe custody deposit'):
+                        account = model.InvestmentsAccount(
+                                acc_number, currency, balance, balance_date)
+                    else:
+                        logger.warning(
+                                'Skipping account %s with unknown type %s.' %
+                                (acc_number, acc_type))
+                        continue
+                    accounts.append(account)
         except (exceptions.NoSuchElementException, AttributeError, IndexError):
             raise fetch.FetchError('Couldn\'t load accounts.')
         self._close_tile()
@@ -303,7 +310,7 @@ class PostFinance(fetch.bank.Bank):
             memo = cells[2].text.strip()
             credit = self._sanitize_amount(cells[3].text)
             debit = self._sanitize_amount(cells[4].text)
-            amount = self._consolidate_credit_debit_amount(credit, debit)
+            amount = credit if credit else debit
             transaction = self._parse_transaction_from_text(date, memo, amount)
             if transaction:
                 transactions.append(transaction)
@@ -431,7 +438,9 @@ class PostFinance(fetch.bank.Bank):
             date = table_row.find_elements_by_tag_name('th')[0].text.strip()
             cells = table_row.find_elements_by_tag_name('td')
             memo = cells[0].text.strip()
-            amount = self._sanitize_amount(cells[1].text)
+            credit = self._sanitize_amount(cells[1].text)
+            debit = self._sanitize_amount(cells[2].text)
+            amount = credit if credit else '-' + debit
             transaction = self._parse_transaction_from_text(date, memo, amount)
             if transaction:
                 transactions.append(transaction)
@@ -445,12 +454,6 @@ class PostFinance(fetch.bank.Bank):
         if amount.endswith('-'):
             amount = '-' + self._MINUS_PATTERN.sub('', amount)
         return amount
-
-    def _consolidate_credit_debit_amount(self, credit, debit):
-        if credit:
-            return credit
-        else:
-            return '-' + debit
 
     def _parse_transaction_from_text(self, date, memo, amount):
         try:
@@ -522,3 +525,9 @@ class PostFinance(fetch.bank.Bank):
     def _get_tile_by_title(self, title):
         return self._browser.find_element_by_xpath(
                 "//*[normalize-space(text()) = '%s']/ancestor::li" % title)
+
+    def _get_column_indizes_by_header_text(self, table):
+        thead = table.find_element_by_tag_name('thead')
+        ths = thead.find_elements_by_tag_name('th')
+        th_texts = [th.text for th in ths]
+        return dict((i[1], i[0]) for i in enumerate(th_texts))
