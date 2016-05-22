@@ -107,11 +107,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
         for account_row in account_rows:
             try:
                 cells = account_row.find_elements_by_tag_name('td')
-                name = cells[0].find_element_by_tag_name('strong').text
+                name = cells[0].find_elements_by_tag_name('div')[1].text \
+                        .replace(' ', '')
                 unused_acc_type = cells[1].text
                 balance_date = self._parse_date(cells[2].text)
-                balance_cell = account_row.find_element_by_tag_name('th')
-                balance = self._parse_balance(balance_cell.text)
+                balance = self._parse_balance(cells[3].text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(
                             name, 'EUR', balance, balance_date)
