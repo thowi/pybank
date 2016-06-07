@@ -345,9 +345,7 @@ class PostFinance(fetch.bank.Bank):
         transactions = []
         while True:
             # Also wait for the content to load.
-            content.find_element_by_xpath(
-                    ".//h1[@class = 'page-title page-title-top']"
-                    "/span[text() = 'Transactions']")
+            content.find_element_by_xpath(".//h1[contains(., 'Transactions')]")
             content.find_element_by_class_name('content-pane-wrapper') \
                     .find_element_by_class_name('content-pane') \
                     .find_element_by_tag_name('table')
