@@ -241,24 +241,24 @@ class PostFinance(fetch.bank.Bank):
         payment_tile.find_element_by_partial_link_text('Transactions').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
-        content.find_element_by_link_text('Search options').click()
-        self._wait_to_finish_loading()
+        fetch.find_button_by_text(content, 'Search options').click()
 
         logger.info('Performing transactions search...')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        form = browser.find_element_by_id('pfform-bewegungen')
-        form.find_element_by_name('p_buchdat_von').send_keys(formatted_start)
-        form.find_element_by_name('p_buchdat_bis').send_keys(formatted_end)
+        form = content.find_element_by_name('SearchForm')
+        form.find_element_by_name('dateFrom').send_keys(formatted_start)
+        form.find_element_by_name('dateTo').send_keys(formatted_end)
         # The search form is not using a standard <select>, but some custom
-        # HTML. Luckily, they use a hidden <input> to store the selected
-        # account.
-        browser.execute_script(
-                'document.getElementsByName("p_lkto_nr")[0].value = "%s"' %
-                account.name[-9:])
-        # 100 entries per page.
-        form.find_element_by_id('p_anz_buchungen_4').click()
+        # HTML.
+        account_drop_down_container = fetch.find_element_by_tag_name_and_text(
+                form, 'label', 'Account').parent
+        account_drop_down_container.find_element_by_class_name(
+                'ef_select--trigger').click()
+        fetch.find_element_by_text(
+                account_drop_down_container, self._format_iban(account.name)) \
+                .click()
 
         transactions = []
         fetch.find_button_by_text(content, 'Search').click()
@@ -266,12 +266,11 @@ class PostFinance(fetch.bank.Bank):
         while True:
             transactions += self._extract_transactions_from_result_page(
                     account.name)
-            # Next page?
+            # More transactions?
             try:
-                logger.info('Loading next transactions page.')
-                fetch.find_button_by_text(content, 'Next').click()
+                logger.info('Loading more transactions...')
+                self._browser.find_element_by_link_text('Show more').click()
                 self._wait_to_finish_loading()
-                #content.find_element_by_id('Button1').click()  # Next
             except exceptions.NoSuchElementException:
                 break
 
@@ -283,9 +282,11 @@ class PostFinance(fetch.bank.Bank):
     def _extract_transactions_from_result_page(self, account_name):
         browser = self._browser
 
+        content = browser.find_element_by_class_name('detail_page')
         try:
-            heading = browser.find_element_by_class_name('paragraph-title')
-            if self._format_iban(account_name) not in heading.text:
+            header = content.find_element_by_tag_name('section') \
+                    .find_element_by_class_name('content-pane')
+            if self._format_iban(account_name) not in header.text:
                 raise fetch.FetchError(
                         'Transactions search failed: Wrong account.')
         except exceptions.NoSuchElementException:
@@ -296,7 +297,6 @@ class PostFinance(fetch.bank.Bank):
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Transactions search failed.')
 
-        content = browser.find_element_by_class_name('detail_page')
         try:
             table = content.find_element_by_tag_name('table')
             tbody = table.find_element_by_tag_name('tbody')
@@ -305,11 +305,12 @@ class PostFinance(fetch.bank.Bank):
             raise fetch.FetchError('Couldn\'t find transactions table.')
         transactions = []
         for table_row in table_rows:
-            cells = table_row.find_elements_by_tag_name('td')
-            date = cells[1].text.strip()
-            memo = cells[2].text.strip()
-            credit = self._sanitize_amount(cells[3].text)
-            debit = self._sanitize_amount(cells[4].text)
+            th_cells = table_row.find_elements_by_tag_name('th')
+            td_cells = table_row.find_elements_by_tag_name('td')
+            date = th_cells[0].text.strip()
+            memo = td_cells[1].text.strip()
+            credit = self._sanitize_amount(th_cells[1].text)
+            debit = self._sanitize_amount(th_cells[2].text)
             amount = credit if credit else debit
             transaction = self._parse_transaction_from_text(date, memo, amount)
             if transaction:
@@ -333,7 +334,8 @@ class PostFinance(fetch.bank.Bank):
             table = content.find_element_by_id('kreditkarte_u1')
             formatted_account_name = self._format_cc_account_name(account.name)
             row = table.find_element_by_xpath(
-                    ".//td[text() = '%s']/ancestor::tr" % formatted_account_name)
+                    ".//td[normalize-space(text()) = '%s']/ancestor::tr" %
+                    formatted_account_name)
             row.find_element_by_tag_name('a').click()
             self._wait_to_finish_loading()
         except exceptions.NoSuchElementException:

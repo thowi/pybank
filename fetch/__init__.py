@@ -73,7 +73,21 @@ def find_element_by_title(parent, title):
             ".//*[normalize-space(@title) = '%s']" % title)
 
 
+def find_element_by_text(parent, text):
+    return parent.find_element_by_xpath(
+            ".//*[normalize-space(text()) = '%s']" % text)
+
+
+def find_element_by_tag_name_and_text(parent, tag_name, text):
+    return parent.find_element_by_xpath(
+            ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
+
+
 def find_button_by_text(parent, text):
+    return find_element_by_tag_name_and_text(parent, 'button', text)
+
+
+def find_input_button_by_text(parent, text):
     return parent.find_element_by_xpath(
             ".//input[@type = 'button' and normalize-space(@value) = '%s']" %
             text)
