@@ -60,31 +60,11 @@ class InteractiveBrokers(fetch.bank.Bank):
                 raise fetch.FetchError('Login form not found.')
             login_form.find_element_by_name('user_name').send_keys(username)
             login_form.find_element_by_name('password').send_keys(password)
+            # Weirldy, the login button has to be clicked twice.
+            login_form.find_element_by_id('submitForm').click()
+            login_form.find_element_by_id('submitForm').click()
 
-            # TODO: Fix the login. Submitting the form doesn't work.
-    #         login_form.submit()
-    #
-    #         # Login successful?
-    #         error_element = browser.find_element_by_class_name('errorMsg')
-    #         error_message = error_element.text
-    #         if error_message:
-    #             logger.error('Login failed:\n%s' % error_message)
-    #             raise fetch.FetchError('Login failed.')
-    #
-    #         # Second login phase: Challenge and security token.
-    #         challenge_container = browser.find_element_by_id('chlgtext')
-    #         # Wait for the image to load, take a screenshot.
-    #         unused_challenge_img = challenge_container.find_element_by_tag_name(
-    #                 'img')
-    #         screenshot_temp_filename = tempfile.mkstemp()[1]
-    #         browser.get_screenshot_as_file(screenshot_temp_filename)
-    #         print 'See screenshot for challenge:', screenshot_temp_filename
-    #         token = raw_input('Login token: ')
-    #         login_form.find_element_by_name('chlginput').send_keys(token)
-    #         login_form.submit()
-
-            print "Automatic log-in doesn't work yet."
-            print "Please log-in manually and press enter."
+            print "Please follow the log-in instructions and press enter."
             raw_input()
 
             if not self._is_logged_in():
