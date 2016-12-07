@@ -135,7 +135,7 @@ def is_element_displayed(lookup_callable):
     return element is not None and element.is_displayed()
 
 
-def wait_for_element_to_appear_and_disappear(lookup_callable):
+def wait_for_element_to_appear_and_disappear(lookup_callable, timeout_s=10):
     """Waits for an element to appear and then disappear.
 
     If the element doesn't appear it is assumed to be gone already.
@@ -150,7 +150,7 @@ def wait_for_element_to_appear_and_disappear(lookup_callable):
         # The element probably disappeared already.
         pass
     element_disappeared = lambda: not element_displayed()
-    wait_until(element_disappeared)
+    wait_until(element_disappeared, timeout_s=timeout_s)
 
 
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py

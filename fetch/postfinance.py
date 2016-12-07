@@ -56,33 +56,59 @@ class PostFinance(fetch.bank.Bank):
             if not password:
                 password = getpass.getpass('Password: ')
 
-            # First login phase: User and password.
             try:
                 login_form = browser.find_element_by_name('login')
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Login form not found.')
+
+            use_mobile_login = raw_input('Use mobile login? [yN]: ') == 'y'
+            if use_mobile_login:
+                login_form.find_element_by_xpath(
+                        ".//label[contains(., 'Mobile ID')]").click()
+            else:
+                login_form.find_element_by_xpath(
+                        ".//label[contains(., 'PostFinance ID')]").click()
+
+            # First login phase: User and password.
             login_form.find_element_by_name('p_et_nr').send_keys(username)
             login_form.find_element_by_name('p_passw').send_keys(password)
             login_form.submit()
 
-            # Second login phase: Challenge and security token.
-            try:
-                challenge_element = browser.find_element_by_id('challenge')
-            except exceptions.NoSuchElementException:
+            # Second login phase: Mobile ID or challenge/return.
+            if use_mobile_login:
                 try:
-                    error_element = browser.find_element_by_class_name('error')
-                    logger.error('Login failed:\n%s' % error_element.text)
-                    raise fetch.FetchError('Login failed.')
+                    browser.find_element_by_id('mid-loading')
                 except exceptions.NoSuchElementException:
-                    raise fetch.FetchError('Security challenge not found.')
-            print 'Challenge:', challenge_element.text
-            token = raw_input('Login token: ')
-            try:
-                login_form = browser.find_element_by_name('login')
-            except exceptions.NoSuchElementException:
-                raise fetch.FetchError('Login token form not found.')
-            login_form.find_element_by_name('p_si_nr').send_keys(token)
-            login_form.submit()
+                    try:
+                        error_element = browser.find_element_by_class_name(
+                                'error')
+                        logger.error('Login failed:\n%s' % error_element.text)
+                        raise fetch.FetchError('Login failed.')
+                    except exceptions.NoSuchElementException:
+                        raise fetch.FetchError('Mobile ID login error.')
+                print 'Please confirm the login on your phone...'
+                fetch.wait_for_element_to_appear_and_disappear(
+                        lambda: browser.find_element_by_id('mid-loading'),
+                        timeout_s=60)
+            else:
+                try:
+                    challenge_element = browser.find_element_by_id('challenge')
+                except exceptions.NoSuchElementException:
+                    try:
+                        error_element = browser.find_element_by_class_name(
+                                'error')
+                        logger.error('Login failed:\n%s' % error_element.text)
+                        raise fetch.FetchError('Login failed.')
+                    except exceptions.NoSuchElementException:
+                        raise fetch.FetchError('Security challenge not found.')
+                print 'Challenge:', challenge_element.text
+                token = raw_input('Login token: ')
+                try:
+                    login_form = browser.find_element_by_name('login')
+                except exceptions.NoSuchElementException:
+                    raise fetch.FetchError('Login token form not found.')
+                login_form.find_element_by_name('p_si_nr').send_keys(token)
+                login_form.submit()
 
             # Logout warning?
             if 'Increased security when logging out' in browser.page_source:
@@ -308,7 +334,7 @@ class PostFinance(fetch.bank.Bank):
             th_cells = table_row.find_elements_by_tag_name('th')
             td_cells = table_row.find_elements_by_tag_name('td')
             date = th_cells[0].text.strip()
-            memo = td_cells[1].text.strip()
+            memo = td_cells[0].text.strip()
             credit = self._sanitize_amount(th_cells[1].text)
             debit = self._sanitize_amount(th_cells[2].text)
             amount = credit if credit else debit
