@@ -139,15 +139,24 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Opening checking account transactions page...')
         browser.find_element_by_link_text(u'Finanzstatus').click()
         self._wait_to_finish_loading()
-        browser.find_element_by_link_text(u'Kontoumsätze').click()
+        browser.find_element_by_link_text(u'Umsätze').click()
         self._wait_to_finish_loading()
 
         # Perform search.
         logger.info('Performing transactions search...')
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        account_select_element = form.find_element_by_name('slAllAccounts')
+        account_select = ui.Select(account_select_element)
+        account_select.select_by_visible_text(account.name + ' / Girokonto')
+        # Selecting an account will reload the page.
+        # Wait a little. Load the form again.
+        time.sleep(5)
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        # TODO: Support multiple accounts.
         content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
         from_input = form.find_element_by_name('transactionDate')
@@ -164,7 +173,10 @@ class DeutscheKreditBank(fetch.bank.Bank):
         # Switch to print view to avoid pagination.
         self._switch_to_print_view_window()
 
-        if account.name not in browser.find_element_by_tag_name('body').text:
+        body_text = browser.find_element_by_tag_name('body').text
+        if u'Kontoumsätze' not in body_text:
+            raise fetch.FetchError('Not an account search result page.')
+        if account.name not in body_text:
             raise fetch.FetchError('Account name not found in result page.')
 
         # Parse result page into transactions.
@@ -183,27 +195,24 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Opening credit card transactions page...')
         browser.find_element_by_link_text('Finanzstatus').click()
         self._wait_to_finish_loading()
-        browser.find_element_by_link_text(u'Kreditkartenumsätze').click()
+        browser.find_element_by_link_text(u'Umsätze').click()
         self._wait_to_finish_loading()
 
         # Perform search.
         logger.info('Performing transactions search...')
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        account_select_element = form.find_element_by_name('slAllAccounts')
+        account_select = ui.Select(account_select_element)
+        account_select.select_by_visible_text(account.name + ' / Kreditkarte')
+        # Selecting a credit card will reload the page.
+        # Wait a little. Load the form again.
+        time.sleep(5)
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        account_select_element = self._get_element_or_none(
-                lambda: form.find_element_by_name('slCreditCard'), wait_time=0)
-        if account_select_element:
-            account_select = ui.Select(account_select_element)
-            account_select.select_by_visible_text(
-                    account.name + ' / Kreditkarte')
-            # Selecting a credit card will reload the page.
-            # Wait a little. Load the form again.
-            time.sleep(5)
-            content = browser.find_element_by_class_name('content')
-            form = content.find_element_by_tag_name('form')
         # Search for a data range.
         form.find_element_by_id('searchPeriod.0').click()
         # Click/send_keys wasn't reliable when the browser window was in the
