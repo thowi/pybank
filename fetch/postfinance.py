@@ -70,7 +70,7 @@ class PostFinance(fetch.bank.Bank):
                         ".//label[contains(., 'PostFinance ID')]").click()
 
             # First login phase: User and password.
-            login_form.find_element_by_name('p_et_nr').send_keys(username)
+            login_form.find_element_by_name('p_username').send_keys(username)
             login_form.find_element_by_name('p_passw').send_keys(password)
             login_form.submit()
 
@@ -131,10 +131,10 @@ class PostFinance(fetch.bank.Bank):
 
     def _is_logged_in(self):
         return fetch.is_element_present(
-                lambda: self._browser.find_element_by_link_text('Logout'))
+                lambda: self._browser.find_element_by_css_selector('a.logout'))
 
     def logout(self):
-        self._browser.find_element_by_link_text('Logout').click()
+        self._browser.find_element_by_css_selector('a.logout').click()
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
@@ -177,7 +177,6 @@ class PostFinance(fetch.bank.Bank):
                     tds = account_row.find_elements_by_tag_name('td')
                     account_name_cell = tds[col_by_text['Account']]
                     acc_number = account_name_cell \
-                            .find_element_by_tag_name('div') \
                             .find_element_by_tag_name('div') \
                             .text.replace(' ', '')
                     account_type_cell = tds[col_by_text['Type']]
@@ -267,27 +266,27 @@ class PostFinance(fetch.bank.Bank):
         payment_tile.find_element_by_partial_link_text('Transactions').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
-        fetch.find_button_by_text(content, 'Search options').click()
 
         logger.info('Performing transactions search...')
-        formatted_start = start.strftime(self._DATE_FORMAT)
-        end_inclusive = end - datetime.timedelta(1)
-        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
         form = content.find_element_by_name('SearchForm')
-        form.find_element_by_name('dateFrom').send_keys(formatted_start)
-        form.find_element_by_name('dateTo').send_keys(formatted_end)
         # The search form is not using a standard <select>, but some custom
         # HTML.
-        account_drop_down_container = fetch.find_element_by_tag_name_and_text(
-                form, 'label', 'Account').parent
+        account_drop_down_container = form.find_element_by_css_selector(
+                '*[name="pf-detail-efmovements-overview-dropdown-account"]')
         account_drop_down_container.find_element_by_class_name(
                 'ef_select--trigger').click()
         fetch.find_element_by_text(
                 account_drop_down_container, self._format_iban(account.name)) \
                 .click()
+        fetch.find_button_by_text(content, 'Search options').click()
+        formatted_start = start.strftime(self._DATE_FORMAT)
+        end_inclusive = end - datetime.timedelta(1)
+        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
+        form.find_element_by_name('dateFrom').send_keys(formatted_start)
+        form.find_element_by_name('dateTo').send_keys(formatted_end)
 
         transactions = []
-        fetch.find_button_by_text(content, 'Search').click()
+        content.find_element_by_css_selector('button[label="Search"]').click()
         self._wait_to_finish_loading()
         while True:
             transactions += self._extract_transactions_from_result_page(
@@ -322,6 +321,15 @@ class PostFinance(fetch.bank.Bank):
                 return []
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Transactions search failed.')
+
+        try:
+            fetch.find_element_by_text(
+                content,
+                'No transactions were found that match your search options')
+            logging.info('No transactions found.')
+            return []
+        except exceptions.NoSuchElementException:
+            pass
 
         try:
             table = content.find_element_by_tag_name('table')
@@ -373,14 +381,11 @@ class PostFinance(fetch.bank.Bank):
         transactions = []
         while True:
             # Also wait for the content to load.
-            content.find_element_by_xpath(".//h1[contains(., 'Transactions')]")
-            content.find_element_by_class_name('content-pane-wrapper') \
-                    .find_element_by_class_name('content-pane') \
-                    .find_element_by_tag_name('table')
+            fetch.find_element_by_tag_name_and_text(content, 'th', 'Date')
 
             # Get the period of the current page.
-            period = content.find_element_by_class_name('page-title') \
-                    .find_element_by_class_name('add-information').text
+            period = content.find_element_by_css_selector(
+                    '.page-title .add-information').text
             if period == 'Current accounting period':
                 # Just use "now", which is an inaccurate hack, but works for our
                 # purposes.
@@ -447,8 +452,8 @@ class PostFinance(fetch.bank.Bank):
 
     def _extract_cc_transactions(self):
         browser = self._browser
-        content = browser.find_element_by_class_name('content-pane-wrapper') \
-                .find_element_by_class_name('content-pane')
+        title = browser.find_element_by_css_selector('h1.page-title')
+        content = title.parent
         try:
             table = content.find_element_by_tag_name('table')
         except exceptions.NoSuchElementException:
