@@ -213,8 +213,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        # Search for a data range.
-        form.find_element_by_id('searchPeriod.0').click()
         # Click/send_keys wasn't reliable when the browser window was in the
         # background. Setting the value directly.
         from_input = form.find_element_by_name('postingDate')
