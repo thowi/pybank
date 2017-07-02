@@ -96,11 +96,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser.find_element_by_link_text('Finanzstatus').click()
         self._wait_to_finish_loading()
 
-        accounts_section = browser.find_element_by_class_name(
-                'financialStatusModule')
-        account_rows = accounts_section \
-                .find_element_by_tag_name('tbody') \
-                .find_elements_by_tag_name('tr')
+        account_rows = browser.find_elements_by_css_selector(
+                '.financialStatusModule tbody tr')
         # Skip last (summary) row.
         account_rows.pop()
         self._accounts = []
@@ -248,8 +245,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def _get_transactions_from_checking_account_statement(self):
         transactions = []
-        table = self._browser.find_element_by_tag_name('table')
-        rows = table.find_elements_by_tag_name('tr')
+        rows = self._browser.find_elements_by_css_selector('table tr')
         # Skip header row.
         rows = rows[1:]
         for row in rows:
@@ -285,8 +281,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def _get_transactions_from_credit_card_statement(self):
         transactions = []
-        table = self._browser.find_element_by_tag_name('table')
-        rows = table.find_elements_by_tag_name('tr')
+        rows = self._browser.find_elements_by_css_selector('table tr')
         # Skip header row.
         rows = rows[1:]
         for row in rows:
