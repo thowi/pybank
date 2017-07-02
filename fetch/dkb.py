@@ -133,41 +133,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._check_logged_in()
         browser = self._browser
 
-        logger.info('Opening checking account transactions page...')
-        browser.find_element_by_link_text(u'Finanzstatus').click()
-        self._wait_to_finish_loading()
-        browser.find_element_by_link_text(u'Umsätze').click()
-        self._wait_to_finish_loading()
-
-        # Perform search.
-        logger.info('Performing transactions search...')
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        account_select_element = form.find_element_by_name('slAllAccounts')
-        account_select = ui.Select(account_select_element)
-        account_select.select_by_visible_text(account.name + ' / Girokonto')
-        # Selecting an account will reload the page.
-        # Wait a little. Load the form again.
-        time.sleep(5)
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        formatted_start = start.strftime(self._DATE_FORMAT)
-        end_inclusive = end - datetime.timedelta(1)
-        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        from_input = form.find_element_by_name('transactionDate')
-        from_input.click()
-        from_input.clear()
-        from_input.send_keys(formatted_start)
-        to_input = form.find_element_by_name('toTransactionDate')
-        to_input.click()
-        to_input.clear()
-        to_input.send_keys(formatted_end)
-        form.find_element_by_id('searchbutton').click()
-        self._wait_to_finish_loading()
-
-        # Switch to print view to avoid pagination.
+        self._perform_transactions_search(account, start, end)
         self._switch_to_print_view_window()
 
         body_text = browser.find_element_by_tag_name('body').text
@@ -189,43 +155,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._check_logged_in()
         browser = self._browser
 
-        logger.info('Opening credit card transactions page...')
-        browser.find_element_by_link_text('Finanzstatus').click()
-        self._wait_to_finish_loading()
-        browser.find_element_by_link_text(u'Umsätze').click()
-        self._wait_to_finish_loading()
-
-        # Perform search.
-        logger.info('Performing transactions search...')
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        account_select_element = form.find_element_by_name('slAllAccounts')
-        account_select = ui.Select(account_select_element)
-        account_select.select_by_visible_text(account.name + ' / Kreditkarte')
-        # Selecting a credit card will reload the page.
-        # Wait a little. Load the form again.
-        time.sleep(5)
-        content = browser.find_element_by_class_name('content')
-        form = content.find_element_by_tag_name('form')
-        formatted_start = start.strftime(self._DATE_FORMAT)
-        end_inclusive = end - datetime.timedelta(1)
-        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        # Click/send_keys wasn't reliable when the browser window was in the
-        # background. Setting the value directly.
-        from_input = form.find_element_by_name('postingDate')
-        from_input.click()
-        browser.execute_script(
-                'document.getElementById("%s").value = "%s"' %
-                (from_input.get_attribute('id'), formatted_start))
-        to_input = form.find_element_by_name('toPostingDate')
-        to_input.click()
-        browser.execute_script(
-                'document.getElementById("%s").value = "%s"' %
-                (to_input.get_attribute('id'), formatted_end))
-        form.find_element_by_id('searchbutton').click()
-        self._wait_to_finish_loading()
-
-        # Switch to print view to avoid pagination.
+        self._perform_transactions_search(account, start, end)
         self._switch_to_print_view_window()
 
         body_text = browser.find_element_by_tag_name('body').text
@@ -242,6 +172,46 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser.switch_to_window(self._main_window_handle)
 
         return transactions
+
+    def _perform_transactions_search(self, account, start, end):
+        browser = self._browser
+        is_credit_card = isinstance(account, model.CreditCard)
+        logger.info('Opening account transactions page...')
+        browser.find_element_by_link_text(u'Finanzstatus').click()
+        self._wait_to_finish_loading()
+        browser.find_element_by_link_text(u'Umsätze').click()
+        self._wait_to_finish_loading()
+
+        # Perform search.
+        logger.info('Performing transactions search...')
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        account_select_element = form.find_element_by_name('slAllAccounts')
+        account_select = ui.Select(account_select_element)
+        account_suffix =  ' / Kreditkarte' if is_credit_card else ' / Girokonto'
+        account_select.select_by_visible_text(account.name + account_suffix)
+        # Selecting an account will reload the page.
+        # Wait a little. Load the form again.
+        time.sleep(5)
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        formatted_start = start.strftime(self._DATE_FORMAT)
+        end_inclusive = end - datetime.timedelta(1)
+        formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
+        content = browser.find_element_by_class_name('content')
+        form = content.find_element_by_tag_name('form')
+        from_name = 'postingDate' if is_credit_card else 'transactionDate'
+        from_input = form.find_element_by_name(from_name)
+        from_input.click()
+        from_input.clear()
+        from_input.send_keys(formatted_start)
+        to_name = 'toPostingDate' if is_credit_card else 'toTransactionDate'
+        to_input = form.find_element_by_name(to_name)
+        to_input.click()
+        to_input.clear()
+        to_input.send_keys(formatted_end)
+        form.find_element_by_id('searchbutton').click()
+        self._wait_to_finish_loading()
 
     def _get_transactions_from_checking_account_statement(self):
         transactions = []
