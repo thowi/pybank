@@ -169,8 +169,8 @@ class PostFinance(fetch.bank.Bank):
             assets_table = content.find_element_by_xpath(
                     ".//h2[text() = 'Assets']/..//table")
             for account_table in payment_accounts_table, assets_table:
-                account_tbody = account_table.find_element_by_tag_name('tbody')
-                account_rows = account_tbody.find_elements_by_tag_name('tr')
+                account_rows = account_table.find_elements_by_css_selector(
+                        'tbody tr')
                 col_by_text = self._get_column_indizes_by_header_text(
                         account_table)
                 for account_row in account_rows:
@@ -220,9 +220,8 @@ class PostFinance(fetch.bank.Bank):
         content = browser.find_element_by_class_name('detail_page')
         accounts = []
         try:
-            account_table = content.find_element_by_id('kreditkarte_u1')
-            tbody = account_table.find_element_by_tag_name('tbody')
-            account_rows = tbody.find_elements_by_tag_name('tr')
+            account_rows = content.find_elements_by_css_selector(
+                    '#kreditkarte_u1 tbody tr')
             for account_row in account_rows:
                 cells = account_row.find_elements_by_tag_name('td')
                 acc_type = cells[1].text.strip()
@@ -265,10 +264,10 @@ class PostFinance(fetch.bank.Bank):
         payment_tile = self._get_tile_by_title('Payment account')
         payment_tile.find_element_by_partial_link_text('Transactions').click()
         self._wait_to_finish_loading()
-        content = browser.find_element_by_class_name('detail_page')
 
         logger.info('Performing transactions search...')
-        form = content.find_element_by_name('SearchForm')
+        form = browser.find_element_by_css_selector(
+                '.detail_page form[name="SearchForm"]')
         # The search form is not using a standard <select>, but some custom
         # HTML.
         account_drop_down_container = form.find_element_by_css_selector(
@@ -278,7 +277,7 @@ class PostFinance(fetch.bank.Bank):
         fetch.find_element_by_text(
                 account_drop_down_container, self._format_iban(account.name)) \
                 .click()
-        fetch.find_button_by_text(content, 'Search options').click()
+        fetch.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
@@ -286,16 +285,15 @@ class PostFinance(fetch.bank.Bank):
         form.find_element_by_name('dateTo').send_keys(formatted_end)
 
         transactions = []
-        content.find_element_by_css_selector('button[label="Search"]').click()
-        self._wait_to_finish_loading()
+        form.find_element_by_css_selector('button[label="Search"]').click()
         while True:
+            self._wait_to_finish_loading()
             transactions += self._extract_transactions_from_result_page(
                     account.name)
             # More transactions?
             try:
                 logger.info('Loading more transactions...')
-                self._browser.find_element_by_link_text('Show more').click()
-                self._wait_to_finish_loading()
+                browser.find_element_by_link_text('Show more').click()
             except exceptions.NoSuchElementException:
                 break
 
@@ -309,8 +307,8 @@ class PostFinance(fetch.bank.Bank):
 
         content = browser.find_element_by_class_name('detail_page')
         try:
-            header = content.find_element_by_tag_name('section') \
-                    .find_element_by_class_name('content-pane')
+            header = content.find_element_by_css_selector(
+                    'section .content-pane')
             if self._format_iban(account_name) not in header.text:
                 raise fetch.FetchError(
                         'Transactions search failed: Wrong account.')
@@ -323,18 +321,17 @@ class PostFinance(fetch.bank.Bank):
                 raise fetch.FetchError('Transactions search failed.')
 
         try:
-            fetch.find_element_by_text(
+            no_transactions = fetch.find_element_by_text(
                 content,
                 'No transactions were found that match your search options')
-            logging.info('No transactions found.')
-            return []
+            if no_transactions.is_displayed():
+                logging.info('No transactions found.')
+                return []
         except exceptions.NoSuchElementException:
             pass
 
         try:
-            table = content.find_element_by_tag_name('table')
-            tbody = table.find_element_by_tag_name('tbody')
-            table_rows = tbody.find_elements_by_tag_name('tr')
+            table_rows = content.find_elements_by_css_selector('table tbody tr')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find transactions table.')
         transactions = []
@@ -423,8 +420,8 @@ class PostFinance(fetch.bank.Bank):
                             memo='[Next billing cycle]'))
 
             # Load earlier transactions.
-            date_select_el = content.find_element_by_class_name('buttons') \
-                    .find_element_by_tag_name('select')
+            date_select_el = content.find_element_by_css_selector(
+                    '.buttons select')
             next_option = date_select_el.find_element_by_xpath(
                     "option[text() = '%s']/following-sibling::option" % period)
             if not next_option:
@@ -558,7 +555,6 @@ class PostFinance(fetch.bank.Bank):
                 "//*[normalize-space(text()) = '%s']/ancestor::li" % title)
 
     def _get_column_indizes_by_header_text(self, table):
-        thead = table.find_element_by_tag_name('thead')
-        ths = thead.find_elements_by_tag_name('th')
+        ths = table.find_elements_by_css_selector('thead th')
         th_texts = [th.text for th in ths]
         return dict((i[1], i[0]) for i in enumerate(th_texts))
