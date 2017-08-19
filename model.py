@@ -206,6 +206,48 @@ class InvestmentDividend(Transaction):
         self.symbol = symbol
 
 
+class InvestmentInterestExpense(Transaction):
+    """An interest expense.
+
+    @type date: datetime.datetime
+    @param date: The date of the dividend.
+
+    @type amount: float
+    @param amount: The total amount of the dividend.
+
+    @type memo: unicode or None
+    @param memo: The memo of the dividend, if any.
+
+    @type category: unicode or None
+    @param category: The category of the dividend, if any.
+    """
+    def __init__(
+            self, date, amount, memo=None, category=None):
+        super(InvestmentInterestExpense, self).__init__(
+                date, amount, memo, category)
+
+
+class InvestmentInterestIncome(Transaction):
+    """An interest income.
+
+    @type date: datetime.datetime
+    @param date: The date of the dividend.
+
+    @type amount: float
+    @param amount: The total amount of the dividend.
+
+    @type memo: unicode or None
+    @param memo: The memo of the dividend, if any.
+
+    @type category: unicode or None
+    @param category: The category of the dividend, if any.
+    """
+    def __init__(
+            self, date, amount, memo=None, category=None):
+        super(InvestmentInterestIncome, self).__init__(
+                date, amount, memo, category)
+
+
 class InvestmentMiscExpense(Transaction):
     """A misc expense.
 
@@ -232,7 +274,7 @@ class InvestmentMiscExpense(Transaction):
 
 
 class InvestmentMiscIncome(Transaction):
-    """A misc expense.
+    """A misc income.
 
     @type date: datetime.datetime
     @param date: The date of the dividend.

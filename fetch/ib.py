@@ -164,12 +164,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         withholding_tax = self._get_withholding_tax_from_activity_statement(
                 account_name)
         dividends = self._get_dividends_from_activity_statement(account_name)
+        interest = self._get_interest_from_activity_statement(account_name)
         other_fees = self._get_other_fees_from_activity_statement(account_name)
 
         # We're only interested in the current currency.
         transactions = []
         for category in (
-                transfers, trades, withholding_tax, dividends, other_fees):
+                transfers, trades, withholding_tax, dividends, interest,
+                other_fees):
             transactions_by_currency = category.get(currency)
             if transactions_by_currency:
                 transactions += transactions_by_currency
@@ -303,6 +305,38 @@ class InteractiveBrokers(fetch.bank.Bank):
                 transaction = model.InvestmentDividend(
                         date, symbol, amount, memo)
                 transactions.append(transaction)
+
+        return transactions_by_currency
+
+    def _get_interest_from_activity_statement(self, account_name):
+        logger.debug('Extracting interest...')
+
+        paid_rows = self._find_broker_interest_paid_rows(account_name)
+        received_rows = self._find_broker_interest_received_rows(account_name)
+        rows = paid_rows + received_rows
+        rows_by_currency = self._group_rows_by_currency(
+                rows, expected_num_columns=4)
+        transactions_by_currency = {}
+        for currency, rows in rows_by_currency.items():
+            transactions = []
+            transactions_by_currency[currency] = transactions
+            for cells in rows:
+                date = cells[0].getText()
+                try:
+                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
+                except ValueError:
+                    logger.warning(
+                            'Skipping transaction with invalid date %s.', date)
+                    continue
+                memo = cells[1].getText()
+                amount = self._parse_float(cells[2].getText())
+
+                if amount < 0:
+                    transactions.append(model.InvestmentInterestExpense(
+                            date, amount, memo))
+                else:
+                    transactions.append(model.InvestmentInterestIncome(
+                            date, amount, memo))
 
         return transactions_by_currency
 
@@ -455,6 +489,14 @@ class InteractiveBrokers(fetch.bank.Bank):
                 'tblPaymentInLieuOfDividends_%sBody' % account_name,
                 account_name)
 
+    def _find_broker_interest_paid_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblBrokerInterestPaid_%sBody' % account_name, account_name)
+
+    def _find_broker_interest_received_rows(self, account_name):
+        return self._find_transaction_rows(
+                'tblBrokerInterestReceived_%sBody' % account_name, account_name)
+
     def _find_other_fee_rows(self, account_name):
         return self._find_transaction_rows(
                 'tblOtherFees_%sBody' % account_name, account_name)
@@ -504,7 +546,8 @@ class InteractiveBrokers(fetch.bank.Bank):
                 continue
 
             # New currency?
-            if len(cells) == 1 and 'currencyHeader ' in cells[0]['class']:
+            if (len(cells) == 1 and
+                    'header-currency' in cells[0]['class'].split()):
                 currency = cells[0].getText()
                 continue
 

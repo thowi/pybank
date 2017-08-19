@@ -63,6 +63,7 @@ INVESTMENT_ACTION_TYPES = {
     'shares in': 'ShrsIn',
     'shares out': 'ShrsOut',
     'dividend': 'Div',
+    'interest income': 'IntInc',
     'misc expense': 'MiscExp',
     'misc income': 'MiscInc',
     'stock split': 'StkSplit',
@@ -91,15 +92,15 @@ class SerializationError(Exception):
     """An error while serializing the data."""
 
 
-"""Serializes an account to the QIF format.
-
-@type account: model.Account
-@param account: The account to serialize
-
-@rtype: unicode
-@return: The QIF serialization of the account.
-"""
 def serialize_account(account):
+    """Serializes an account to the QIF format.
+
+    @type account: model.Account
+    @param account: The account to serialize
+
+    @rtype: unicode
+    @return: The QIF serialization of the account.
+    """
     account_fields = []
 
     account_fields.append(ACCOUNT_HEADER)
@@ -132,17 +133,17 @@ def serialize_account(account):
     return '\n'.join(account_fields)
 
 
-"""Serializes a transaction to the QIF format.
-
-@type transaction: model.Transaction
-@param transaction: The transaction to serialize
-
-@rtype: unicode
-@return: The QIF serialization of the transaction.
-
-@raise SerializationError: For unknown transaction types.
-"""
 def serialize_transaction(transaction):
+    """Serializes a transaction to the QIF format.
+
+    @type transaction: model.Transaction
+    @param transaction: The transaction to serialize
+
+    @rtype: unicode
+    @return: The QIF serialization of the transaction.
+
+    @raise SerializationError: For unknown transaction types.
+    """
     if isinstance(transaction, model.Payment):
         return serialize_payment(transaction)
     elif isinstance(transaction, model.InvestmentSecurityPurchase):
@@ -154,6 +155,14 @@ def serialize_transaction(transaction):
     elif isinstance(transaction, model.InvestmentDividend):
         return serialize_investment_transaction(
                 transaction, INVESTMENT_ACTION_TYPES['dividend'])
+    elif isinstance(transaction, model.InvestmentInterestExpense):
+        # Note: There is no "investment interest expense", so we save it as a
+        # negative income.
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['interest income'])
+    elif isinstance(transaction, model.InvestmentInterestIncome):
+        return serialize_investment_transaction(
+                transaction, INVESTMENT_ACTION_TYPES['interest income'])
     elif isinstance(transaction, model.InvestmentMiscExpense):
         return serialize_investment_transaction(
                 transaction, INVESTMENT_ACTION_TYPES['misc expense'])
@@ -164,15 +173,15 @@ def serialize_transaction(transaction):
         raise SerializationError('Unknown transaction type: ' + transaction)
 
 
-"""Serializes a payment to the QIF format.
-
-@type payment: model.Payment
-@param payment: The payment to serialize
-
-@rtype: unicode
-@return: The QIF serialization of the payment.
-"""
 def serialize_payment(payment):
+    """Serializes a payment to the QIF format.
+
+    @type payment: model.Payment
+    @param payment: The payment to serialize
+
+    @rtype: unicode
+    @return: The QIF serialization of the payment.
+    """
     fields = []
 
     fields.append(ITEMS['date'] + payment.date.strftime(DATE_FORMAT))
@@ -189,31 +198,31 @@ def serialize_payment(payment):
     return '\n'.join(fields)
 
 
-"""Serializes a investment transaction to the QIF format.
-
-@type transaction: model.InvestmentTransaction
-@param transaction: The investment transaction to serialize.
-
-@type action: str
-@param action: The "action" of the transaction to serialize.
-
-@rtype: unicode
-@return: The QIF serialization of the investment transaction.
-"""
 def serialize_investment_transaction(transaction, action):
+    """Serializes a investment transaction to the QIF format.
+
+    @type transaction: model.InvestmentTransaction
+    @param transaction: The investment transaction to serialize.
+
+    @type action: str
+    @param action: The "action" of the transaction to serialize.
+
+    @rtype: unicode
+    @return: The QIF serialization of the investment transaction.
+    """
     fields = []
 
     fields.append(INVESTMENT_ITEMS['action'] + action)
     fields.append(
             INVESTMENT_ITEMS['date'] + transaction.date.strftime(DATE_FORMAT))
     fields.append(
-            INVESTMENT_ITEMS['security'] + transaction.symbol)
-    fields.append(
             INVESTMENT_ITEMS['amount'] + (AMOUNT_FORMAT % transaction.amount))
     if transaction.memo:
         fields.append(ITEMS['memo'] + format_memo_(transaction.memo))
     if transaction.category:
         fields.append(ITEMS['category'] + transaction.category)
+    if hasattr(transaction, 'symbol'):
+        fields.append(INVESTMENT_ITEMS['security'] + transaction.symbol)
     if hasattr(transaction, 'quantity'):
         fields.append(
                 INVESTMENT_ITEMS['quantity'] + str(transaction.quantity))
