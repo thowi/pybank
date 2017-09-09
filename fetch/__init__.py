@@ -68,6 +68,23 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
+def format_iban(iban):
+    return format_string_into_blocks(iban, 4)
+
+
+def format_cc_account_name(account_name):
+    return format_string_into_blocks(account_name, 4)
+
+
+def format_string_into_blocks(string, block_length, separator=' '):
+    parts = []
+    index = 0
+    while index < len(string):
+        parts.append(string[index:index + block_length])
+        index += block_length
+    return separator.join(parts)
+
+
 def find_element_by_title(parent, title):
     return parent.find_element_by_xpath(
             ".//*[normalize-space(@title) = '%s']" % title)

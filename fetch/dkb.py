@@ -97,9 +97,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._wait_to_finish_loading()
 
         account_rows = browser.find_elements_by_css_selector(
-                '.financialStatusModule tbody tr')
-        # Skip last (summary) row.
-        account_rows.pop()
+                '.financialStatusModule tbody tr.mainRow')
         self._accounts = []
         for account_row in account_rows:
             try:
@@ -188,8 +186,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
         form = content.find_element_by_tag_name('form')
         account_select_element = form.find_element_by_name('slAllAccounts')
         account_select = ui.Select(account_select_element)
-        account_suffix =  ' / Kreditkarte' if is_credit_card else ' / Girokonto'
-        account_select.select_by_visible_text(account.name + account_suffix)
+        if is_credit_card:
+            account_text = account.name + ' / Kreditkarte'
+        else:
+            account_text = fetch.format_iban(account.name) + ' / Girokonto'
+        account_select.select_by_visible_text(account_text)
         # Selecting an account will reload the page.
         # Wait a little. Load the form again.
         time.sleep(5)

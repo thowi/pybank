@@ -275,7 +275,7 @@ class PostFinance(fetch.bank.Bank):
         account_drop_down_container.find_element_by_class_name(
                 'ef_select--trigger').click()
         fetch.find_element_by_text(
-                account_drop_down_container, self._format_iban(account.name)) \
+                account_drop_down_container, fetch.format_iban(account.name)) \
                 .click()
         fetch.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -309,7 +309,7 @@ class PostFinance(fetch.bank.Bank):
         try:
             header = content.find_element_by_css_selector(
                     'section .content-pane')
-            if self._format_iban(account_name) not in header.text:
+            if fetch.format_iban(account_name) not in header.text:
                 raise fetch.FetchError(
                         'Transactions search failed: Wrong account.')
         except exceptions.NoSuchElementException:
@@ -363,7 +363,7 @@ class PostFinance(fetch.bank.Bank):
         # Find the table row for that account.
         try:
             table = content.find_element_by_id('kreditkarte_u1')
-            formatted_account_name = self._format_cc_account_name(account.name)
+            formatted_account_name = fetch.format_cc_account_name(account.name)
             row = table.find_element_by_xpath(
                     ".//td[normalize-space(text()) = '%s']/ancestor::tr" %
                     formatted_account_name)
@@ -531,20 +531,6 @@ class PostFinance(fetch.bank.Bank):
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
         return fetch.parse_decimal_number(balance, 'de_CH')
-
-    def _format_iban(self, iban):
-        return self._format_string_into_blocks(iban, 4)
-
-    def _format_cc_account_name(self, account_name):
-        return self._format_string_into_blocks(account_name, 4)
-
-    def _format_string_into_blocks(self, string, block_length, separator=' '):
-        parts = []
-        index = 0
-        while index < len(string):
-            parts.append(string[index:index + block_length])
-            index += block_length
-        return separator.join(parts)
 
     def _check_logged_in(self):
         if not self._logged_in:
