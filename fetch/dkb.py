@@ -201,6 +201,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
         content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
+        if is_credit_card:
+            form.find_element_by_css_selector('input[value="DATE_RANGE"]') \
+                    .click()
+        else:
+            form.find_element_by_css_selector('input[value="1"]').click()
         from_name = 'postingDate' if is_credit_card else 'transactionDate'
         from_input = form.find_element_by_name(from_name)
         from_input.click()
