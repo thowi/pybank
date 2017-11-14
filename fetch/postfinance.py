@@ -372,13 +372,10 @@ class PostFinance(fetch.bank.Bank):
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find account %s.' % account)
 
-        # You can see the transactions for three periods:
-        # Current, previous and last-but-one.
-        # We always load all and post-filter.
+        # You can see the transactions for one month/period at a time.
         transactions = []
         while True:
-            # Also wait for the content to load.
-            fetch.find_element_by_tag_name_and_text(content, 'th', 'Date')
+            self._wait_to_finish_loading()
 
             # Get the period of the current page.
             period = content.find_element_by_css_selector(
@@ -451,6 +448,19 @@ class PostFinance(fetch.bank.Bank):
         browser = self._browser
         title = browser.find_element_by_css_selector('h1.page-title')
         content = title.parent
+
+        # Check if there are any transactions in the current period.
+        try:
+            no_transactions = fetch.find_element_by_text(
+                content,
+                'There are no transactions in the selected accounting '
+                'period for this card')
+            if no_transactions.is_displayed():
+                logging.info('No transactions found.')
+                return []
+        except exceptions.NoSuchElementException:
+            pass
+
         try:
             table = content.find_element_by_tag_name('table')
         except exceptions.NoSuchElementException:
