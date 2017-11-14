@@ -70,6 +70,10 @@ class InteractiveBrokers(fetch.bank.Bank):
             if not self._is_logged_in():
                 raise fetch.FetchError('Login failed.')
 
+        # Go back to the old UI.
+        # TODO: Implement new UI.
+        browser.find_element_by_link_text('Classic AM').click()
+
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
         time.sleep(10)
@@ -81,7 +85,8 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _is_logged_in(self):
         return fetch.is_element_present(
-                lambda: self._browser.find_element_by_id('mainFrameSet'))
+                lambda: self._browser.find_element_by_class_name(
+                        'navigation-title'))
 
     def logout(self):
         browser = self._browser
