@@ -221,9 +221,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def _get_transactions_from_checking_account_statement(self):
         transactions = []
-        rows = self._browser.find_elements_by_css_selector('table tr')
-        # Skip header row.
-        rows = rows[1:]
+        rows = self._browser.find_elements_by_css_selector(
+                'table tbody tr.mainRow')
         for row in rows:
             try:
                 cells = row.find_elements_by_tag_name('td')
