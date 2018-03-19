@@ -21,6 +21,9 @@ logger = logging.getLogger(__name__)
 class InteractiveBrokers(fetch.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
     _LOGIN_URL = 'https://gdcdyn.interactivebrokers.com/sso/Login'
+    _MAIN_URL = (
+            'https://gdcdyn.interactivebrokers.com/AccountManagement/'
+            'AmAuthentication')
     _ACTIVITY_FORM_DATE_FORMAT = '%Y%m%d'
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
@@ -47,7 +50,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             username = raw_input('User name: ')
 
         if self.ask_and_restore_cookies(browser, username):
-            browser.refresh()
+            browser.get(self._MAIN_URL)
 
         if not self._is_logged_in():
             if not password:
@@ -218,7 +221,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         table_rows = self._find_trade_rows(account_name)
         rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=9)
+                table_rows, expected_num_columns=10)
         transactions_by_currency = {}
         for currency, rows in rows_by_currency.items():
             transactions = []
@@ -507,7 +510,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 'tblOtherFees_%sBody' % account_name, account_name)
 
     def _find_transaction_rows(self, table_container_id, account_name):
-
+        # Make sure the page is loaded.
         self._browser.find_element_by_id(
                 'tblAccountInformation_' + account_name + 'Body')
 
