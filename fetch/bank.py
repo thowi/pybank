@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import logging
+import os
 import pickle
 
 logger = logging.getLogger(__name__)
@@ -100,3 +101,16 @@ class Bank(object):
                 browser.add_cookie(cookie)
             return True
         return False
+
+    def delete_cookies(self, username):
+        """Deletes any cookies for a session.
+
+        @type username: str
+        @param str: The username that owned the session.
+        """
+        cookies_filename = self._get_cookies_filename(username)
+        logger.info('Deleting cookies in %s...' % cookies_filename)
+        try:
+            os.remove(cookies_filename)
+        except IOError:
+            logger.info('No cookies found.')

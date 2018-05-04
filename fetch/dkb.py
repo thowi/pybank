@@ -71,6 +71,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         self.save_cookies(browser, username)
         self._logged_in = True
+        self._username = username
         self._main_window_handle = browser.current_window_handle
         logger.info('Log-in sucessful.')
 
@@ -83,6 +84,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
+        self.delete_cookies(self._username)
+        self._username = None
 
     def get_accounts(self):
         self._check_logged_in()

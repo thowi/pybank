@@ -127,6 +127,7 @@ class PostFinance(fetch.bank.Bank):
 
         self.save_cookies(browser, username)
         self._logged_in = True
+        self._username = username
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
@@ -138,6 +139,8 @@ class PostFinance(fetch.bank.Bank):
         self._browser.quit()
         self._logged_in = False
         self._accounts = None
+        self.delete_cookies(self._username)
+        self._username = None
 
     def get_accounts(self):
         if self._accounts is not None:

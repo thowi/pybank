@@ -80,7 +80,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         self.save_cookies(browser, username)
         self._logged_in = True
-        self._main_window_handle = browser.current_window_handle
+        self._username = username
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
@@ -100,6 +100,8 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._logged_in = False
         self._accounts_cache = None
         self._transactions_cache = {}
+        self.delete_cookies(self._username)
+        self._username = None
 
     def get_accounts(self):
         if self._accounts_cache is not None:
