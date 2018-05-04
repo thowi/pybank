@@ -153,10 +153,12 @@ class InteractiveBrokers(fetch.bank.Bank):
     def get_transactions(self, account, start, end):
         account_name, currency = self._split_account_name(account.name)
         cache_key = account_name, start, end
-        # TODO: Actually store data in the cache. This is a no-op right now.
         cached_transactions = self._transactions_cache.get(cache_key)
         if cached_transactions:
-            return cached_transactions[currency]
+            transactions = cached_transactions[currency]
+            logger.info('Found %i cached transactions for account %s.' % (
+                    len(transactions), account))
+            return transactions
 
         self._check_logged_in()
 
@@ -171,16 +173,18 @@ class InteractiveBrokers(fetch.bank.Bank):
         interest = self._get_interest_from_activity_statement(account_name)
         other_fees = self._get_other_fees_from_activity_statement(account_name)
 
-        # We're only interested in the current currency.
-        transactions = []
+        # Collect transactions for all currencies. Later select by currency.
+        transactions_by_currency = collections.defaultdict(list)
         for category in (
                 transfers, trades, withholding_tax, dividends, interest,
                 other_fees):
-            transactions_by_currency = category.get(currency)
-            if transactions_by_currency:
-                transactions += transactions_by_currency
+            for category_currency, transactions in category.items():
+                transactions_by_currency[category_currency] += transactions
+        self._transactions_cache[cache_key] = transactions_by_currency
 
-        logger.info('Found %i transactions.' % len(transactions))
+        transactions = transactions_by_currency[currency]
+        logger.info('Found %i transactions for account %s.' % (
+                len(transactions), account))
         return transactions
 
     def _get_transfers_from_activity_statement(self, account_name):
