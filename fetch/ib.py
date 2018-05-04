@@ -11,6 +11,7 @@ import BeautifulSoup
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
+import fetch
 import fetch.bank
 import model
 
@@ -24,7 +25,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     _MAIN_URL = (
             'https://gdcdyn.interactivebrokers.com/AccountManagement/'
             'AmAuthentication')
-    _ACTIVITY_FORM_DATE_FORMAT = '%Y%m%d'
+    _ACTIVITY_FORM_DATE_FORMAT = '%Y-%m-%d'
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
     _WEBDRIVER_TIMEOUT = 30
@@ -37,7 +38,8 @@ class InteractiveBrokers(fetch.bank.Bank):
             #self._browser = webdriver.PhantomJS()
             self._browser = webdriver.Firefox()
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-        self._browser.set_window_size(800, 800)
+        # The user menu is only visible if the window is min 992px wide.
+        self._browser.set_window_size(1000, 800)
 
         self._logged_in = False
         self._accounts_cache = None
@@ -67,15 +69,10 @@ class InteractiveBrokers(fetch.bank.Bank):
             login_form.find_element_by_id('submitForm').click()
             login_form.find_element_by_id('submitForm').click()
 
-            print "Please follow the log-in instructions and press enter."
-            raw_input()
+            raw_input("Please follow the log-in instructions and press enter.")
 
             if not self._is_logged_in():
                 raise fetch.FetchError('Login failed.')
-
-        # Go back to the old UI.
-        # TODO: Implement new UI.
-        browser.find_element_by_link_text('Classic AM').click()
 
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
@@ -87,16 +84,18 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
-        return fetch.is_element_present(
-                lambda: self._browser.find_element_by_class_name(
-                        'navigation-title'))
+        self._browser.implicitly_wait(5)
+        is_logged_in = fetch.is_element_present(
+                lambda: fetch.find_element_by_text(
+                        self._browser, 'Account Management'))
+        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        return is_logged_in
 
     def logout(self):
         browser = self._browser
-        browser.switch_to_default_content()
-        browser.switch_to_frame('header')
-        browser.find_element_by_link_text('Logout').click()
-
+        browser.find_element_by_css_selector(
+                '#userSettings user-options a').click()
+        browser.find_element_by_link_text('Log Out').click()
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -115,24 +114,21 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser = self._browser
 
         logger.debug('Getting account name...')
-        browser.switch_to_default_content()
-        browser.switch_to_frame('footer')
-        account_name = browser.find_element_by_id('theAccountId').text.strip()
-        browser.switch_to_default_content()
-        browser.switch_to_frame('content')
+        self._navigate_to('Settings', 'Account Settings')
+        account_name = browser.find_element_by_css_selector(
+                '.page-content .account-numbers').text.strip()
 
         logger.debug('Getting balances from activity statement...')
-        today = datetime.datetime.today()
+        yesterday = datetime.datetime.today() - datetime.timedelta(1)
         accounts = []
-        self._open_activity_statement(account_name, today, today)
+        self._open_activity_statement(account_name, yesterday, yesterday)
         currencies_and_balances = \
                 self._get_currencies_and_balances_from_activity_statement(
                         account_name)
         for currency, balance in currencies_and_balances:
             name = '%s.%s' % (account_name, currency)
             accounts.append(model.InvestmentsAccount(
-                    name, currency, balance, today))
-        self._close_activity_statement()
+                    name, currency, balance, yesterday))
 
         return accounts
 
@@ -183,8 +179,6 @@ class InteractiveBrokers(fetch.bank.Bank):
             transactions_by_currency = category.get(currency)
             if transactions_by_currency:
                 transactions += transactions_by_currency
-
-        self._close_activity_statement()
 
         logger.info('Found %i transactions.' % len(transactions))
         return transactions
@@ -380,16 +374,17 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _go_to_activity_statements(self):
         logger.debug('Opening activity statements page...')
+        self._navigate_to('Reports', 'Statements')
+
+    def _navigate_to(self, section, page):
         browser = self._browser
-        browser.switch_to_default_content()
-        browser.switch_to_frame('header')
-        # Hover Reports.
-        reports_menu = browser.find_element_by_link_text('Reports')
-        webdriver.ActionChains(browser).move_to_element(reports_menu).perform()
-        browser.find_element_by_link_text('Activity').click()
-        browser.find_element_by_link_text('Statements').click()
-        browser.switch_to_default_content()
-        browser.switch_to_frame('content')
+        nav = browser.find_element_by_class_name('side-navigation')
+        menu_item = fetch.find_element_by_text(nav, section) \
+                .find_element_by_xpath('../..')
+        if 'nav-active' not in menu_item.get_attribute('class').split():
+            menu_item.find_element_by_tag_name('a').click()
+        nav.find_element_by_link_text(page).click()
+        self._wait_to_finish_loading()
 
     def _open_activity_statement(self, account_name, start, end):
         self._go_to_activity_statements()
@@ -397,65 +392,64 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         # Get activity statements form.
         try:
-            form = browser.find_element_by_name('view_stmt')
+            body = browser.find_element_by_css_selector('section.panel')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Activity statements form not found.')
 
-        # Select account.
-        # NOTE: There is no account select box, at least when you have only one
-        # account.
-        #account_select = ui.Select(form.find_element_by_name('accounts'))
-        #account_select.select_by_value(account_name)
-
-        # Select simple report.
-        type_select = ui.Select(form.find_element_by_name('templateId'))
-        type_select.select_by_value('S')  # S = simple.
-        # Changing the report type will block the page using an overlay.
-        self._wait_to_finish_loading()
+        # Check statement type.
+        if (body.find_element_by_id('statementCategory').get_attribute('value')
+            != 'string:DEFAULT_STATEMENT' or
+            body.find_element_by_id('statementType').get_attribute('value')
+            != 'string:DEFAULT_ACTIVITY'):
+            raise fetch.FetchError('Expected activity statement type.')
 
         # Select date range.
-        period_select = ui.Select(form.find_element_by_name('activityPeriod'))
-        period_select.select_by_value('R')  # R = range.
-        # Changing the period type will block the page using an overlay.
+        period_select = fetch.find_element_by_text(body, 'Period') \
+                .find_element_by_xpath('../..//select')
+        ui.Select(period_select).select_by_value('string:DATE_RANGE')
+        # Switching period will refresh the form.
         self._wait_to_finish_loading()
-        from_date_element = form.find_element_by_name('fromDate')
-        to_date_element = form.find_element_by_name('toDate')
-        self._select_date_in_activity_statement(from_date_element, start)
-        self._select_date_in_activity_statement(to_date_element, end)
+        body = browser.find_element_by_css_selector('section.panel')
+        self._select_date_in_activity_statement('fromDate', start)
+        self._select_date_in_activity_statement('toDate', end)
 
+        # Open report.
         logger.debug('Opening activity statement report...')
-        browser.find_element_by_css_selector('.button.continue').click()
-        browser.switch_to_window('report')
+        body.find_element_by_link_text('RUN STATEMENT').click()
+        self._wait_to_finish_loading()
 
         # Expand all sections.
-        browser.find_element_by_link_text('Expand All').click()
+        try:
+            body = browser.find_element_by_css_selector('section.panel')
+        except exceptions.NoSuchElementException:
+            raise fetch.FetchError('Activity statement failed to load.')
+        body.find_element_by_link_text('Expand All').click()
 
-    def _select_date_in_activity_statement(self, select_element, date):
-        """Tries to select the specified date.
+    def _select_date_in_activity_statement(self, input_name, date):
+        assert input_name in ('fromDate', 'toDate')
+        # The date picker is a bit tricky. It's a jQuery Bootstrap date pickers
+        # and it will only open when the <input> is focused while the browser
+        # window is in the foreground.
+        # See e.g. https://stackoverflow.com/questions/21689309.
+        # So instead, we manipulate it directly.
 
-        If the requested date is not one of the options, goes back in time up to
-        7 days until the requested date is found.
+        # Weekends are not allowed.
+        if date.weekday() > 4:
+            if input_name == 'fromDate':
+                date = date + datetime.timedelta(7 - date.weekday())
+            elif input_name == 'toDate':
+                date = date - datetime.timedelta(date.weekday() - 4)
 
-        Raises a fetch.FetchError if no date could be selected.
-        """
-        select = ui.Select(select_element)
-        # Disable waiting for elements while checking the available options, in
-        # order to speed up the value selection.
-        self._browser.implicitly_wait(0)
-        for go_back in range(7):
-            adjusted_date = date - datetime.timedelta(go_back)
-            formatted_adjusted_date = adjusted_date.strftime(
-                    self._ACTIVITY_FORM_DATE_FORMAT)
-            matching_options = self._browser.find_elements_by_xpath(
-                    '//form[@name="view_stmt"]//select[@name="%s"]/'
-                    'option[@value="%s"]' % (
-                     select_element.get_attribute('name'),
-                     formatted_adjusted_date))
-            if matching_options:
-                select.select_by_value(formatted_adjusted_date)
-                break
+        # January 1st is not allowed.
+        if date.month == 1 and date.day == 1:
+            date = date.replace(day=2)
 
-        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        formatted_date = date.strftime(self._ACTIVITY_FORM_DATE_FORMAT)
+        self._browser.execute_script(
+                '$("input[name=\'%s\']")'
+                '.datepicker("show")'
+                '.datepicker("update", "%s")'
+                '.datepicker("hide")' % (input_name, formatted_date))
 
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
@@ -463,14 +457,10 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Disable waiting for elements to speed up the operation.
         browser.implicitly_wait(0)
 
-        overlay = lambda: browser.find_element_by_class_name('blockUI')
+        overlay = lambda: browser.find_element_by_tag_name('loading-overlay')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-
-    def _close_activity_statement(self):
-        self._browser.close()
-        self._browser.switch_to_window(self._main_window_handle)
 
     def _find_transfer_rows(self, account_name):
         return self._find_transaction_rows(
