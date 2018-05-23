@@ -1,9 +1,13 @@
 #!/usr/bin/python
 
 import collections
+import csv
 import datetime
 import getpass
 import logging
+import os
+import os.path
+import re
 import tempfile
 import time
 
@@ -31,12 +35,25 @@ class InteractiveBrokers(fetch.bank.Bank):
     _WEBDRIVER_TIMEOUT = 30
 
     def login(self, username=None, password=None):
+        # Download to a custom location. Don't show dialog.
+        self._download_dir = tempfile.mkdtemp()
+        firefox_profile = webdriver.FirefoxProfile()
+        firefox_profile.set_preference('browser.download.folderList', 2)
+        firefox_profile.set_preference(
+                'browser.download.manager.showWhenStarting', False)
+        firefox_profile.set_preference(
+                'browser.download.dir', self._download_dir)
+        # CSV files are returned as text/plain.
+        firefox_profile.set_preference(
+                'browser.helperApps.neverAsk.saveToDisk', 'text/plain')
+
         if self._debug:
-            self._browser = webdriver.Firefox()
+            self._browser = webdriver.Firefox(firefox_profile)
         else:
             # TODO: Fix the login and enable PhantomJs.
             #self._browser = webdriver.PhantomJS()
-            self._browser = webdriver.Firefox()
+            self._browser = webdriver.Firefox(firefox_profile)
+
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         # The user menu is only visible if the window is min 992px wide.
         self._browser.set_window_size(1000, 800)
@@ -123,34 +140,19 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.debug('Getting balances from activity statement...')
         yesterday = datetime.datetime.today() - datetime.timedelta(1)
         accounts = []
-        self._open_activity_statement(account_name, yesterday, yesterday)
-        currencies_and_balances = \
-                self._get_currencies_and_balances_from_activity_statement(
-                        account_name)
-        for currency, balance in currencies_and_balances:
+        csv_dict = self._download_activity_statement(
+                account_name, yesterday, yesterday)
+        account_data = csv_dict['Account Information']['Data']['Account']
+        account_name = account_data['__rows'][0][0]
+        ending_cash = csv_dict['Cash Report']['Data']['Ending Cash']
+        currencies = [k for k in ending_cash.keys() if len(k) == 3]
+        accounts = []
+        for currency in currencies:
             name = '%s.%s' % (account_name, currency)
+            balance = self._parse_float(ending_cash[currency]['__rows'][0][0])
             accounts.append(model.InvestmentsAccount(
                     name, currency, balance, yesterday))
-
         return accounts
-
-    def _get_currencies_and_balances_from_activity_statement(
-            self, account_name):
-        logger.debug('Extracting currencies and balances...')
-
-        table_rows = self._find_cash_rows(account_name)
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=6)
-        currencies_and_balances = []
-        for currency, rows in rows_by_currency.items():
-            if currency == 'Base Currency Summary':
-                continue
-            for cells in rows:
-                if cells[0].getText() == 'Ending Cash':
-                    balance = self._parse_float(cells[1].getText())
-                    currencies_and_balances.append((currency, balance))
-
-        return currencies_and_balances
 
     def get_transactions(self, account, start, end):
         account_name, currency = self._split_account_name(account.name)
@@ -165,15 +167,15 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._check_logged_in()
 
         end_inclusive = end - datetime.timedelta(1)
-        self._open_activity_statement(account_name, start, end_inclusive)
+        csv_dict = self._download_activity_statement(
+                account_name, start, end_inclusive)
 
-        transfers = self._get_transfers_from_activity_statement(account_name)
-        trades = self._get_trades_from_activity_statement(account_name)
-        withholding_tax = self._get_withholding_tax_from_activity_statement(
-                account_name)
-        dividends = self._get_dividends_from_activity_statement(account_name)
-        interest = self._get_interest_from_activity_statement(account_name)
-        other_fees = self._get_other_fees_from_activity_statement(account_name)
+        transfers = self._get_transfers(csv_dict, account_name)
+        trades = self._get_trades(csv_dict, account_name)
+        withholding_tax = self._get_withholding_tax(csv_dict, account_name)
+        dividends = self._get_dividends(csv_dict, account_name)
+        interest = self._get_interest(csv_dict, account_name)
+        other_fees = self._get_other_fees(csv_dict, account_name)
 
         # Collect transactions for all currencies. Later select by currency.
         transactions_by_currency = collections.defaultdict(list)
@@ -182,6 +184,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                 other_fees):
             for category_currency, transactions in category.items():
                 transactions_by_currency[category_currency] += transactions
+
         self._transactions_cache[cache_key] = transactions_by_currency
 
         transactions = transactions_by_currency[currency]
@@ -189,192 +192,123 @@ class InteractiveBrokers(fetch.bank.Bank):
                 len(transactions), account))
         return transactions
 
-    def _get_transfers_from_activity_statement(self, account_name):
+    def _get_transfers(self, csv_dict, account_name):
         logger.debug('Extracting transfers...')
 
-        table_rows = self._find_transfer_rows(account_name)
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=4)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                date = cells[0].getText()
-                try:
-                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transfer with invalid date %s.', date)
-                    continue
-                description = cells[1].getText()
-                amount = self._parse_float(cells[2].getText())
-                unused_code = cells[3].getText()
-
-                transaction = model.Payment(date, amount, payee=account_name)
-                transactions.append(transaction)
+        transactions_by_currency = collections.defaultdict(list)
+        for row in csv_dict['Deposits & Withdrawals']['Data']['__rows']:
+            currency = row[0]
+            if currency == 'Total':
+                continue
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
+            kind = row[2]
+            amount = self._parse_float(row[3])
+            transaction = model.Payment(date, amount, payee=account_name)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
-    def _get_trades_from_activity_statement(self, account_name):
+    def _get_trades(self, csv_dict, account_name):
         logger.debug('Extracting trades...')
 
-        table_rows = self._find_trade_rows(account_name)
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=10)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                symbol = cells[0].getText()
-                date = cells[1].getText()
-                try:
-                    date = datetime.datetime.strptime(
-                            date, self._DATE_TIME_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transaction with invalid date %s.', date)
-                    continue
-                quantity = self._parse_int(cells[2].getText())
-                price = self._parse_float(cells[3].getText())
-                proceeds = self._parse_float(cells[4].getText())
-                commissions_and_tax = self._parse_float(cells[5].getText())
-                amount = proceeds + commissions_and_tax
-
-                if quantity >= 0:
-                    transaction = model.InvestmentSecurityPurchase(
-                            date, symbol, quantity, price, commissions_and_tax,
-                            amount)
-                else:
-                    transaction = model.InvestmentSecuritySale(
-                            date, symbol, -quantity, price, commissions_and_tax,
-                            amount)
-                transactions.append(transaction)
+        st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
+        ft = csv_dict['Trades']['Data']['Order']['Forex'].get('__rows', [])
+        trades = st + ft
+        transactions_by_currency = collections.defaultdict(list)
+        for row in trades:
+            currency = row[0]
+            symbol = row[1]
+            date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
+            quantity = self._parse_int(row[3])
+            price = self._parse_float(row[4])
+            proceeds = self._parse_float(row[6])
+            commissions_and_tax = self._parse_float(row[7])
+            amount = proceeds + commissions_and_tax
+            if quantity >= 0:
+                transaction = model.InvestmentSecurityPurchase(
+                        date, symbol, quantity, price, commissions_and_tax,
+                        amount)
+            else:
+                transaction = model.InvestmentSecuritySale(
+                        date, symbol, -quantity, price, commissions_and_tax,
+                        amount)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
-    def _get_withholding_tax_from_activity_statement(self, account_name):
+    def _get_withholding_tax(self, csv_dict, account_name):
         logger.debug('Extracting withholding tax...')
 
-        table_rows = self._find_withholding_tax_rows(account_name)
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=4)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                date = cells[0].getText()
-                try:
-                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transaction with invalid date %s.', date)
-                    continue
-                description = cells[1].getText()
-                amount = self._parse_float(cells[2].getText())
-
-                symbol = description.split()[0]
-                memo = description
-
-                transaction = model.InvestmentMiscExpense(
-                        date, symbol, amount, memo)
-                transactions.append(transaction)
+        transactions_by_currency = collections.defaultdict(list)
+        for row in csv_dict['Withholding Tax']['Data']['__rows']:
+            currency = row[0]
+            if currency.startswith('Total'):
+                continue
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
+            description = row[2]
+            amount = self._parse_float(row[3])
+            symbol = re.split('[ (]', description)[0]
+            memo = description
+            transaction = model.InvestmentMiscExpense(
+                   date, symbol, amount, memo)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
-    def _get_dividends_from_activity_statement(self, account_name):
+    def _get_dividends(self, csv_dict, account_name):
         logger.debug('Extracting dividends...')
 
-        dividend_rows = self._find_dividend_rows(account_name)
-        div_lieu_rows = self._find_in_lieu_of_dividend_rows(account_name)
-        table_rows = dividend_rows + div_lieu_rows
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=4)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                date = cells[0].getText()
-                try:
-                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transaction with invalid date %s.', date)
-                    continue
-                description = cells[1].getText()
-                amount = self._parse_float(cells[2].getText())
-
-                symbol = description.split()[0]
-                memo = description
-
-                transaction = model.InvestmentDividend(
-                        date, symbol, amount, memo)
-                transactions.append(transaction)
+        transactions_by_currency = collections.defaultdict(list)
+        for row in csv_dict['Dividends']['Data']['__rows']:
+            currency = row[0]
+            if currency.startswith('Total'):
+                continue
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
+            description = row[2]
+            amount = self._parse_float(row[3])
+            symbol = re.split('[ (]', description)[0]
+            memo = description
+            transaction = model.InvestmentDividend(date, symbol, amount, memo)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
-    def _get_interest_from_activity_statement(self, account_name):
+    def _get_interest(self, csv_dict, account_name):
         logger.debug('Extracting interest...')
 
-        paid_rows = self._find_broker_interest_paid_rows(account_name)
-        received_rows = self._find_broker_interest_received_rows(account_name)
-        rows = paid_rows + received_rows
-        rows_by_currency = self._group_rows_by_currency(
-                rows, expected_num_columns=4)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                date = cells[0].getText()
-                try:
-                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transaction with invalid date %s.', date)
-                    continue
-                memo = cells[1].getText()
-                amount = self._parse_float(cells[2].getText())
-
-                if amount < 0:
-                    transactions.append(model.InvestmentInterestExpense(
-                            date, amount, memo))
-                else:
-                    transactions.append(model.InvestmentInterestIncome(
-                            date, amount, memo))
+        transactions_by_currency = collections.defaultdict(list)
+        for row in csv_dict['Interest']['Data']['__rows']:
+            currency = row[0]
+            if currency.startswith('Total'):
+                continue
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
+            description = row[2]
+            amount = self._parse_float(row[3])
+            memo = description
+            if amount < 0:
+                transaction = model.InvestmentInterestExpense(
+                        date, amount, memo)
+            else:
+                transaction = model.InvestmentInterestIncome(date, amount, memo)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
-    def _get_other_fees_from_activity_statement(self, account_name):
+    def _get_other_fees(self, csv_dict, account_name):
         logger.debug('Extracting other fees...')
 
-        table_rows = self._find_other_fee_rows(account_name)
-        rows_by_currency = self._group_rows_by_currency(
-                table_rows, expected_num_columns=4)
-        transactions_by_currency = {}
-        for currency, rows in rows_by_currency.items():
-            transactions = []
-            transactions_by_currency[currency] = transactions
-            for cells in rows:
-                date = cells[0].getText()
-                try:
-                    date = datetime.datetime.strptime(date, self._DATE_FORMAT)
-                except ValueError:
-                    logger.warning(
-                            'Skipping transaction with invalid date %s.', date)
-                    continue
-                description = cells[1].getText()
-                amount = self._parse_float(cells[2].getText())
-
-                symbol = ''
-                memo = description
-
-                transaction = model.InvestmentMiscExpense(
-                        date, symbol, amount, memo)
-                transactions.append(transaction)
+        transactions_by_currency = collections.defaultdict(list)
+        for row in csv_dict['Fees']['Data']['Other Fees']['__rows']:
+            currency = row[0]
+            date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
+            date = row[1]
+            description = row[2]
+            amount = self._parse_float(row[3])
+            memo = description
+            symbol = ''
+            transaction = model.InvestmentMiscExpense(
+                    date, symbol, amount, memo)
+            transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
@@ -392,7 +326,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         nav.find_element_by_link_text(page).click()
         self._wait_to_finish_loading()
 
-    def _open_activity_statement(self, account_name, start, end):
+    def _download_activity_statement(self, account_name, start, end):
         self._go_to_activity_statements()
         browser = self._browser
 
@@ -419,17 +353,50 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._select_date_in_activity_statement('fromDate', start)
         self._select_date_in_activity_statement('toDate', end)
 
-        # Open report.
-        logger.debug('Opening activity statement report...')
-        body.find_element_by_link_text('RUN STATEMENT').click()
-        self._wait_to_finish_loading()
+        # Select CSV format.
+        format_select = fetch.find_element_by_text(body, 'Format') \
+                .find_element_by_xpath('../..//select')
+        ui.Select(format_select).select_by_visible_text('CSV')
 
-        # Expand all sections.
+        # Download report.
+        logger.debug('Downloading activity statement report...')
+        before_download_timestamp = time.time()
+        body.find_element_by_link_text('RUN STATEMENT').click()
+
+        # Find file on disk, load, parse CSV.
         try:
-            body = browser.find_element_by_css_selector('section.panel')
-        except exceptions.NoSuchElementException:
+            csv_filename = lambda: self._get_downloaded_filename_newer_than(
+                    before_download_timestamp)
+            fetch.wait_until(csv_filename)
+            filename = csv_filename()
+            with open(filename, 'rb') as csvfile:
+                csv_dict = self._parse_csv_into_dict(csvfile)
+                os.remove(filename)
+                return csv_dict
+        except fetch.OperationTimeoutError:
             raise fetch.FetchError('Activity statement failed to load.')
-        body.find_element_by_link_text('Expand All').click()
+
+    def _get_downloaded_filename_newer_than(self, timestamp):
+        for root, dirs, files in os.walk(self._download_dir):
+            for file in files:
+                path = os.path.join(root, file)
+                last_modified = os.path.getmtime(path)
+                if last_modified > timestamp:
+                    return path
+        return None
+
+    def _parse_csv_into_dict(self, csvfile):
+        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
+        nested_default_dict = lambda: collections.defaultdict(nested_default_dict)
+        csv_dict = nested_default_dict()
+        for row in reader:
+            cur = csv_dict
+            for i, cell in enumerate(row):
+                cur = cur[cell]
+                if '__rows' not in cur:
+                    cur['__rows'] = []
+                cur['__rows'].append(row[i+1:])
+        return csv_dict
 
     def _select_date_in_activity_statement(self, input_name, date):
         assert input_name in ('fromDate', 'toDate')
@@ -467,116 +434,6 @@ class InteractiveBrokers(fetch.bank.Bank):
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-
-    def _find_transfer_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblDepositsWithdrawals_%sBody' % account_name, account_name)
-
-    def _find_cash_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblCashReport_%sBody' % account_name, account_name)
-
-    def _find_trade_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblTransactions_%sBody' % account_name, account_name)
-
-    def _find_withholding_tax_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblWithholdingTax_%sBody' % account_name, account_name)
-
-    def _find_dividend_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblDividends_%sBody' % account_name, account_name)
-
-    def _find_in_lieu_of_dividend_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblPaymentInLieuOfDividends_%sBody' % account_name,
-                account_name)
-
-    def _find_broker_interest_paid_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblBrokerInterestPaid_%sBody' % account_name, account_name)
-
-    def _find_broker_interest_received_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblBrokerInterestReceived_%sBody' % account_name, account_name)
-
-    def _find_other_fee_rows(self, account_name):
-        return self._find_transaction_rows(
-                'tblOtherFees_%sBody' % account_name, account_name)
-
-    def _find_transaction_rows(self, table_container_id, account_name):
-        # Make sure the page is loaded.
-        self._browser.find_element_by_id(
-                'tblAccountInformation_' + account_name + 'Body')
-
-        # We're using BeautifulSoup to parse the HTML directly, as using
-        # WebDriver proved to be unreliable (hidden elements) and slow.
-        html = self._browser.page_source
-        soup = BeautifulSoup.BeautifulSoup(html)
-
-        table_container = soup.find('div', {'id': table_container_id})
-        if not table_container:
-            logger.debug(
-                    'Couldn\'t find %s table. Maybe there are no transactions '
-                    'of that type?' % table_container_id)
-            return []
-        return table_container.find('table').findAll('tr')
-
-    def _group_rows_by_currency(self, table_rows, expected_num_columns):
-        """Groups the table rows by currency.
-
-        @type table_rows: [BeautifulSoup.Tag]
-        @param table_rows: The table rows.
-
-        @type expected_num_columns: int
-        @param expected_num_columns: The expected number of columns for each
-                data row.
-
-        @rtype: {str: [[BeautifulSoup.Tag],]}
-        @returns: A dict which maps from currencies to a list of rows, where
-                each row contains a list of cells.
-        """
-        rows_by_currency = collections.defaultdict(list)
-
-        currency = None
-        logger.debug('Scanning %i table rows...' % len(table_rows))
-        for table_row in table_rows:
-            cells = table_row.findAll('td')
-
-            # Header row?
-            if len(cells) == 0:
-                logger.debug('Skipping empty table or header row.')
-                continue
-
-            # New currency?
-            if (len(cells) == 1 and
-                    'header-currency' in cells[0]['class'].split()):
-                currency = cells[0].getText()
-                continue
-
-            # Totals row?
-            if 'Total ' in cells[0].getText():
-                continue
-
-            # Invalid row?
-            if len(cells) != expected_num_columns:
-                logger.debug(
-                        'Skipping invalid transaction row with %i cells. '
-                        'Expected %i cells.' % (
-                        len(cells), expected_num_columns))
-                continue
-
-            if not currency:
-                logger.warning(
-                        'Don\'t know the currency yet. '
-                        'Skipping transaction row.')
-                continue
-
-            rows_by_currency[currency].append(cells)
-            logger.debug('Added new row for currency %s.' % currency)
-
-        return rows_by_currency
 
     def _split_account_name(self, account_name):
         """Splits a combined account name in the form ACCNAME.CUR into the
