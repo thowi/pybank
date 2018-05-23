@@ -167,10 +167,9 @@ class PostFinance(fetch.bank.Bank):
 
         accounts = []
         try:
-            payment_accounts_table = content.find_element_by_xpath(
-                    ".//h2[text() = 'Payment accounts']/..//table")
-            assets_table = content.find_element_by_xpath(
-                    ".//h2[text() = 'Assets']/..//table")
+            payment_accounts_table = content.find_element_by_id(
+                    "paymentAccounts")
+            assets_table = content.find_element_by_id("investmentAccounts")
             for account_table in payment_accounts_table, assets_table:
                 account_rows = account_table.find_elements_by_css_selector(
                         'tbody tr')
@@ -189,7 +188,7 @@ class PostFinance(fetch.bank.Bank):
                     balance_cell = tds[col_by_text['Balance in CHF']]
                     balance = self._parse_balance(balance_cell.text.strip())
                     balance_date = datetime.datetime.now()
-                    if acc_type == 'Private':
+                    if acc_type == 'Private account':
                         account = model.CheckingAccount(
                                 acc_number, currency, balance, balance_date)
                     elif acc_type == 'E-savings account':
@@ -308,11 +307,11 @@ class PostFinance(fetch.bank.Bank):
     def _extract_transactions_from_result_page(self, account_name):
         browser = self._browser
 
-        content = browser.find_element_by_class_name('detail_page')
+        content = browser.find_element_by_css_selector(
+                '.detail_page '
+                '.content-pane:not(.is-hidden-print):not(.ng-hide)')
         try:
-            header = content.find_element_by_css_selector(
-                    'section .content-pane')
-            if fetch.format_iban(account_name) not in header.text:
+            if fetch.format_iban(account_name) not in content.text:
                 raise fetch.FetchError(
                         'Transactions search failed: Wrong account.')
         except exceptions.NoSuchElementException:
