@@ -4,6 +4,7 @@
 import datetime
 import getpass
 import logging
+import re
 import time
 
 from selenium import webdriver
@@ -28,6 +29,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
     _DATE_FORMAT = '%d.%m.%Y'
     _DATE_FORMAT_SHORT = '%d.%m.%y'
     _WEBDRIVER_TIMEOUT = 10
+    _SESSION_TIMEOUT_S = 12 * 60
 
     def login(self, username=None, password=None):
         if self._debug:
@@ -47,7 +49,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         if not username:
             username = raw_input('User: ')
 
-        if self.ask_and_restore_cookies(browser, username):
+        if self.ask_and_restore_cookies(browser, username, _SESSION_TIMEOUT_S):
             browser.refresh()
 
         if not self._is_logged_in():
@@ -162,7 +164,10 @@ class DeutscheKreditBank(fetch.bank.Bank):
         body_text = browser.find_element_by_tag_name('body').text
         if u'Kreditkartenumsätze' not in body_text:
             raise fetch.FetchError('Not a credit card search result page.')
-        if u'Kreditkarte ' + account.name not in body_text:
+        # The full credit card number is shown on the transactions page. Until
+        # here we only have a partially anonymized number.
+        pattern = re.compile(u'Kreditkarte ' + account.name.replace('*', '.'))
+        if not pattern.search(body_text):
             raise fetch.FetchError('Wrong credit card search result page.')
 
         # Parse result page into transactions.
