@@ -2,6 +2,7 @@
 
 import logging
 import os
+import os.path
 import pickle
 
 logger = logging.getLogger(__name__)
@@ -74,7 +75,7 @@ class Bank(object):
         logger.info('Saving cookies to %s...' % cookies_filename)
         pickle.dump(browser.get_cookies(), open(cookies_filename, 'wb'))
 
-    def ask_and_restore_cookies(self, browser, username):
+    def ask_and_restore_cookies(self, browser, username, timeout_secs=None):
         """Checks if cookies were found for a session and asks to restore them.
 
         @type browser: selenium.webdriver
@@ -83,15 +84,28 @@ class Bank(object):
         @type username: str
         @param str: The username that owned the session.
 
+        @type timeout_secs: int or None
+        @param str: The timeout in seconds after which cookies are invalid.
+
         @rtype bool
         @return: True if any cookies were restored. False otherwise.
         """
         cookies_filename = self._get_cookies_filename(username)
+        if not os.path.exists(cookies_filename):
+            logger.info('No cookies found.')
+        if timeout_secs is not None:
+            mtime = os.path.getmtime(cookies_filename)
+            if mtime + timeout_secs < time.time():
+                logger.info(
+                        'Cookies from %s expired. Deleting.' % cookies_filename)
+                os.remove(cookies_filename)
+                return False
         logger.info('Reading cookies from %s...' % cookies_filename)
         try:
             cookies = pickle.load(open(cookies_filename, 'rb'))
         except IOError:
-            logger.info('No cookies found.')
+            logger.info('Invalid cookies file. Deleting.')
+            os.remove(cookies_filename)
             return False
         restore = raw_input(
                 'A previous session was found for this user. Restore? [yN] ')
