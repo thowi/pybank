@@ -33,6 +33,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
     _WEBDRIVER_TIMEOUT = 30
+    _SESSION_TIMEOUT_S = 30 * 60
 
     def login(self, username=None, password=None):
         # Download to a custom location. Don't show dialog.
@@ -301,7 +302,6 @@ class InteractiveBrokers(fetch.bank.Bank):
         for row in csv_dict['Fees']['Data']['Other Fees']['__rows']:
             currency = row[0]
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
-            date = row[1]
             description = row[2]
             amount = self._parse_float(row[3])
             memo = description
@@ -400,7 +400,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _select_date_in_activity_statement(self, input_name, date):
         assert input_name in ('fromDate', 'toDate')
-        # The date picker is a bit tricky. It's a jQuery Bootstrap date pickers
+        # The date picker is a bit tricky. It's a jQuery Bootstrap date picker
         # and it will only open when the <input> is focused while the browser
         # window is in the foreground.
         # See e.g. https://stackoverflow.com/questions/21689309.
@@ -409,9 +409,18 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Weekends are not allowed.
         if date.weekday() > 4:
             if input_name == 'fromDate':
+                # Select next week day.
                 date = date + datetime.timedelta(7 - date.weekday())
             elif input_name == 'toDate':
+                # Select previous week day.
                 date = date - datetime.timedelta(date.weekday() - 4)
+            # Dates in the future are not allowed.
+            today = datetime.datetime.today()
+            if date > today:
+                date = today
+                # Now if today is also a weekend, select previous week day.
+                if date.weekday() > 4:
+                    date = date - datetime.timedelta(date.weekday() - 4)
 
         # January 1st is not allowed.
         if date.month == 1 and date.day == 1:
