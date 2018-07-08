@@ -31,6 +31,7 @@ class PostFinance(fetch.bank.Bank):
     _MINUS_PATTERN = re.compile(u'\u2212|-')
     _PLUS_PATTERN = re.compile(u'\+')
     _WEBDRIVER_TIMEOUT = 10
+    _SESSION_TIMEOUT_S = 60 * 60
 
     def login(self, username=None, password=None):
         if self._debug:
@@ -49,7 +50,8 @@ class PostFinance(fetch.bank.Bank):
         if not username:
             username = raw_input('E-Finance number: ')
 
-        if self.ask_and_restore_cookies(browser, username):
+        if self.ask_and_restore_cookies(
+                browser, username, self._SESSION_TIMEOUT_S):
             browser.refresh()
 
         if not self._is_logged_in():

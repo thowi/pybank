@@ -49,7 +49,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
         if not username:
             username = raw_input('User: ')
 
-        if self.ask_and_restore_cookies(browser, username, _SESSION_TIMEOUT_S):
+        if self.ask_and_restore_cookies(
+                browser, username, self._SESSION_TIMEOUT_S):
             browser.refresh()
 
         if not self._is_logged_in():

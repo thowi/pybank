@@ -69,7 +69,8 @@ class InteractiveBrokers(fetch.bank.Bank):
         if not username:
             username = raw_input('User name: ')
 
-        if self.ask_and_restore_cookies(browser, username):
+        if self.ask_and_restore_cookies(
+                browser, username, self._SESSION_TIMEOUT_S):
             browser.get(self._MAIN_URL)
 
         if not self._is_logged_in():
