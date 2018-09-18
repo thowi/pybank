@@ -26,9 +26,7 @@ logger = logging.getLogger(__name__)
 class InteractiveBrokers(fetch.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
     _LOGIN_URL = 'https://gdcdyn.interactivebrokers.com/sso/Login'
-    _MAIN_URL = (
-            'https://gdcdyn.interactivebrokers.com/AccountManagement/'
-            'AmAuthentication')
+    _MAIN_URL = 'https://gdcdyn.interactivebrokers.com/portal/'
     _ACTIVITY_FORM_DATE_FORMAT = '%Y-%m-%d'
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
@@ -97,6 +95,11 @@ class InteractiveBrokers(fetch.bank.Bank):
         # this is a simple fix.
         time.sleep(10)
 
+        if self._is_element_displayed_now(lambda: fetch.find_element_by_text(
+                browser,
+                'We could not connect to the trading/market data system')):
+            raise fetch.FetchError('Trading system unavailable. Try again.')
+
         self.save_cookies(browser, username)
         self._logged_in = True
         self._username = username
@@ -106,15 +109,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._browser.implicitly_wait(5)
         is_logged_in = fetch.is_element_present(
                 lambda: fetch.find_element_by_text(
-                        self._browser, 'Account Management'))
+                        self._browser, 'Client Portal'))
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         return is_logged_in
 
     def logout(self):
         browser = self._browser
-        browser.find_element_by_css_selector(
-                '#userSettings user-options a').click()
-        browser.find_element_by_link_text('Log Out').click()
+        browser.find_element_by_css_selector('nav a[title="User"]').click()
+        browser.find_element_by_link_text('Log out').click()
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -137,7 +139,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         logger.debug('Getting account name...')
         self._navigate_to('Settings', 'Account Settings')
         account_name = browser.find_element_by_css_selector(
-                '.page-content .account-numbers').text.strip()
+                '.page-head .account-numbers').text.strip()
 
         logger.debug('Getting balances from activity statement...')
         yesterday = datetime.datetime.today() - datetime.timedelta(1)
@@ -221,7 +223,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             currency = row[0]
             symbol = row[1]
             date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
-            quantity = self._parse_int(row[3])
+            quantity = self._parse_float(row[3])
             price = self._parse_float(row[4])
             proceeds = self._parse_float(row[6])
             commissions_and_tax = self._parse_float(row[7])
@@ -319,12 +321,17 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _navigate_to(self, section, page):
         browser = self._browser
-        nav = browser.find_element_by_class_name('side-navigation')
-        menu_item = fetch.find_element_by_text(nav, section) \
-                .find_element_by_xpath('../..')
-        if 'nav-active' not in menu_item.get_attribute('class').split():
-            menu_item.find_element_by_tag_name('a').click()
-        nav.find_element_by_link_text(page).click()
+        browser.find_element_by_css_selector(
+                'nav a[title="Application Menu"]').click()
+        nav = browser.find_element_by_css_selector('nav .bar2-content ul')
+        menu_link = nav.find_element_by_partial_link_text(section + '\n')
+        menu_item = menu_link.find_element_by_xpath('..')
+        if not self._is_element_displayed_now(
+                lambda: menu_item.find_element_by_tag_name('ul')):
+            # Open sub menu first.
+            menu_link.click()
+        sub_menu = menu_item.find_element_by_tag_name('ul')
+        sub_menu.find_element_by_link_text(page).click()
         self._wait_to_finish_loading()
 
     def _download_activity_statement(self, account_name, start, end):
@@ -415,10 +422,10 @@ class InteractiveBrokers(fetch.bank.Bank):
             elif input_name == 'toDate':
                 # Select previous week day.
                 date = date - datetime.timedelta(date.weekday() - 4)
-            # Dates in the future are not allowed.
+            # Today and dates in the future are not allowed.
             today = datetime.datetime.today()
-            if date > today:
-                date = today
+            if date >= today:
+                date = today - datetime.timedelta(1)
                 # Now if today is also a weekend, select previous week day.
                 if date.weekday() > 4:
                     date = date - datetime.timedelta(date.weekday() - 4)
@@ -444,6 +451,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+
+    def _is_element_displayed_now(self, lookup_callable):
+        """Doesn't wait for an element but returns if it's displayed now."""
+        browser = self._browser
+        browser.implicitly_wait(0)
+        displayed = fetch.is_element_displayed(lookup_callable)
+        browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        return displayed
 
     def _split_account_name(self, account_name):
         """Splits a combined account name in the form ACCNAME.CUR into the
