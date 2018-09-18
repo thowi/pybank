@@ -4,6 +4,7 @@ import logging
 import os
 import os.path
 import pickle
+import time
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,7 @@ class Bank(object):
         cookies_filename = self._get_cookies_filename(username)
         if not os.path.exists(cookies_filename):
             logger.info('No cookies found.')
+            return False
         if timeout_secs is not None:
             mtime = os.path.getmtime(cookies_filename)
             if mtime + timeout_secs < time.time():
