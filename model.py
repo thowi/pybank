@@ -255,16 +255,16 @@ class InvestmentMiscExpense(Transaction):
     @param date: The date of the dividend.
 
     @type symbol: str
-    @param symbol: The symbol of the security of the dividend.
+    @param symbol: The symbol of the security of the expense.
 
     @type amount: float
-    @param amount: The total amount of the dividend.
+    @param amount: The total amount of the expense.
 
     @type memo: unicode or None
-    @param memo: The memo of the dividend, if any.
+    @param memo: The memo of the expense, if any.
 
     @type category: unicode or None
-    @param category: The category of the dividend, if any.
+    @param category: The category of the expense, if any.
     """
     def __init__(
             self, date, symbol, amount, memo=None, category=None):
