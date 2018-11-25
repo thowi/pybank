@@ -64,12 +64,6 @@ class PostFinance(fetch.bank.Bank):
                 raise fetch.FetchError('Login form not found.')
 
             use_mobile_login = raw_input('Use mobile login? [yN]: ') == 'y'
-            if use_mobile_login:
-                login_form.find_element_by_xpath(
-                        ".//label[contains(., 'Mobile ID')]").click()
-            else:
-                login_form.find_element_by_xpath(
-                        ".//label[contains(., 'PostFinance ID')]").click()
 
             # First login phase: User and password.
             login_form.find_element_by_name('p_username').send_keys(username)
@@ -167,12 +161,17 @@ class PostFinance(fetch.bank.Bank):
         fetch.find_element_by_title(assets_tile, 'Detailed overview').click()
         content = browser.find_element_by_class_name('detail_page')
 
+        account_tables = []
+        for table_id in (
+                'paymentAccounts', 'savingsAccounts', 'investmentAccounts'):
+            try:
+                account_tables.append(content.find_element_by_id(table_id))
+            except exceptions.NoSuchElementException:
+                # Not all account types need to be present.
+                pass
         accounts = []
-        try:
-            payment_accounts_table = content.find_element_by_id(
-                    "paymentAccounts")
-            assets_table = content.find_element_by_id("investmentAccounts")
-            for account_table in payment_accounts_table, assets_table:
+        for account_table in account_tables:
+            try:
                 account_rows = account_table.find_elements_by_css_selector(
                         'tbody tr')
                 col_by_text = self._get_column_indizes_by_header_text(
@@ -205,8 +204,10 @@ class PostFinance(fetch.bank.Bank):
                                 (acc_number, acc_type))
                         continue
                     accounts.append(account)
-        except (exceptions.NoSuchElementException, AttributeError, IndexError):
-            raise fetch.FetchError('Couldn\'t load accounts.')
+            except (
+                    exceptions.NoSuchElementException, AttributeError,
+                    IndexError):
+                raise fetch.FetchError('Couldn\'t load accounts.')
         self._close_tile()
         return accounts
 
@@ -222,19 +223,24 @@ class PostFinance(fetch.bank.Bank):
         self._wait_to_finish_loading()
 
         content = browser.find_element_by_class_name('detail_page')
+        content.find_element_by_link_text('Card account').click()
         accounts = []
         try:
             account_rows = content.find_elements_by_css_selector(
-                    '#kreditkarte_u1 tbody tr')
+                    '#overview-panel tbody tr')
             for account_row in account_rows:
                 cells = account_row.find_elements_by_tag_name('td')
-                acc_type = cells[1].text.strip()
-                name = cells[2].text.replace(' ', '')
-                currency = cells[3].text.strip()
-                balance = self._parse_balance(cells[4].text.strip())
+                description_lines = cells[0].text.split('\n')
+                if description_lines[0] != 'Card total':
+                    # Not a credit card.
+                    continue
+                acc_type = description_lines[1]
+                name = description_lines[2].replace(' ', '')
+                debit = self._parse_balance(cells[2].text)
+                balance = -debit
                 balance_date = datetime.datetime.now()
-                if (acc_type.startswith('Visa') or
-                    acc_type.startswith('Master')):
+                currency = 'CHF'
+                if 'Visa' in acc_type or 'Master' in acc_type:
                     account = model.CreditCard(
                             name, currency, balance, balance_date)
                 else:
@@ -364,16 +370,15 @@ class PostFinance(fetch.bank.Bank):
         content = browser.find_element_by_class_name('detail_page')
 
         logger.debug('Finding credit card account...')
-        # Find the table row for that account.
-        try:
-            table = content.find_element_by_id('kreditkarte_u1')
-            formatted_account_name = fetch.format_cc_account_name(account.name)
-            row = table.find_element_by_xpath(
-                    ".//td[normalize-space(text()) = '%s']/ancestor::tr" %
-                    formatted_account_name)
-            row.find_element_by_tag_name('a').click()
-            self._wait_to_finish_loading()
-        except exceptions.NoSuchElementException:
+        # Switch to tab for that account.
+        for tab in content.find_elements_by_css_selector('tab-wrapper'):
+            if tab.text.endswith(account.name[-4:]):
+                tab.find_element_by_tag_name('a').click()
+        # Verify that the correct card is displayed.
+        active_pane = content.find_element_by_css_selector(
+                'section.js-tabs--pane.is-active')
+        formatted_account_name = fetch.format_cc_account_name(account.name)
+        if formatted_account_name not in active_pane.text:
             raise fetch.FetchError('Couldn\'t find account %s.' % account)
 
         # You can see the transactions for one month/period at a time.
@@ -382,8 +387,10 @@ class PostFinance(fetch.bank.Bank):
             self._wait_to_finish_loading()
 
             # Get the period of the current page.
-            period = content.find_element_by_css_selector(
-                    '.page-title .add-information').text
+            date_select_el = content.find_element_by_css_selector(
+                    '.buttons select')
+            date_select = ui.Select(date_select_el)
+            period = date_select.first_selected_option.text
             if period == 'Current accounting period':
                 # Just use "now", which is an inaccurate hack, but works for our
                 # purposes.
@@ -421,15 +428,12 @@ class PostFinance(fetch.bank.Bank):
                             memo='[Next billing cycle]'))
 
             # Load earlier transactions.
-            date_select_el = content.find_element_by_css_selector(
-                    '.buttons select')
             next_option = date_select_el.find_element_by_xpath(
                     "option[text() = '%s']/following-sibling::option" % period)
             if not next_option:
                 logger.info('No more earlier transactions.')
                 break
             logger.info('Loading earlier transactions page...')
-            date_select = ui.Select(date_select_el)
             date_select.select_by_value(next_option.get_attribute('value'))
             self._wait_to_finish_loading()
 
@@ -450,13 +454,14 @@ class PostFinance(fetch.bank.Bank):
 
     def _extract_cc_transactions(self):
         browser = self._browser
-        title = browser.find_element_by_css_selector('h1.page-title')
-        content = title.parent
+        content = browser.find_element_by_class_name('detail_page')
+        active_pane = content.find_element_by_css_selector(
+                'section.js-tabs--pane.is-active')
 
         # Check if there are any transactions in the current period.
         try:
             no_transactions = fetch.find_element_by_text(
-                content,
+                active_pane,
                 'There are no transactions in the selected accounting '
                 'period for this card')
             if no_transactions.is_displayed():
@@ -466,7 +471,7 @@ class PostFinance(fetch.bank.Bank):
             pass
 
         try:
-            table = content.find_element_by_tag_name('table')
+            table = active_pane.find_element_by_tag_name('table')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find transactions.')
         try:
