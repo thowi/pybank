@@ -95,23 +95,27 @@ class InteractiveBrokers(fetch.bank.Bank):
         # this is a simple fix.
         time.sleep(10)
 
-        if self._is_element_displayed_now(lambda: fetch.find_element_by_text(
-                browser,
-                'We could not connect to the trading/market data system')):
-            raise fetch.FetchError('Trading system unavailable. Try again.')
-
         self.save_cookies(browser, username)
         self._logged_in = True
         self._username = username
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
-        self._browser.implicitly_wait(5)
+        browser = self._browser
+        browser.implicitly_wait(5)
         is_logged_in = fetch.is_element_present(
-                lambda: fetch.find_element_by_text(
-                        self._browser, 'Client Portal'))
-        self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-        return is_logged_in
+                lambda: fetch.find_element_by_text(browser, 'Client Portal'))
+        # Often the portal isn't properly connected to the backend even if the
+        # login was successful. Perform an additional check.
+        try:
+            is_connected = fetch \
+                    .find_element_by_text(browser, 'Manage Your Account') \
+                    .find_element_by_xpath('../..') \
+                    .find_element_by_link_text('Statements') is not None
+        except exceptions.NoSuchElementException:
+            is_connected = False
+        browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+        return is_logged_in and is_connected
 
     def logout(self):
         browser = self._browser
@@ -202,7 +206,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Deposits & Withdrawals']['Data']['__rows']:
             currency = row[0]
-            if currency == 'Total':
+            if currency.startswith('Total'):
                 continue
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             kind = row[2]
@@ -215,28 +219,65 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_trades(self, csv_dict, account_name):
         logger.debug('Extracting trades...')
 
-        st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
-        ft = csv_dict['Trades']['Data']['Order']['Forex'].get('__rows', [])
-        trades = st + ft
         transactions_by_currency = collections.defaultdict(list)
-        for row in trades:
+
+        # Stock transactions:
+        st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
+        for row in st:
             currency = row[0]
             symbol = row[1]
             date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
             quantity = self._parse_float(row[3])
             price = self._parse_float(row[4])
             proceeds = self._parse_float(row[6])
-            commissions_and_tax = self._parse_float(row[7])
-            amount = proceeds + commissions_and_tax
+            # Commissions are reported as a negative number.
+            commissions =  - self._parse_float(row[7])
+            amount = proceeds - commissions
             if quantity >= 0:
                 transaction = model.InvestmentSecurityPurchase(
-                        date, symbol, quantity, price, commissions_and_tax,
-                        amount)
+                        date, symbol, quantity, price, commissions, amount)
             else:
                 transaction = model.InvestmentSecuritySale(
-                        date, symbol, -quantity, price, commissions_and_tax,
-                        amount)
+                        date, symbol, -quantity, price, commissions, amount)
             transactions_by_currency[currency].append(transaction)
+
+        # Forex transactions. Treated slightly differently from stocks.
+        ft = csv_dict['Trades']['Data']['Order']['Forex'].get('__rows', [])
+        for row in ft:
+            currency = row[0]
+            symbol = row[1]
+            to_currency, from_currency = symbol.split('.')
+            assert currency == from_currency
+            date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
+            quantity = self._parse_float(row[3])
+            price = self._parse_float(row[4])
+            proceeds = self._parse_float(row[6])
+            # Commissions are reported as a negative number.
+            commissions =  - self._parse_float(row[7])
+
+            if quantity >= 0:
+                buy_currency, sell_currency = to_currency, from_currency
+                buy_amount, sell_amount = quantity, -proceeds
+            else:
+                buy_currency, sell_currency = from_currency, to_currency
+                buy_amount, sell_amount = proceeds, -quantity
+            memo = 'Buy %.2f %s, sell %.2f %s' % (
+                    buy_amount, buy_currency, sell_amount, sell_currency)
+            quantity = abs(quantity)
+            transactions_by_currency[buy_currency].append(
+                    model.InvestmentSecurityPurchase(
+                            date, symbol, quantity, price, commissions,
+                            buy_amount, memo))
+            transactions_by_currency[sell_currency].append(
+                    model.InvestmentSecuritySale(
+                            date, symbol, quantity, price, 0, sell_amount,
+                            memo))
+
+            # Forex commissions are all billed to the main (CHF) account.
+            # TODO: Find out the main currency/account. Don't just hardcode
+            # CHF.
+            transactions_by_currency['CHF'].append(model.InvestmentMiscExpense(
+                    date, symbol, commissions, 'Forex commissions'))
 
         return transactions_by_currency
 

@@ -5,6 +5,7 @@
 Supported banks:
 * Deutsche Kreditbank http://www.dkb.de/
 * PostFinance http://www.postfinance.ch/
+* Interactive Brokers http://www.interactivebrokers.com/
 
 With inspiration from Jens Herrmann's web_bank.py (http://qoli.de).
 
