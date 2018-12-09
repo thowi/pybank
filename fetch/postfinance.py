@@ -27,6 +27,7 @@ class PostFinance(fetch.bank.Bank):
             r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
     _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
             r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
+    _CREDIT_CARD_TAB_PATTERN = re.compile(r'(.*Card) (\d\d\d\d)')
     _SPACE_PATTERN = re.compile(u'&nbsp;| ')
     _MINUS_PATTERN = re.compile(u'\u2212|-')
     _PLUS_PATTERN = re.compile(u'\+')
@@ -216,41 +217,26 @@ class PostFinance(fetch.bank.Bank):
 
         browser = self._browser
 
-        logger.info('Loading credit cards overview...')
+        logger.info('Opening credit cards overview...')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
         fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
         self._wait_to_finish_loading()
-
         content = browser.find_element_by_class_name('detail_page')
-        content.find_element_by_link_text('Card account').click()
+
         accounts = []
-        try:
-            account_rows = content.find_elements_by_css_selector(
-                    '#overview-panel tbody tr')
-            for account_row in account_rows:
-                cells = account_row.find_elements_by_tag_name('td')
-                description_lines = cells[0].text.split('\n')
-                if description_lines[0] != 'Card total':
-                    # Not a credit card.
-                    continue
-                acc_type = description_lines[1]
-                name = description_lines[2].replace(' ', '')
-                debit = self._parse_balance(cells[2].text)
-                balance = -debit
+        for tab in content.find_elements_by_css_selector('tab-wrapper'):
+            match = self._CREDIT_CARD_TAB_PATTERN.match(tab.text)
+            if match:
+                acc_type = match.group(1)
+                name = 'X' * 12 + match.group(2)
+                # TODO: Extract balance, if available.
+                balance = 0
                 balance_date = datetime.datetime.now()
                 currency = 'CHF'
-                if 'Visa' in acc_type or 'Master' in acc_type:
-                    account = model.CreditCard(
-                            name, currency, balance, balance_date)
-                else:
-                    logger.warning(
-                            'Skipping account %s with unknown type %s.' %
-                            (name, acc_type))
-                    continue
+                account = model.CreditCard(
+                        name, currency, balance, balance_date)
                 accounts.append(account)
-        except (exceptions.NoSuchElementException, AttributeError, IndexError):
-            raise fetch.FetchError('Couldn\'t load accounts.')
         self._close_tile()
         return accounts
 
