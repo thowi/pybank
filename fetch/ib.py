@@ -265,11 +265,11 @@ class InteractiveBrokers(fetch.bank.Bank):
                     buy_amount, buy_currency, sell_amount, sell_currency)
             quantity = abs(quantity)
             transactions_by_currency[buy_currency].append(
-                    model.InvestmentSecurityPurchase(
+                    model.InvestmentSecuritySale(
                             date, symbol, quantity, price, commissions,
                             buy_amount, memo))
             transactions_by_currency[sell_currency].append(
-                    model.InvestmentSecuritySale(
+                    model.InvestmentSecurityPurchase(
                             date, symbol, quantity, price, 0, sell_amount,
                             memo))
 
@@ -410,7 +410,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Download report.
         logger.debug('Downloading activity statement report...')
         before_download_timestamp = time.time()
-        body.find_element_by_link_text('RUN STATEMENT').click()
+        body.find_element_by_link_text('Run Statement').click()
 
         # Find file on disk, load, parse CSV.
         try:
