@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 """Serialization to QIF (Quicken Interchange Format).
 
 Not complete.

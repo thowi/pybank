@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import logging
 import os
 import os.path
@@ -109,7 +107,7 @@ class Bank(object):
             logger.info('Invalid cookies file. Deleting.')
             os.remove(cookies_filename)
             return False
-        restore = raw_input(
+        restore = input(
                 'A previous session was found for this user. Restore? [yN] ')
         if restore == 'y':
             logger.info('Restoring cookies...')

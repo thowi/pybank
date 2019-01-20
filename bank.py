@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 
 """Downloads bank account data from banking websites.
 
@@ -73,11 +73,11 @@ def _parse_args(argv):
             'till=', 'outfile=', 'debug']
     try:
         opts, unused_args = getopt.getopt(argv[1:], options, options_long)
-    except getopt.error, msg:
+    except getopt.error as msg:
         raise Usage(msg)
     for opt, arg in opts:
         if opt in ('-h', '--help'):
-            print Usage()
+            print(Usage())
             return 0
         if opt in ('-b', '--bank'):
             bank_name = arg
@@ -145,7 +145,7 @@ def _fetch_accounts(
 
     logger.info(
             'Available accounts: %s.',
-            ', '.join(unicode(a) for a in available_accounts))
+            ', '.join(str(a) for a in available_accounts))
 
     if not account_names:
         # Download all accounts by default.
@@ -168,11 +168,11 @@ def _fetch_accounts(
         output = _open_file(
                 output_filename, bank_name, account.name, from_date, till_date)
         try:
-            print >>output, qif.serialize_account(account).encode('utf-8')
-        except qif.SerializationError, e:
+            print(qif.serialize_account(account), file=output)
+        except qif.SerializationError as e:
                 logger.error('Serialization error: %s.', e)
 
-    logout = raw_input('Logout? [yN] ')
+    logout = input('Logout? [yN] ')
     if logout == 'y':
         bank.logout()
 
@@ -191,8 +191,8 @@ def _open_file(output_filename, bank_name, account_name, from_date, till_date):
     try:
         logger.info('Writing to file: %s.', escaped_filename)
         return open(escaped_filename, 'w')
-    except IOError, err:
-        print >>sys.stderr, err.msg
+    except IOError as err:
+        print(err.msg, file=sys.stderr)
 
 
 def main(argv=None):
@@ -201,8 +201,8 @@ def main(argv=None):
     try:
         (bank_name, username, password, accounts, from_date, till_date,
         output_filename, debug) = _parse_args(argv)
-    except Usage, err:
-        print >>sys.stderr, err
+    except Usage as err:
+        print(err, file=sys.stderr)
         return 2
 
     if debug:
@@ -216,7 +216,7 @@ def main(argv=None):
                 output_filename, debug)
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception, e:
+    except Exception as e:
         logger.error('Error while fetching transactions: %s' % e)
         if debug:
             import pdb; pdb.post_mortem()

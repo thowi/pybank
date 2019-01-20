@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import collections
 import csv
 import datetime
@@ -11,7 +9,7 @@ import re
 import tempfile
 import time
 
-import BeautifulSoup
+from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
@@ -65,7 +63,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser.get(self._LOGIN_URL)
 
         if not username:
-            username = raw_input('User name: ')
+            username = input('User name: ')
 
         if self.ask_and_restore_cookies(
                 browser, username, self._SESSION_TIMEOUT_S):
@@ -86,7 +84,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             login_form.find_element_by_id('submitForm').click()
             login_form.find_element_by_id('submitForm').click()
 
-            raw_input("Please follow the log-in instructions and press enter.")
+            input("Please follow the log-in instructions and press enter.")
 
             if not self._is_logged_in():
                 raise fetch.FetchError('Login failed.')
@@ -153,7 +151,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         account_data = csv_dict['Account Information']['Data']['Account']
         account_name = account_data['__rows'][0][0]
         ending_cash = csv_dict['Cash Report']['Data']['Ending Cash']
-        currencies = [k for k in ending_cash.keys() if len(k) == 3]
+        currencies = [k for k in list(ending_cash.keys()) if len(k) == 3]
         accounts = []
         for currency in currencies:
             name = '%s.%s' % (account_name, currency)
@@ -190,7 +188,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         for category in (
                 transfers, trades, withholding_tax, dividends, interest,
                 other_fees):
-            for category_currency, transactions in category.items():
+            for category_currency, transactions in list(category.items()):
                 transactions_by_currency[category_currency] += transactions
 
         self._transactions_cache[cache_key] = transactions_by_currency
@@ -418,7 +416,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                     before_download_timestamp)
             fetch.wait_until(csv_filename)
             filename = csv_filename()
-            with open(filename, 'rb') as csvfile:
+            with open(filename, 'r') as csvfile:
                 csv_dict = self._parse_csv_into_dict(csvfile)
                 os.remove(filename)
                 return csv_dict
@@ -428,6 +426,9 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _get_downloaded_filename_newer_than(self, timestamp):
         for root, dirs, files in os.walk(self._download_dir):
             for file in files:
+                # Ignore partial files.
+                if file.endswith('.part'):
+                    return None
                 path = os.path.join(root, file)
                 last_modified = os.path.getmtime(path)
                 if last_modified > timestamp:

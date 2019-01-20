@@ -1,10 +1,8 @@
-#!/usr/bin/python
-
 import datetime
 import getpass
 import logging
 import re
-import urlparse
+import urllib.parse
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -28,9 +26,9 @@ class PostFinance(fetch.bank.Bank):
     _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
             r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
     _CREDIT_CARD_TAB_PATTERN = re.compile(r'(.*Card) (\d\d\d\d)')
-    _SPACE_PATTERN = re.compile(u'&nbsp;| ')
-    _MINUS_PATTERN = re.compile(u'\u2212|-')
-    _PLUS_PATTERN = re.compile(u'\+')
+    _SPACE_PATTERN = re.compile('&nbsp;| ')
+    _MINUS_PATTERN = re.compile('\u2212|-')
+    _PLUS_PATTERN = re.compile('\+')
     _WEBDRIVER_TIMEOUT = 10
     _SESSION_TIMEOUT_S = 60 * 60
 
@@ -49,7 +47,7 @@ class PostFinance(fetch.bank.Bank):
         browser.get(self._LOGIN_URL)
 
         if not username:
-            username = raw_input('E-Finance number: ')
+            username = input('E-Finance number: ')
 
         if self.ask_and_restore_cookies(
                 browser, username, self._SESSION_TIMEOUT_S):
@@ -64,7 +62,7 @@ class PostFinance(fetch.bank.Bank):
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Login form not found.')
 
-            use_mobile_login = raw_input('Use mobile login? [yN]: ') == 'y'
+            use_mobile_login = input('Use mobile login? [yN]: ') == 'y'
 
             # First login phase: User and password.
             login_form.find_element_by_name('p_username').send_keys(username)
@@ -83,7 +81,7 @@ class PostFinance(fetch.bank.Bank):
                         raise fetch.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
                         raise fetch.FetchError('Mobile ID login error.')
-                print 'Please confirm the login on your phone...'
+                print('Please confirm the login on your phone...')
                 fetch.wait_for_element_to_appear_and_disappear(
                         lambda: browser.find_element_by_id('mid-loading'),
                         timeout_s=60)
@@ -98,8 +96,8 @@ class PostFinance(fetch.bank.Bank):
                         raise fetch.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
                         raise fetch.FetchError('Security challenge not found.')
-                print 'Challenge:', challenge_element.text
-                token = raw_input('Login token: ')
+                print('Challenge:', challenge_element.text)
+                token = input('Login token: ')
                 try:
                     login_form = browser.find_element_by_name('login')
                 except exceptions.NoSuchElementException:
@@ -220,7 +218,9 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening credit cards overview...')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
+        fetch.find_element_by_title(cc_tile, 'Detailed overview') \
+                .find_element_by_xpath('..') \
+                .click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
@@ -272,6 +272,7 @@ class PostFinance(fetch.bank.Bank):
                 'ef_select--trigger').click()
         fetch.find_element_by_text(
                 account_drop_down_container, fetch.format_iban(account.name)) \
+                .find_element_by_xpath('../../../..') \
                 .click()
         fetch.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -351,7 +352,9 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening credit cards overview...')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
+        fetch.find_element_by_title(cc_tile, 'Detailed overview') \
+                .find_element_by_xpath('..') \
+                .click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
@@ -427,7 +430,7 @@ class PostFinance(fetch.bank.Bank):
         logger.debug(
                 'Found %i transactions before filtering for date range.' %
                 len(transactions))
-        transactions = filter(lambda t: start <= t.date < end, transactions)
+        transactions = [t for t in transactions if start <= t.date < end]
 
         # They should be sorted in reverse chronological order already, but
         # let's make this explicit.
@@ -508,8 +511,8 @@ class PostFinance(fetch.bank.Bank):
 
     def _select_english_language(self):
         browser = self._browser
-        url = urlparse.urlparse(browser.current_url)
-        english_url = urlparse.urlunparse(url[:3] + ('', 'lang=en', ''))
+        url = urllib.parse.urlparse(browser.current_url)
+        english_url = urllib.parse.urlunparse(url[:3] + ('', 'lang=en', ''))
         browser.get(english_url)
 
     def _go_to_assets(self):
@@ -532,7 +535,7 @@ class PostFinance(fetch.bank.Bank):
 
     def _parse_balance(self, balance):
         # A Unicode minus might be used.
-        balance = balance.replace(u'\u2212', '-')
+        balance = balance.replace('\u2212', '-')
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
         return fetch.parse_decimal_number(balance, 'de_CH')

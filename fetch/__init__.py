@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 import datetime
 import locale
 import logging
@@ -202,7 +200,7 @@ def wait_until(condition, timeout_s=10, sleep_s=0.5, raise_exceptions=False):
         try:
             if condition():
                 return
-        except Exception, e:
+        except Exception as e:
             if raise_exceptions:
                 raise e
             else:

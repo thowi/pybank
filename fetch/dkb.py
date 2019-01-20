@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # coding: utf-8
 
 import datetime
@@ -47,7 +46,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser.get(self._BASE_URL)
 
         if not username:
-            username = raw_input('User: ')
+            username = input('User: ')
 
         if self.ask_and_restore_cookies(
                 browser, username, self._SESSION_TIMEOUT_S):
@@ -140,8 +139,12 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._perform_transactions_search(account, start, end)
         self._switch_to_print_view_window()
 
+        # Wait for page to be loaded.
+        browser.find_element_by_tag_name('table')
+
+        # Check that we're on the correct page.
         body_text = browser.find_element_by_tag_name('body').text
-        if u'Kontoumsätze' not in body_text:
+        if 'Kontoumsätze' not in body_text:
             raise fetch.FetchError('Not an account search result page.')
         if account.name not in body_text:
             raise fetch.FetchError('Account name not found in result page.')
@@ -163,11 +166,11 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._switch_to_print_view_window()
 
         body_text = browser.find_element_by_tag_name('body').text
-        if u'Kreditkartenumsätze' not in body_text:
+        if 'Kreditkartenumsätze' not in body_text:
             raise fetch.FetchError('Not a credit card search result page.')
         # The full credit card number is shown on the transactions page. Until
         # here we only have a partially anonymized number.
-        pattern = re.compile(u'Kreditkarte ' + account.name.replace('*', '.'))
+        pattern = re.compile('Kreditkarte ' + account.name.replace('*', '.'))
         if not pattern.search(body_text):
             raise fetch.FetchError('Wrong credit card search result page.')
 
@@ -184,9 +187,9 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser = self._browser
         is_credit_card = isinstance(account, model.CreditCard)
         logger.info('Opening account transactions page...')
-        browser.find_element_by_link_text(u'Finanzstatus').click()
+        browser.find_element_by_link_text('Finanzstatus').click()
         self._wait_to_finish_loading()
-        browser.find_element_by_link_text(u'Umsätze').click()
+        browser.find_element_by_link_text('Umsätze').click()
         self._wait_to_finish_loading()
 
         # Perform search.
@@ -256,7 +259,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 amount = fetch.parse_decimal_number(cells[3].text, 'de_DE')
 
                 transactions.append(model.Payment(date, amount, payee, memo))
-            except ValueError, e:
+            except ValueError as e:
                 logger.warning(
                         'Skipping invalid row: %s. Error: %s' % (row.text, e))
                 raise
@@ -293,7 +296,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                             original_currency, original_amount)
 
                 transactions.append(model.Payment(date, amount, memo=memo))
-            except ValueError, e:
+            except ValueError as e:
                 logger.warning(
                         'Skipping invalid row: %s. Error: %s' % (row.text, e))
                 raise
