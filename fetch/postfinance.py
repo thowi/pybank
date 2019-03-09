@@ -352,9 +352,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening credit cards overview...')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        fetch.find_element_by_title(cc_tile, 'Detailed overview') \
-                .find_element_by_xpath('..') \
-                .click()
+        fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
