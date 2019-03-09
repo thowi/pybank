@@ -108,8 +108,8 @@ class Bank(object):
             os.remove(cookies_filename)
             return False
         restore = input(
-                'A previous session was found for this user. Restore? [yN] ')
-        if restore == 'y':
+                'A previous session was found for this user. Restore? [Yn] ')
+        if restore.lower() in ('y', ''):
             logger.info('Restoring cookies...')
             for cookie in cookies:
                 browser.add_cookie(cookie)
