@@ -100,7 +100,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _is_logged_in(self):
         browser = self._browser
-        browser.implicitly_wait(5)
+        browser.implicitly_wait(10)
         is_logged_in = fetch.is_element_present(
                 lambda: fetch.find_element_by_text(browser, 'Client Portal'))
         # Often the portal isn't properly connected to the backend even if the
@@ -292,8 +292,13 @@ class InteractiveBrokers(fetch.bank.Bank):
             amount = self._parse_float(row[3])
             symbol = re.split('[ (]', description)[0]
             memo = description
-            transaction = model.InvestmentMiscExpense(
-                   date, symbol, amount, memo)
+            if amount < 0:
+                transaction = model.InvestmentMiscExpense(
+                       date, symbol, amount, memo)
+            else:
+                # Possibly a correction for previous withholding tax.
+                transaction = model.InvestmentMiscIncome(
+                       date, symbol, amount, memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -369,9 +374,19 @@ class InteractiveBrokers(fetch.bank.Bank):
                 lambda: menu_item.find_element_by_tag_name('ul')):
             # Open sub menu first.
             menu_link.click()
-        sub_menu = menu_item.find_element_by_tag_name('ul')
-        sub_menu.find_element_by_link_text(page).click()
-        self._wait_to_finish_loading()
+        # There's a bug in the IB menu where the navigation closes when clicking
+        # the top-level menu item the first time. Should the navigation be
+        # hidden now, we need to open it again.
+        if not self._is_element_displayed_now(
+                lambda: browser.find_element_by_css_selector(
+                        'nav .bar2-content ul')):
+            logger.debug('Bug in navigation. Trying again.')
+            self._navigate_to(section, page)
+            return
+        else:
+            sub_menu = menu_item.find_element_by_tag_name('ul')
+            sub_menu.find_element_by_link_text(page).click()
+            self._wait_to_finish_loading()
 
     def _download_activity_statement(self, account_name, start, end):
         self._go_to_activity_statements()
@@ -408,7 +423,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Download report.
         logger.debug('Downloading activity statement report...')
         before_download_timestamp = time.time()
-        body.find_element_by_link_text('Run Statement').click()
+        body.find_element_by_link_text('RUN STATEMENT').click()
 
         # Find file on disk, load, parse CSV.
         try:
@@ -491,6 +506,9 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         overlay = lambda: browser.find_element_by_tag_name('loading-overlay')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
+
+        progressbar = lambda: browser.find_element_by_class_name('progress-bar')
+        fetch.wait_for_element_to_appear_and_disappear(progressbar)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
