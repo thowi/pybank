@@ -470,6 +470,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # window is in the foreground.
         # See e.g. https://stackoverflow.com/questions/21689309.
         # So instead, we manipulate it directly.
+        # Docs: https://bootstrap-datepicker.readthedocs.io/en/latest/
 
         # Weekends are not allowed.
         if date.weekday() > 4:
@@ -490,6 +491,15 @@ class InteractiveBrokers(fetch.bank.Bank):
         # January 1st is not allowed.
         if date.month == 1 and date.day == 1:
             date = date.replace(day=2)
+
+        # Respect the end date.
+        end_date_str = self._browser.execute_script(
+                'return $("input[name=\'%s\']")'
+                '.datepicker("getEndDate")' % input_name)
+        end_date = datetime.datetime.strptime(
+                end_date_str[:10], self._DATE_FORMAT)
+        if date > end_date:
+            date = end_date
 
         formatted_date = date.strftime(self._ACTIVITY_FORM_DATE_FORMAT)
         self._browser.execute_script(
