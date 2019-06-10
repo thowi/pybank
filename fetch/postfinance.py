@@ -114,9 +114,6 @@ class PostFinance(fetch.bank.Bank):
                     raise fetch.FetchError('Logout reminder form not found.')
                 login_form.submit()
 
-            # Ensure we're using the English interface.
-            self._select_english_language()
-
             if not self._is_logged_in():
                 raise fetch.FetchError('Login failed.')
 
@@ -449,8 +446,8 @@ class PostFinance(fetch.bank.Bank):
         try:
             no_transactions = fetch.find_element_by_text(
                 active_pane,
-                'There are no transactions in the selected accounting '
-                'period for this card')
+                'There are no transactions for this card in the selected '
+                'accounting period.')
             if no_transactions.is_displayed():
                 logging.info('No transactions found.')
                 return []
@@ -507,12 +504,6 @@ class PostFinance(fetch.bank.Bank):
 
         return model.Payment(date, amount, memo=memo)
 
-    def _select_english_language(self):
-        browser = self._browser
-        url = urllib.parse.urlparse(browser.current_url)
-        english_url = urllib.parse.urlunparse(url[:3] + ('', 'lang=en', ''))
-        browser.get(english_url)
-
     def _go_to_assets(self):
         self._browser.get(self._ASSETS_URL)
         self._wait_to_finish_loading()
@@ -526,7 +517,7 @@ class PostFinance(fetch.bank.Bank):
         # The loading overlay should be there pretty fast.
         browser.implicitly_wait(0)
 
-        overlay = lambda: browser.find_element_by_class_name('is-loading')
+        overlay = lambda: browser.find_element_by_class_name('widget--loading')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
