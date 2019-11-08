@@ -32,9 +32,13 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def login(self, username=None, password=None):
         if self._debug:
-            self._browser = webdriver.Firefox()
+            self._browser = webdriver.Chrome()
         else:
-            self._browser = webdriver.PhantomJS()
+            import selenium.webdriver.chrome.options
+            chrome_options = selenium.webdriver.chrome.options.Options()
+            chrome_options.add_argument("--headless")
+            self._browser = webdriver.Chrome(chrome_options=chrome_options)
+
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(1000, 800)
         browser = self._browser

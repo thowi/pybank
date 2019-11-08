@@ -47,9 +47,10 @@ class InteractiveBrokers(fetch.bank.Bank):
         if self._debug:
             self._browser = webdriver.Firefox(firefox_profile)
         else:
-            # TODO: Fix the login and enable PhantomJs.
-            #self._browser = webdriver.PhantomJS()
-            self._browser = webdriver.Firefox(firefox_profile)
+            import selenium.webdriver.chrome.options
+            chrome_options = selenium.webdriver.chrome.options.Options()
+            chrome_options.add_argument("--headless")
+            self._browser = webdriver.Chrome(chrome_options=chrome_options)
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         # The user menu is only visible if the window is min 992px wide.

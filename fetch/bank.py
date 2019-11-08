@@ -112,6 +112,9 @@ class Bank(object):
         if restore.lower() in ('y', ''):
             logger.info('Restoring cookies...')
             for cookie in cookies:
+                if 'expiry' in cookie:
+                    # Float values throw an error in ChromeDriver.
+                    cookie['expiry'] = int(cookie['expiry'])
                 browser.add_cookie(cookie)
             return True
         return False
