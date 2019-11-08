@@ -34,9 +34,13 @@ class PostFinance(fetch.bank.Bank):
 
     def login(self, username=None, password=None):
         if self._debug:
-            self._browser = webdriver.Firefox()
+            self._browser = webdriver.Chrome()
         else:
-            self._browser = webdriver.PhantomJS()
+            import selenium.webdriver.chrome.options
+            chrome_options = selenium.webdriver.chrome.options.Options()
+            chrome_options.add_argument("--headless")
+            self._browser = webdriver.Chrome(chrome_options=chrome_options)
+
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         self._browser.set_window_size(800, 800)
         self._logged_in = False
@@ -72,7 +76,7 @@ class PostFinance(fetch.bank.Bank):
             # Second login phase: Mobile ID or challenge/return.
             if use_mobile_login:
                 try:
-                    browser.find_element_by_id('mid-loading')
+                    browser.find_element_by_class_name('pf-spinner')
                 except exceptions.NoSuchElementException:
                     try:
                         error_element = browser.find_element_by_class_name(
@@ -83,7 +87,8 @@ class PostFinance(fetch.bank.Bank):
                         raise fetch.FetchError('Mobile ID login error.')
                 print('Please confirm the login on your phone...')
                 fetch.wait_for_element_to_appear_and_disappear(
-                        lambda: browser.find_element_by_id('mid-loading'),
+                        lambda: browser.find_element_by_class_name(
+                                'pf-spinner'),
                         timeout_s=60)
             else:
                 try:
@@ -260,17 +265,33 @@ class PostFinance(fetch.bank.Bank):
 
         logger.info('Performing transactions search...')
         form = browser.find_element_by_css_selector(
-                '.detail_page form[name="SearchForm"]')
+                '.detail_content form[name="EfmovementsOverviewForm"]')
+
+        # If there are multiple accounts, select the requested one.
         # The search form is not using a standard <select>, but some custom
         # HTML.
-        account_drop_down_container = form.find_element_by_css_selector(
-                '*[name="pf-detail-efmovements-overview-dropdown-account"]')
-        account_drop_down_container.find_element_by_class_name(
-                'ef_select--trigger').click()
-        fetch.find_element_by_text(
-                account_drop_down_container, fetch.format_iban(account.name)) \
-                .find_element_by_xpath('../../../..') \
-                .click()
+        try:
+            account_drop_down_container = form.find_element_by_css_selector(
+                    '*[name="pf-detail-efmovements-overview-dropdown-account"]')
+            account_drop_down_container.find_element_by_class_name(
+                    'ef_select--trigger').click()
+            fetch.find_element_by_text(
+                    account_drop_down_container,
+                    fetch.format_iban(account.name)) \
+                    .find_element_by_xpath('../../../..') \
+                    .click()
+        except exceptions.NoSuchElementException:
+            # Probably only one account present.
+            pass
+
+        # Check that we're looking at the right account.
+        current_account = browser.find_element_by_id(
+                'pf-detail-efmovements-overview-account-iban').text
+        if current_account != fetch.format_iban(account.name):
+            raise fetch.FetchError(
+                    'Transactions search failed: Wrong account: ' +
+                    current_account)
+
         fetch.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
@@ -358,6 +379,7 @@ class PostFinance(fetch.bank.Bank):
         for tab in content.find_elements_by_css_selector('tab-wrapper'):
             if tab.text.endswith(account.name[-4:]):
                 tab.find_element_by_tag_name('a').click()
+                break
         # Verify that the correct card is displayed.
         active_pane = content.find_element_by_css_selector(
                 'section.js-tabs--pane.is-active')
@@ -446,16 +468,21 @@ class PostFinance(fetch.bank.Bank):
         try:
             no_transactions = fetch.find_element_by_text(
                 active_pane,
-                'There are no transactions for this card in the selected '
-                'accounting period.')
+                'There are no transactions in the selected invoicing period '
+                'for this card.')
             if no_transactions.is_displayed():
                 logging.info('No transactions found.')
                 return []
         except exceptions.NoSuchElementException:
             pass
 
+        # Find the transactions table.
         try:
-            table = active_pane.find_element_by_tag_name('table')
+            # Find the "Entries" section, skip the "Reservations" section.
+            entries_heading = fetch.find_element_by_tag_name_and_text(
+                    active_pane, 'h3', 'Entries')
+            # The transactions are in the next table after that heading.
+            table = entries_heading.find_element_by_xpath('following::table')
         except exceptions.NoSuchElementException:
             raise fetch.FetchError('Couldn\'t find transactions.')
         try:
@@ -517,7 +544,7 @@ class PostFinance(fetch.bank.Bank):
         # The loading overlay should be there pretty fast.
         browser.implicitly_wait(0)
 
-        overlay = lambda: browser.find_element_by_class_name('widget--loading')
+        overlay = lambda: browser.find_element_by_class_name('page_loader')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
