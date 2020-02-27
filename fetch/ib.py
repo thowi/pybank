@@ -23,8 +23,8 @@ logger = logging.getLogger(__name__)
 
 class InteractiveBrokers(fetch.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
-    _LOGIN_URL = 'https://gdcdyn.interactivebrokers.com/sso/Login'
-    _MAIN_URL = 'https://gdcdyn.interactivebrokers.com/portal/'
+    _LOGIN_URL = 'https://www.interactivebrokers.co.uk/sso/Login'
+    _MAIN_URL = 'https://www.interactivebrokers.co.uk/portal/'
     _ACTIVITY_FORM_DATE_FORMAT = '%Y-%m-%d'
     _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
     _DATE_FORMAT = '%Y-%m-%d'
@@ -102,19 +102,22 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _is_logged_in(self):
         browser = self._browser
         browser.implicitly_wait(10)
-        is_logged_in = fetch.is_element_present(
-                lambda: fetch.find_element_by_text(browser, 'Client Portal'))
-        # Often the portal isn't properly connected to the backend even if the
-        # login was successful. Perform an additional check.
+
         try:
-            is_connected = fetch \
+            fetch.find_element_by_text(browser, 'Client Portal')
+            # Often the portal isn't properly connected to the backend even if
+            # the login was successful. Perform an additional check.
+            fetch \
                     .find_element_by_text(browser, 'Manage Your Account') \
                     .find_element_by_xpath('../..') \
-                    .find_element_by_link_text('Statements') is not None
+                    .find_element_by_link_text('Transaction History')
+            browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
+            return True
         except exceptions.NoSuchElementException:
-            is_connected = False
+            pass
+
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
-        return is_logged_in and is_connected
+        return False
 
     def logout(self):
         browser = self._browser
@@ -360,15 +363,18 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         return transactions_by_currency
 
-    def _go_to_activity_statements(self):
-        logger.debug('Opening activity statements page...')
-        self._navigate_to('Reports', 'Statements')
+    def _go_to_reports(self):
+        logger.debug('Opening reports page...')
+        self._navigate_to('Reports')
 
-    def _navigate_to(self, section, page):
+    def _navigate_to(self, section, page=None):
         browser = self._browser
         browser.find_element_by_css_selector(
                 'nav a[title="Application Menu"]').click()
         nav = browser.find_element_by_css_selector('nav .bar2-content ul')
+        if not page:
+            nav.find_element_by_link_text(section).click()
+            return
         menu_link = nav.find_element_by_partial_link_text(section + '\n')
         menu_item = menu_link.find_element_by_xpath('..')
         if not self._is_element_displayed_now(
@@ -390,41 +396,48 @@ class InteractiveBrokers(fetch.bank.Bank):
             self._wait_to_finish_loading()
 
     def _download_activity_statement(self, account_name, start, end):
-        self._go_to_activity_statements()
+        self._go_to_reports()
         browser = self._browser
+
+        # Open Activity statements dialog.
+        fetch.find_element_by_text(browser, 'Default Statements') \
+                .find_element_by_xpath(
+                        './ancestor::section'
+                        '//*[normalize-space(text()) = "Activity"]'
+                        '/ancestor::div[@class="row"]') \
+                .find_element_by_css_selector('.btn-group-right a') \
+                .click()
 
         # Get activity statements form.
         try:
-            body = browser.find_element_by_css_selector('section.panel')
+            dialog = browser.find_element_by_css_selector('am-modal')
         except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Activity statements form not found.')
+            raise fetch.FetchError('Activity statements dialog not found.')
 
         # Check statement type.
-        if (body.find_element_by_id('statementCategory').get_attribute('value')
-            != 'string:DEFAULT_STATEMENT' or
-            body.find_element_by_id('statementType').get_attribute('value')
-            != 'string:DEFAULT_ACTIVITY'):
+        if dialog.find_element_by_css_selector('.modal-header .modal-title') \
+                .text.strip() != 'Activity':
             raise fetch.FetchError('Expected activity statement type.')
 
         # Select date range.
-        period_select = fetch.find_element_by_text(body, 'Period') \
+        period_select = fetch.find_element_by_text(dialog, 'Period') \
                 .find_element_by_xpath('../..//select')
         ui.Select(period_select).select_by_value('string:DATE_RANGE')
         # Switching period will refresh the form.
         self._wait_to_finish_loading()
-        body = browser.find_element_by_css_selector('section.panel')
+        dialog = browser.find_element_by_css_selector('am-modal')
         self._select_date_in_activity_statement('fromDate', start)
         self._select_date_in_activity_statement('toDate', end)
 
         # Select CSV format.
-        format_select = fetch.find_element_by_text(body, 'Format') \
+        format_select = fetch.find_element_by_text(dialog, 'Format') \
                 .find_element_by_xpath('../..//select')
         ui.Select(format_select).select_by_visible_text('CSV')
 
         # Download report.
         logger.debug('Downloading activity statement report...')
         before_download_timestamp = time.time()
-        body.find_element_by_link_text('RUN STATEMENT').click()
+        dialog.find_element_by_link_text('RUN').click()
 
         # Find file on disk, load, parse CSV.
         try:
