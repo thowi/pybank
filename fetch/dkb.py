@@ -24,7 +24,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
     The accounts for a user will be identified by the bank account number
     (digits) or the obfuscated credit card number (1234******5678).
     """
-    _BASE_URL = 'https://banking.dkb.de/dkb/-'
+    _BASE_URL = 'https://www.dkb.de/banking'
     _DATE_FORMAT = '%d.%m.%Y'
     _DATE_FORMAT_SHORT = '%d.%m.%y'
     _WEBDRIVER_TIMEOUT = 10
