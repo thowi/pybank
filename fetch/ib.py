@@ -121,7 +121,8 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def logout(self):
         browser = self._browser
-        browser.find_element_by_css_selector('nav a[title="User"]').click()
+        browser.find_element_by_css_selector('right-side a[title="User"]') \
+                .click()
         browser.find_element_by_link_text('Log out').click()
         browser.quit()
         self._logged_in = False
@@ -370,8 +371,8 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _navigate_to(self, section, page=None):
         browser = self._browser
         browser.find_element_by_css_selector(
-                'nav a[title="Application Menu"]').click()
-        nav = browser.find_element_by_css_selector('nav .bar2-content ul')
+                'div.left-side a[title="Application Menu"]').click()
+        nav = browser.find_element_by_css_selector('.bar2-content ul')
         if not page:
             nav.find_element_by_link_text(section).click()
             return
@@ -386,7 +387,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # hidden now, we need to open it again.
         if not self._is_element_displayed_now(
                 lambda: browser.find_element_by_css_selector(
-                        'nav .bar2-content ul')):
+                        '.bar2-content ul')):
             logger.debug('Bug in navigation. Trying again.')
             self._navigate_to(section, page)
             return
