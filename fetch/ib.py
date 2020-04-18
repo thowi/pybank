@@ -13,6 +13,7 @@ from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
+from selenium.webdriver import chrome
 import fetch
 import fetch.bank
 import model
@@ -32,25 +33,18 @@ class InteractiveBrokers(fetch.bank.Bank):
     _SESSION_TIMEOUT_S = 30 * 60
 
     def login(self, username=None, password=None):
+        chrome_options = chrome.options.Options()
         # Download to a custom location. Don't show dialog.
         self._download_dir = tempfile.mkdtemp()
-        firefox_profile = webdriver.FirefoxProfile()
-        firefox_profile.set_preference('browser.download.folderList', 2)
-        firefox_profile.set_preference(
-                'browser.download.manager.showWhenStarting', False)
-        firefox_profile.set_preference(
-                'browser.download.dir', self._download_dir)
-        # CSV files are returned as text/plain.
-        firefox_profile.set_preference(
-                'browser.helperApps.neverAsk.saveToDisk', 'text/plain')
-
-        if self._debug:
-            self._browser = webdriver.Firefox(firefox_profile)
-        else:
-            import selenium.webdriver.chrome.options
-            chrome_options = selenium.webdriver.chrome.options.Options()
-            chrome_options.add_argument("--headless")
-            self._browser = webdriver.Chrome(chrome_options=chrome_options)
+        logger.debug('Downloading files to: ' + self._download_dir)
+        chrome_options.add_experimental_option('prefs', {
+          'download.default_directory': self._download_dir,
+          'download.prompt_for_download': False,
+          'download.directory_upgrade': True,
+        })
+        if not self._debug:
+            chrome_options.add_argument('--headless')
+        self._browser = webdriver.Chrome(chrome_options=chrome_options)
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         # The user menu is only visible if the window is min 992px wide.
@@ -85,7 +79,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             login_form.find_element_by_id('submitForm').click()
             login_form.find_element_by_id('submitForm').click()
 
-            input("Please follow the log-in instructions and press enter.")
+            input('Please follow the log-in instructions and press enter.')
 
             if not self._is_logged_in():
                 raise fetch.FetchError('Login failed.')
@@ -376,7 +370,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         if not page:
             nav.find_element_by_link_text(section).click()
             return
-        menu_link = nav.find_element_by_partial_link_text(section + '\n')
+        menu_link = nav.find_element_by_partial_link_text(section)
         menu_item = menu_link.find_element_by_xpath('..')
         if not self._is_element_displayed_now(
                 lambda: menu_item.find_element_by_tag_name('ul')):
@@ -408,6 +402,7 @@ class InteractiveBrokers(fetch.bank.Bank):
                         '/ancestor::div[@class="row"]') \
                 .find_element_by_css_selector('.btn-group-right a') \
                 .click()
+        self._wait_to_finish_loading()
 
         # Get activity statements form.
         try:
@@ -417,7 +412,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         # Check statement type.
         if dialog.find_element_by_css_selector('.modal-header .modal-title') \
-                .text.strip() != 'Activity':
+                .text != 'Activity':
             raise fetch.FetchError('Expected activity statement type.')
 
         # Select date range.
