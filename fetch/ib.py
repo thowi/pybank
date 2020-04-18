@@ -366,7 +366,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _go_to_reports(self):
         logger.debug('Opening reports page...')
-        self._navigate_to('Reports')
+        self._navigate_to('Reports / Tax Docs')
 
     def _navigate_to(self, section, page=None):
         browser = self._browser
