@@ -41,7 +41,7 @@ class Account(object):
         repr = [self.name]
         if self.transactions:
             repr.append('%i transactions' % len(self.transactions))
-        if self.balance:
+        if self.balance is not None:
             repr.append('Balance: %.2f' % self.balance)
         return '. '.join(repr) + '.'
 

@@ -137,12 +137,12 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._check_logged_in()
         browser = self._browser
 
-        logger.debug('Getting account name...')
+        logger.debug('Getting account name…')
         self._navigate_to('Settings', 'Account Settings')
         account_name = browser.find_element_by_css_selector(
                 '.page-head .account-numbers').text.strip()
 
-        logger.debug('Getting balances from activity statement...')
+        logger.debug('Getting balances from activity statement…')
         yesterday = datetime.datetime.today() - datetime.timedelta(1)
         accounts = []
         csv_dict = self._download_activity_statement(
@@ -198,7 +198,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions
 
     def _get_transfers(self, csv_dict, account_name):
-        logger.debug('Extracting transfers...')
+        logger.debug('Extracting transfers…')
 
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Deposits & Withdrawals']['Data']['__rows']:
@@ -214,7 +214,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _get_trades(self, csv_dict, account_name):
-        logger.debug('Extracting trades...')
+        logger.debug('Extracting trades…')
 
         transactions_by_currency = collections.defaultdict(list)
 
@@ -279,7 +279,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _get_withholding_tax(self, csv_dict, account_name):
-        logger.debug('Extracting withholding tax...')
+        logger.debug('Extracting withholding tax…')
 
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Withholding Tax']['Data']['__rows']:
@@ -303,7 +303,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _get_dividends(self, csv_dict, account_name):
-        logger.debug('Extracting dividends...')
+        logger.debug('Extracting dividends…')
 
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Dividends']['Data']['__rows']:
@@ -321,7 +321,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _get_interest(self, csv_dict, account_name):
-        logger.debug('Extracting interest...')
+        logger.debug('Extracting interest…')
 
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Interest']['Data']['__rows']:
@@ -342,7 +342,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _get_other_fees(self, csv_dict, account_name):
-        logger.debug('Extracting other fees...')
+        logger.debug('Extracting other fees…')
 
         transactions_by_currency = collections.defaultdict(list)
         for row in csv_dict['Fees']['Data']['Other Fees']['__rows']:
@@ -359,7 +359,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         return transactions_by_currency
 
     def _go_to_reports(self):
-        logger.debug('Opening reports page...')
+        logger.debug('Opening reports page…')
         self._navigate_to('Reports / Tax Docs')
 
     def _navigate_to(self, section, page=None):
@@ -431,7 +431,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         ui.Select(format_select).select_by_visible_text('CSV')
 
         # Download report.
-        logger.debug('Downloading activity statement report...')
+        logger.debug('Downloading activity statement report…')
         before_download_timestamp = time.time()
         dialog.find_element_by_link_text('RUN').click()
 

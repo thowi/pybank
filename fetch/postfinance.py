@@ -47,7 +47,7 @@ class PostFinance(fetch.bank.Bank):
         self._accounts = None
         browser = self._browser
 
-        logger.info('Loading login page...')
+        logger.info('Loading login page…')
         browser.get(self._LOGIN_URL)
 
         if not username:
@@ -85,7 +85,7 @@ class PostFinance(fetch.bank.Bank):
                         raise fetch.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
                         raise fetch.FetchError('Mobile ID login error.')
-                print('Please confirm the login on your phone...')
+                print('Please confirm the login on your phone…')
                 fetch.wait_for_element_to_appear_and_disappear(
                         lambda: browser.find_element_by_class_name(
                                 'pf-spinner'),
@@ -112,7 +112,7 @@ class PostFinance(fetch.bank.Bank):
 
             # Logout warning?
             if 'Increased security when logging out' in browser.page_source:
-                logger.info('Confirming logout reminder...')
+                logger.info('Confirming logout reminder…')
                 try:
                     login_form = browser.find_element_by_name('login')
                 except exceptions.NoSuchElementException:
@@ -156,7 +156,7 @@ class PostFinance(fetch.bank.Bank):
 
         browser = self._browser
 
-        logger.info('Loading accounts overview...')
+        logger.info('Loading accounts overview…')
         self._go_to_assets()
         assets_tile = self._get_tile_by_title('Overview of your assets')
         fetch.find_element_by_title(assets_tile, 'Detailed overview').click()
@@ -217,7 +217,7 @@ class PostFinance(fetch.bank.Bank):
 
         browser = self._browser
 
-        logger.info('Opening credit cards overview...')
+        logger.info('Opening credit cards overview…')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
         fetch.find_element_by_title(cc_tile, 'Detailed overview') \
@@ -256,14 +256,14 @@ class PostFinance(fetch.bank.Bank):
     def _get_account_transactions(self, account, start, end):
         browser = self._browser
 
-        logger.info('Opening transactions search form...')
+        logger.info('Opening transactions search form…')
         self._go_to_assets()
         # We can go to any payment account to proceed to the custom search.
         payment_tile = self._get_tile_by_title('Payment account')
         payment_tile.find_element_by_partial_link_text('Transactions').click()
         self._wait_to_finish_loading()
 
-        logger.info('Performing transactions search...')
+        logger.info('Performing transactions search…')
         form = browser.find_element_by_css_selector(
                 '.detail_content form[name="EfmovementsOverviewForm"]')
 
@@ -307,7 +307,7 @@ class PostFinance(fetch.bank.Bank):
                     account.name)
             # More transactions?
             try:
-                logger.info('Loading more transactions...')
+                logger.info('Loading more transactions…')
                 browser.find_element_by_link_text('Show more').click()
             except exceptions.NoSuchElementException:
                 break
@@ -367,14 +367,14 @@ class PostFinance(fetch.bank.Bank):
     def _get_credit_card_transactions(self, account, start, end):
         browser = self._browser
 
-        logger.info('Opening credit cards overview...')
+        logger.info('Opening credit cards overview…')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
         fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
-        logger.debug('Finding credit card account...')
+        logger.debug('Finding credit card account…')
         # Switch to tab for that account.
         for tab in content.find_elements_by_css_selector('tab-wrapper'):
             if tab.text.endswith(account.name[-4:]):
@@ -439,7 +439,7 @@ class PostFinance(fetch.bank.Bank):
             if not next_option:
                 logger.info('No more earlier transactions.')
                 break
-            logger.info('Loading earlier transactions page...')
+            logger.info('Loading earlier transactions page…')
             date_select.select_by_value(next_option.get_attribute('value'))
             self._wait_to_finish_loading()
 

@@ -21,12 +21,14 @@ import sys
 import fetch.dkb
 import fetch.ib
 import fetch.postfinance
+import fetch.revolut
 import qif
 
 BANK_BY_NAME = {
     'dkb': fetch.dkb.DeutscheKreditBank,
     'interactivebrokers': fetch.ib.InteractiveBrokers,
     'postfinance': fetch.postfinance.PostFinance,
+    'revolut': fetch.revolut.Revolut,
 }
 DATE_FORMAT = '%Y-%m-%d'
 INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z0-9-_.]')
@@ -62,15 +64,16 @@ def _parse_args(argv):
     username = None
     password = None
     accounts = []
+    statements = []
     from_date = None
     till_date = None
     output_filename = None
     debug = False
 
-    options = 'hb:u:a:p:f:t:o:d'
+    options = 'hb:u:a:p:s:f:t:o:d'
     options_long = [
-            'help', 'bank=', 'username=', 'password=', 'account=', 'from=',
-            'till=', 'outfile=', 'debug']
+            'help', 'bank=', 'username=', 'password=', 'account=',
+            'statements=', 'from=', 'till=', 'outfile=', 'debug']
     try:
         opts, unused_args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error as msg:
@@ -87,6 +90,8 @@ def _parse_args(argv):
             password = arg
         if opt in ('-a', '--account'):
             accounts.append(arg)
+        if opt in ('-s', '--statements'):
+            statements.append(arg)
         if opt in ('-f', '--from'):
             from_date = arg
         if opt in ('-t', '--till'):
@@ -126,17 +131,17 @@ def _parse_args(argv):
         till_date = datetime.datetime(now.year, now.month, 1)
 
     return (
-        bank_name, username, password, accounts, from_date, till_date,
-        output_filename, debug)
+        bank_name, username, password, accounts, statements,
+        from_date, till_date, output_filename, debug)
 
 
 def _fetch_accounts(
-        bank_name, username, password, account_names, from_date, till_date,
-        output_filename, debug):
+        bank_name, username, password, account_names, statements,
+        from_date, till_date, output_filename, debug):
     bank_class = BANK_BY_NAME[bank_name]
     bank = bank_class(debug)
 
-    bank.login(username=username, password=password)
+    bank.login(username=username, password=password, statements=statements)
 
     available_accounts = bank.get_accounts()
     if not available_accounts:
@@ -199,8 +204,8 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
     try:
-        (bank_name, username, password, accounts, from_date, till_date,
-        output_filename, debug) = _parse_args(argv)
+        (bank_name, username, password, accounts, statements,
+        from_date, till_date, output_filename, debug) = _parse_args(argv)
     except Usage as err:
         print(err, file=sys.stderr)
         return 2
@@ -212,8 +217,8 @@ def main(argv=None):
 
     try:
         _fetch_accounts(
-                bank_name, username, password, accounts, from_date, till_date,
-                output_filename, debug)
+                bank_name, username, password, accounts, statements,
+                from_date, till_date, output_filename, debug)
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:

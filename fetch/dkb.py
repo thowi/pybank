@@ -46,7 +46,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         self._logged_in = False
         self._accounts = None
 
-        logger.info('Loading login page...')
+        logger.info('Loading login page…')
         browser.get(self._BASE_URL)
 
         if not username:
@@ -67,7 +67,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             username_input.send_keys(username)
             password_input = login_form.find_element_by_id('pinInputSelector')
             password_input.send_keys(password)
-            logger.info('Logging in with user name %s...' % username)
+            logger.info('Logging in with user name %s…' % username)
             submit_button = login_form.find_element_by_id('buttonlogin')
             submit_button.click()
             self._wait_to_finish_loading()
@@ -101,7 +101,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         browser = self._browser
 
-        logger.info('Loading accounts overview...')
+        logger.info('Loading accounts overview…')
         browser.find_element_by_link_text('Finanzstatus').click()
         self._wait_to_finish_loading()
 
@@ -154,7 +154,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             raise fetch.FetchError('Account name not found in result page.')
 
         # Parse result page into transactions.
-        logger.info('Extracting transaction...')
+        logger.info('Extracting transaction…')
         transactions = self._get_transactions_from_checking_account_statement()
         logger.info('Found %i transactions.' % len(transactions))
         browser.close()
@@ -179,7 +179,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             raise fetch.FetchError('Wrong credit card search result page.')
 
         # Parse result page into transactions.
-        logger.info('Extracting transaction...')
+        logger.info('Extracting transaction…')
         transactions = self._get_transactions_from_credit_card_statement()
         logger.info('Found %i transactions.' % len(transactions))
         browser.close()
@@ -190,14 +190,14 @@ class DeutscheKreditBank(fetch.bank.Bank):
     def _perform_transactions_search(self, account, start, end):
         browser = self._browser
         is_credit_card = isinstance(account, model.CreditCard)
-        logger.info('Opening account transactions page...')
+        logger.info('Opening account transactions page…')
         browser.find_element_by_link_text('Finanzstatus').click()
         self._wait_to_finish_loading()
         browser.find_element_by_link_text('Umsätze').click()
         self._wait_to_finish_loading()
 
         # Perform search.
-        logger.info('Performing transactions search...')
+        logger.info('Performing transactions search…')
         content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
         account_select_element = form.find_element_by_name('slAllAccounts')
@@ -308,7 +308,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         return transactions
 
     def _switch_to_print_view_window(self):
-        logger.debug('Switching to print view...')
+        logger.debug('Switching to print view…')
         browser = self._browser
         browser.find_element_by_css_selector('[title="Drucken"]').click()
         for handle in browser.window_handles:

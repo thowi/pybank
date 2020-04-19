@@ -41,11 +41,11 @@ class Bank(object):
         """
         raise NotImplementedError()
 
-    def get_transactions(self, name, start, end):
+    def get_transactions(self, account, start, end):
         """Returns all transactions within the given date range.
 
-        @type name: unicode
-        @param name: The account name.
+        @type account: model.Account
+        @param account: The account.
 
         @type start: datetime.datetime
         @param start: Start date, inclusive.
