@@ -32,7 +32,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     _WEBDRIVER_TIMEOUT = 30
     _SESSION_TIMEOUT_S = 30 * 60
 
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, statements=None):
         chrome_options = chrome.options.Options()
         # Download to a custom location. Don't show dialog.
         self._download_dir = tempfile.mkdtemp()

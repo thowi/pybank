@@ -30,7 +30,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
     _WEBDRIVER_TIMEOUT = 10
     _SESSION_TIMEOUT_S = 12 * 60
 
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, statements=None):
         if self._debug:
             self._browser = webdriver.Chrome()
         else:

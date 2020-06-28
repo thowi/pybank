@@ -18,7 +18,7 @@ class Bank(object):
         """
         self._debug = debug
 
-    def login(self, username=None, password=None):
+    def login(self, username=None, password=None, statements=None):
         """Will prompt the user if either user name or password are not defined.
 
         @type username: unicode
@@ -26,6 +26,9 @@ class Bank(object):
 
         @type password: unicode
         @param password: The password.
+
+        @type statements: list or None
+        @param statements: A list of statement files to read for import.
         """
         raise NotImplementedError()
 
