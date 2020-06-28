@@ -98,13 +98,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser.implicitly_wait(10)
 
         try:
-            fetch.find_element_by_text(browser, 'Client Portal')
+            browser.find_element_by_id('ib-bar-user-icon').click()
+            fetch.find_element_by_text(browser, 'Log out')
             # Often the portal isn't properly connected to the backend even if
             # the login was successful. Perform an additional check.
             fetch \
                     .find_element_by_text(browser, 'Manage Your Account') \
                     .find_element_by_xpath('../..') \
-                    .find_element_by_link_text('Transaction History')
+                    .find_element_by_link_text('Transaction Status & History')
             browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
             return True
         except exceptions.NoSuchElementException:
@@ -364,8 +365,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _navigate_to(self, section, page=None):
         browser = self._browser
-        browser.find_element_by_css_selector(
-                'div.left-side a[title="Application Menu"]').click()
+        browser.find_element_by_css_selector('.bar3-logo button').click()
         nav = browser.find_element_by_css_selector('.bar2-content ul')
         if not page:
             nav.find_element_by_link_text(section).click()
@@ -395,11 +395,12 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser = self._browser
 
         # Open Activity statements dialog.
-        fetch.find_element_by_text(browser, 'Default Statements') \
-                .find_element_by_xpath(
-                        './ancestor::section'
-                        '//*[normalize-space(text()) = "Activity"]'
-                        '/ancestor::div[@class="row"]') \
+        browser.find_element_by_xpath(
+                '//*[normalize-space(text()) = "Default Statements"]'
+                '/ancestor::section'
+                '//*[normalize-space(text()) = "Activity"]'
+                '/ancestor::div[@class="row"]'
+                '[1]') \
                 .find_element_by_css_selector('.btn-group-right a') \
                 .click()
         self._wait_to_finish_loading()

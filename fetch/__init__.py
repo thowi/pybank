@@ -176,12 +176,14 @@ def wait_for_element_to_appear_and_disappear(lookup_callable, timeout_s=10):
 
     @type lookup_callable: callable
     @param lookup_callable: The lookup to find the element.
+    @type timeout_s: int
+    @param timeout_s: The timeout to wait for the element to disappear.
     """
     element_displayed = lambda: is_element_displayed(lookup_callable)
     try:
         wait_until(element_displayed, timeout_s=2)
     except OperationTimeoutError:
-        # The element probably disappeared already.
+        # The element probably never showed up or disappeared already.
         pass
     element_disappeared = lambda: not element_displayed()
     wait_until(element_disappeared, timeout_s=timeout_s)
