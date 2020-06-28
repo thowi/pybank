@@ -544,7 +544,11 @@ class PostFinance(fetch.bank.Bank):
         # The loading overlay should be there pretty fast.
         browser.implicitly_wait(0)
 
+        # Wait for global loading overlay.
         overlay = lambda: browser.find_element_by_class_name('page_loader')
+        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        # Wait for any individual card overlays.
+        overlay = lambda: browser.find_element_by_class_name('widget--loading')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
