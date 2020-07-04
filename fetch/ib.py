@@ -219,9 +219,11 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         transactions_by_currency = collections.defaultdict(list)
 
-        # Stock transactions:
+        # Stock and options transactions:
         st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
-        for row in st:
+        ot = csv_dict['Trades']['Data']['Order']['Equity and Index Options'] \
+                .get('__rows', [])
+        for row in st + ot:
             currency = row[0]
             symbol = row[1]
             date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
