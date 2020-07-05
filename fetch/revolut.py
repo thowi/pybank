@@ -88,9 +88,10 @@ class Revolut(fetch.bank.Bank):
             transactions = []
             with open(statement_filename, 'r') as csvfile:
                 reader = csv.DictReader(csvfile, delimiter=';', quotechar='"')
-                rows = [{k.strip(): v.strip() for k, v in row.items()}
+                strip_or_none = lambda s: s.strip() if s is not None else None
+                rows = [{strip_or_none(k): strip_or_none(v) for k, v in row.items()}
                         for row in reader]
-                if rows:
+                if rows and not (len(rows) == 1 and rows[0]['Description'] == 'No Transactions'):
                     # Get balance.
                     balance_str = rows[0][
                             self._BALANCE_HEADER_PATTERN % currency]
