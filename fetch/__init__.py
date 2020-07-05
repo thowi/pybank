@@ -186,7 +186,11 @@ def wait_for_element_to_appear_and_disappear(lookup_callable, timeout_s=10):
         # The element probably never showed up or disappeared already.
         pass
     element_disappeared = lambda: not element_displayed()
-    wait_until(element_disappeared, timeout_s=timeout_s)
+    try:
+        wait_until(element_disappeared, timeout_s=timeout_s)
+    except OperationTimeoutError:
+        # The element probably never showed up or disappeared already.
+        pass
 
 
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
