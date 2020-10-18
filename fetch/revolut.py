@@ -137,7 +137,6 @@ class Revolut(fetch.bank.Bank):
         for acc in self.get_accounts():
             if acc.name == account.name:
                 for transaction in acc.transactions:
-                    logger.debug('Checking if date %s is in %s - %s.' % (transaction.date, start, end))
                     if transaction.date >= start and transaction.date < end:
                         transactions.append(transaction)
         logger.info('Found %i transactions for account %s.' % (
