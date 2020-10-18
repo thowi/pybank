@@ -116,9 +116,8 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def logout(self):
         browser = self._browser
-        browser.find_element_by_css_selector('right-side a[title="User"]') \
-                .click()
-        browser.find_element_by_link_text('Log out').click()
+        browser.find_element_by_id('ib-bar-user-icon').click()
+        fetch.find_element_by_text(browser, 'Log out').click()
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -370,6 +369,12 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser.find_element_by_css_selector('.bar3-logo button').click()
         nav = browser.find_element_by_css_selector('.bar2-content ul')
         if not page:
+            # Oddly, this needs to be scrolled into view using JS first.
+            browser.execute_script(
+                    'Array.from(arguments[0].querySelectorAll("li"))'
+                    '.find(e => e.innerText == arguments[1])'
+                    '.scrollIntoView()',
+                    nav, section)
             nav.find_element_by_link_text(section).click()
             return
         menu_link = nav.find_element_by_partial_link_text(section)
