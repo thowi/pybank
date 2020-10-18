@@ -441,7 +441,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         # Download report.
         logger.debug('Downloading activity statement report…')
         before_download_timestamp = time.time()
-        dialog.find_element_by_link_text('RUN').click()
+        dialog.find_element_by_link_text('Run').click()
 
         # Find file on disk, load, parse CSV.
         try:
