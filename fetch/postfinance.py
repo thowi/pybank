@@ -66,7 +66,8 @@ class PostFinance(fetch.bank.Bank):
             except exceptions.NoSuchElementException:
                 raise fetch.FetchError('Login form not found.')
 
-            use_mobile_login = input('Use mobile login? [yN]: ') == 'y'
+            use_mobile_login_input = input('Use mobile login? [Yn]: ').lower()
+            use_mobile_login = use_mobile_login_input in ('y', '')
 
             # First login phase: User and password.
             login_form.find_element_by_name('p_username').send_keys(username)
