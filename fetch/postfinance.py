@@ -297,8 +297,12 @@ class PostFinance(fetch.bank.Bank):
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
-        form.find_element_by_name('dateFrom').send_keys(formatted_start)
-        form.find_element_by_name('dateTo').send_keys(formatted_end)
+        from_field = form.find_element_by_name('dateFrom')
+        from_field.clear()
+        from_field.send_keys(formatted_start)
+        to_field = form.find_element_by_name('dateTo')
+        to_field.clear()
+        to_field.send_keys(formatted_end)
 
         transactions = []
         form.find_element_by_css_selector('button[label="Search"]').click()
@@ -542,14 +546,17 @@ class PostFinance(fetch.bank.Bank):
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
         browser = self._browser
-        # The loading overlay should be there pretty fast.
-        browser.implicitly_wait(0)
+        # The loading indicators should be there pretty fast.
+        browser.implicitly_wait(1)
 
         # Wait for global loading overlay.
         overlay = lambda: browser.find_element_by_class_name('page_loader')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
         # Wait for any individual card overlays.
         overlay = lambda: browser.find_element_by_class_name('widget--loading')
+        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        # Wait for data loading inside cards.
+        overlay = lambda: browser.find_element_by_class_name('is-loading')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)

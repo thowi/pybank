@@ -349,8 +349,8 @@ class DeutscheKreditBank(fetch.bank.Bank):
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
         browser = self._browser
-        # Disable waiting for elements to speed up the operation.
-        browser.implicitly_wait(0)
+        # The loading indicators should be there pretty fast.
+        browser.implicitly_wait(1)
 
         overlay = lambda: browser.find_element_by_class_name('ajax_loading')
         fetch.wait_for_element_to_appear_and_disappear(overlay)

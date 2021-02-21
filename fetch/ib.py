@@ -99,7 +99,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         try:
             browser.find_element_by_id('ib-bar-user-icon').click()
-            fetch.find_element_by_text(browser, 'Log out')
+            fetch.find_element_by_text(browser, 'Log Out')
             # Often the portal isn't properly connected to the backend even if
             # the login was successful. Perform an additional check.
             fetch \
@@ -529,8 +529,8 @@ class InteractiveBrokers(fetch.bank.Bank):
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
         browser = self._browser
-        # Disable waiting for elements to speed up the operation.
-        browser.implicitly_wait(0)
+        # The loading indicators should be there pretty fast.
+        browser.implicitly_wait(1)
 
         overlay = lambda: browser.find_element_by_tag_name('loading-overlay')
         fetch.wait_for_element_to_appear_and_disappear(overlay)
