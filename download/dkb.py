@@ -11,14 +11,14 @@ from selenium.common import exceptions
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support import ui
 
-import fetch.bank
+import download.bank
 import model
 
 
 logger = logging.getLogger(__name__)
 
 
-class DeutscheKreditBank(fetch.bank.Bank):
+class DeutscheKreditBank(download.bank.Bank):
     """Fetcher for Deutsche Kreditbank (http://www.dkb.de/).
 
     The accounts for a user will be identified by the bank account number
@@ -62,7 +62,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             try:
                 login_form = browser.find_element_by_id('login')
             except exceptions.NoSuchElementException:
-                raise fetch.FetchError('Login form not found.')
+                raise download.FetchError('Login form not found.')
             username_input = login_form.find_element_by_id('loginInputSelector')
             username_input.send_keys(username)
             password_input = login_form.find_element_by_id('pinInputSelector')
@@ -73,7 +73,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
             self._wait_to_finish_loading()
 
             if not self._is_logged_in():
-                raise fetch.FetchError('Login failed.')
+                raise download.FetchError('Login failed.')
 
         self.save_cookies(browser, username)
         self._logged_in = True
@@ -82,7 +82,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
-        return fetch.is_element_present(
+        return download.is_element_present(
                 lambda: self._browser.find_element_by_link_text('Finanzstatus'))
 
     def logout(self):
@@ -149,9 +149,9 @@ class DeutscheKreditBank(fetch.bank.Bank):
         # Check that we're on the correct page.
         body_text = browser.find_element_by_tag_name('body').text
         if 'Kontoumsätze' not in body_text:
-            raise fetch.FetchError('Not an account search result page.')
+            raise download.FetchError('Not an account search result page.')
         if account.name not in body_text:
-            raise fetch.FetchError('Account name not found in result page.')
+            raise download.FetchError('Account name not found in result page.')
 
         # Parse result page into transactions.
         logger.info('Extracting transaction…')
@@ -171,12 +171,12 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
         body_text = browser.find_element_by_tag_name('body').text
         if 'Kreditkartenumsätze' not in body_text:
-            raise fetch.FetchError('Not a credit card search result page.')
+            raise download.FetchError('Not a credit card search result page.')
         # The full credit card number is shown on the transactions page. Until
         # here we only have a partially anonymized number.
         pattern = re.compile('Kreditkarte ' + account.name.replace('*', '.'))
         if not pattern.search(body_text):
-            raise fetch.FetchError('Wrong credit card search result page.')
+            raise download.FetchError('Wrong credit card search result page.')
 
         # Parse result page into transactions.
         logger.info('Extracting transaction…')
@@ -205,7 +205,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         if is_credit_card:
             account_text = account.name + ' / Kreditkarte'
         else:
-            account_text = fetch.format_iban(account.name) + ' / Girokonto'
+            account_text = download.format_iban(account.name) + ' / Girokonto'
         account_select.select_by_visible_text(account_text)
         # Selecting an account will reload the page.
         # Wait a little. Load the form again.
@@ -248,7 +248,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 date = self._parse_date(date_text)
 
                 # Payee and memo.
-                details_lines = fetch.normalize_text(cells[1].text).split('\n')
+                details_lines = download.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
                 payee = '\n'.join(details_lines[1:2])  # This line might not exist.
                 memo = '\n'.join(details_lines[2:])  # Might be empty.
@@ -260,7 +260,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                     memo += '\nClearing: %s' % payee_clearing
 
                 # Amount
-                amount = fetch.parse_decimal_number(cells[3].text, 'de_DE')
+                amount = download.parse_decimal_number(cells[3].text, 'de_DE')
 
                 transactions.append(model.Payment(date, amount, payee, memo))
             except ValueError as e:
@@ -284,16 +284,16 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 date = self._parse_date(date_text)
 
                 # Memo.
-                memo = fetch.normalize_text(cells[2].text)
+                memo = download.normalize_text(cells[2].text)
 
                 # Amount.
                 amounts = cells[3].text.split('\n')
-                amount = fetch.parse_decimal_number(amounts[0], 'de_DE')
+                amount = download.parse_decimal_number(amounts[0], 'de_DE')
 
                 # Currency.
                 currencies = cells[4].text.split('\n')
                 if len(currencies) > 1 and len(amounts) > 1:
-                    original_amount = fetch.parse_decimal_number(
+                    original_amount = download.parse_decimal_number(
                             amounts[1], 'de_DE')
                     original_currency = currencies[1]
                     memo += '\nOriginal amount: %s %.2f' % (
@@ -316,7 +316,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
                 browser.switch_to_window(handle)
                 break
         if browser.current_window_handle == self._main_window_handle:
-            raise fetch.FetchError('Print view window not found.')
+            raise download.FetchError('Print view window not found.')
 
     def _is_credit_card(self, name):
         return '******' in name
@@ -325,7 +325,7 @@ class DeutscheKreditBank(fetch.bank.Bank):
         if balance.endswith('S'):  # Debit.
             balance = '-' + balance
         balance = balance.replace(' S', '').replace(' H', '')
-        return fetch.parse_decimal_number(balance, 'de_DE')
+        return download.parse_decimal_number(balance, 'de_DE')
 
     def _parse_date(self, date_string):
         try:
@@ -336,12 +336,12 @@ class DeutscheKreditBank(fetch.bank.Bank):
 
     def _check_logged_in(self):
         if not self._logged_in:
-            raise fetch.FetchError('Not logged in.')
+            raise download.FetchError('Not logged in.')
 
     def _get_element_or_none(self, lookup_callable, wait_time=None):
         if wait_time is not None:
             self._browser.implicitly_wait(0)
-        result = fetch.get_element_or_none(lookup_callable)
+        result = download.get_element_or_none(lookup_callable)
         if wait_time is not None:
             self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         return result
@@ -353,6 +353,6 @@ class DeutscheKreditBank(fetch.bank.Bank):
         browser.implicitly_wait(1)
 
         overlay = lambda: browser.find_element_by_class_name('ajax_loading')
-        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)

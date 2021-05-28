@@ -6,15 +6,15 @@ import itertools
 import logging
 import re
 
-import fetch
-import fetch.bank
+import download
+import download.bank
 import model
 
 
 logger = logging.getLogger(__name__)
 
 
-class Revolut(fetch.bank.Bank):
+class Revolut(download.bank.Bank):
     """Fetcher for Revolut (https://www.revolut.com/).
 
     Revolut doesn't have a Web interface, so we're just working with downloaded
@@ -50,7 +50,7 @@ class Revolut(fetch.bank.Bank):
                     'Using statment files: %s.' %
                     ', '.join(self._statement_file_names))
         else:
-            raise fetch.FetchError('Couldn\'t read any statement files.')
+            raise download.FetchError('Couldn\'t read any statement files.')
 
     def logout(self):
         pass

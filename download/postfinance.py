@@ -8,14 +8,14 @@ from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
 
-import fetch.bank
+import download.bank
 import model
 
 
 logger = logging.getLogger(__name__)
 
 
-class PostFinance(fetch.bank.Bank):
+class PostFinance(download.bank.Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
     _BASE_URL = 'https://www.postfinance.ch/ap/ba/fp/html/e-finance/'
     _LOGIN_URL = _BASE_URL + 'home?login&p_spr_cd=4'
@@ -64,7 +64,7 @@ class PostFinance(fetch.bank.Bank):
             try:
                 login_form = browser.find_element_by_name('login')
             except exceptions.NoSuchElementException:
-                raise fetch.FetchError('Login form not found.')
+                raise download.FetchError('Login form not found.')
 
             use_mobile_login_input = input('Use mobile login? [Yn]: ').lower()
             use_mobile_login = use_mobile_login_input in ('y', '')
@@ -83,11 +83,11 @@ class PostFinance(fetch.bank.Bank):
                         error_element = browser.find_element_by_class_name(
                                 'error')
                         logger.error('Login failed:\n%s' % error_element.text)
-                        raise fetch.FetchError('Login failed.')
+                        raise download.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
-                        raise fetch.FetchError('Mobile ID login error.')
+                        raise download.FetchError('Mobile ID login error.')
                 print('Please confirm the login on your phone…')
-                fetch.wait_for_element_to_appear_and_disappear(
+                download.wait_for_element_to_appear_and_disappear(
                         lambda: browser.find_element_by_class_name(
                                 'pf-spinner'),
                         timeout_s=60)
@@ -99,15 +99,15 @@ class PostFinance(fetch.bank.Bank):
                         error_element = browser.find_element_by_class_name(
                                 'error')
                         logger.error('Login failed:\n%s' % error_element.text)
-                        raise fetch.FetchError('Login failed.')
+                        raise download.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
-                        raise fetch.FetchError('Security challenge not found.')
+                        raise download.FetchError('Security challenge not found.')
                 print('Challenge:', challenge_element.text)
                 token = input('Login token: ')
                 try:
                     login_form = browser.find_element_by_name('login')
                 except exceptions.NoSuchElementException:
-                    raise fetch.FetchError('Login token form not found.')
+                    raise download.FetchError('Login token form not found.')
                 login_form.find_element_by_name('p_si_nr').send_keys(token)
                 login_form.submit()
 
@@ -117,11 +117,11 @@ class PostFinance(fetch.bank.Bank):
                 try:
                     login_form = browser.find_element_by_name('login')
                 except exceptions.NoSuchElementException:
-                    raise fetch.FetchError('Logout reminder form not found.')
+                    raise download.FetchError('Logout reminder form not found.')
                 login_form.submit()
 
             if not self._is_logged_in():
-                raise fetch.FetchError('Login failed.')
+                raise download.FetchError('Login failed.')
 
         self.save_cookies(browser, username)
         self._logged_in = True
@@ -129,7 +129,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Log-in sucessful.')
 
     def _is_logged_in(self):
-        return fetch.is_element_present(
+        return download.is_element_present(
                 lambda: self._browser.find_element_by_css_selector('a.logout'))
 
     def logout(self):
@@ -160,7 +160,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Loading accounts overview…')
         self._go_to_assets()
         assets_tile = self._get_tile_by_title('Overview of your assets')
-        fetch.find_element_by_title(assets_tile, 'Detailed overview').click()
+        download.find_element_by_title(assets_tile, 'Detailed overview').click()
         content = browser.find_element_by_class_name('detail_page')
 
         account_tables = []
@@ -209,7 +209,7 @@ class PostFinance(fetch.bank.Bank):
             except (
                     exceptions.NoSuchElementException, AttributeError,
                     IndexError):
-                raise fetch.FetchError('Couldn\'t load accounts.')
+                raise download.FetchError('Couldn\'t load accounts.')
         self._close_tile()
         return accounts
 
@@ -221,7 +221,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening credit cards overview…')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        fetch.find_element_by_title(cc_tile, 'Detailed overview') \
+        download.find_element_by_title(cc_tile, 'Detailed overview') \
                 .find_element_by_xpath('..') \
                 .click()
         self._wait_to_finish_loading()
@@ -252,7 +252,7 @@ class PostFinance(fetch.bank.Bank):
         elif isinstance(account, model.CreditCard):
             return self._get_credit_card_transactions(account, start, end)
         else:
-            raise fetch.FetchError('Unsupported account type: %s.', type(account))
+            raise download.FetchError('Unsupported account type: %s.', type(account))
 
     def _get_account_transactions(self, account, start, end):
         browser = self._browser
@@ -276,9 +276,9 @@ class PostFinance(fetch.bank.Bank):
                     '*[name="pf-detail-efmovements-overview-dropdown-account"]')
             account_drop_down_container.find_element_by_class_name(
                     'ef_select--trigger').click()
-            fetch.find_element_by_text(
+            download.find_element_by_text(
                     account_drop_down_container,
-                    fetch.format_iban(account.name)) \
+                    download.format_iban(account.name)) \
                     .find_element_by_xpath('../../../..') \
                     .click()
         except exceptions.NoSuchElementException:
@@ -288,12 +288,12 @@ class PostFinance(fetch.bank.Bank):
         # Check that we're looking at the right account.
         current_account = browser.find_element_by_id(
                 'pf-detail-efmovements-overview-account-iban').text
-        if current_account != fetch.format_iban(account.name):
-            raise fetch.FetchError(
+        if current_account != download.format_iban(account.name):
+            raise download.FetchError(
                     'Transactions search failed: Wrong account: ' +
                     current_account)
 
-        fetch.find_button_by_text(form, 'Search options').click()
+        download.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
         end_inclusive = end - datetime.timedelta(1)
         formatted_end = end_inclusive.strftime(self._DATE_FORMAT)
@@ -329,8 +329,8 @@ class PostFinance(fetch.bank.Bank):
                 '.detail_page '
                 '.content-pane:not(.is-hidden-print):not(.ng-hide)')
         try:
-            if fetch.format_iban(account_name) not in content.text:
-                raise fetch.FetchError(
+            if download.format_iban(account_name) not in content.text:
+                raise download.FetchError(
                         'Transactions search failed: Wrong account.')
         except exceptions.NoSuchElementException:
             try:
@@ -338,10 +338,10 @@ class PostFinance(fetch.bank.Bank):
                 logging.info('Search failed: ' + error_element.text)
                 return []
             except exceptions.NoSuchElementException:
-                raise fetch.FetchError('Transactions search failed.')
+                raise download.FetchError('Transactions search failed.')
 
         try:
-            no_transactions = fetch.find_element_by_text(
+            no_transactions = download.find_element_by_text(
                 content,
                 'No transactions were found that match your search options')
             if no_transactions.is_displayed():
@@ -353,7 +353,7 @@ class PostFinance(fetch.bank.Bank):
         try:
             table_rows = content.find_elements_by_css_selector('table tbody tr')
         except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Couldn\'t find transactions table.')
+            raise download.FetchError('Couldn\'t find transactions table.')
         transactions = []
         for table_row in table_rows:
             th_cells = table_row.find_elements_by_tag_name('th')
@@ -375,7 +375,7 @@ class PostFinance(fetch.bank.Bank):
         logger.info('Opening credit cards overview…')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        fetch.find_element_by_title(cc_tile, 'Detailed overview').click()
+        download.find_element_by_title(cc_tile, 'Detailed overview').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
@@ -388,9 +388,9 @@ class PostFinance(fetch.bank.Bank):
         # Verify that the correct card is displayed.
         active_pane = content.find_element_by_css_selector(
                 'section.js-tabs--pane.is-active')
-        formatted_account_name = fetch.format_cc_account_name(account.name)
+        formatted_account_name = download.format_cc_account_name(account.name)
         if formatted_account_name not in active_pane.text:
-            raise fetch.FetchError('Couldn\'t find account %s.' % account)
+            raise download.FetchError('Couldn\'t find account %s.' % account)
 
         # You can see the transactions for one month/period at a time.
         transactions = []
@@ -416,7 +416,7 @@ class PostFinance(fetch.bank.Bank):
                     end_date = datetime.datetime.strptime(
                             end_date_str, self._DATE_FORMAT)
                 else:
-                    raise fetch.FetchError(
+                    raise download.FetchError(
                             'Not a credit card transactions page %s.' %
                             account.name)
             logger.debug('Current period: ' + period)
@@ -471,7 +471,7 @@ class PostFinance(fetch.bank.Bank):
 
         # Check if there are any transactions in the current period.
         try:
-            no_transactions = fetch.find_element_by_text(
+            no_transactions = download.find_element_by_text(
                 active_pane,
                 'There are no transactions in the selected invoicing period '
                 'for this card.')
@@ -484,12 +484,12 @@ class PostFinance(fetch.bank.Bank):
         # Find the transactions table.
         try:
             # Find the "Entries" section, skip the "Reservations" section.
-            entries_heading = fetch.find_element_by_tag_name_and_text(
+            entries_heading = download.find_element_by_tag_name_and_text(
                     active_pane, 'h3', 'Entries')
             # The transactions are in the next table after that heading.
             table = entries_heading.find_element_by_xpath('following::table')
         except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Couldn\'t find transactions.')
+            raise download.FetchError('Couldn\'t find transactions.')
         try:
             tbody = table.find_element_by_tag_name('tbody')
         except exceptions.NoSuchElementException:
@@ -526,9 +526,9 @@ class PostFinance(fetch.bank.Bank):
                     'Skipping transaction with invalid date %s.', date)
             return
 
-        memo = fetch.normalize_text(memo)
+        memo = download.normalize_text(memo)
         try:
-            amount = fetch.parse_decimal_number(amount, 'de_CH')
+            amount = download.parse_decimal_number(amount, 'de_CH')
         except ValueError:
             logger.warning(
                     'Skipping transaction with invalid amount %s.', amount)
@@ -551,13 +551,13 @@ class PostFinance(fetch.bank.Bank):
 
         # Wait for global loading overlay.
         overlay = lambda: browser.find_element_by_class_name('page_loader')
-        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(overlay)
         # Wait for any individual card overlays.
         overlay = lambda: browser.find_element_by_class_name('widget--loading')
-        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(overlay)
         # Wait for data loading inside cards.
         overlay = lambda: browser.find_element_by_class_name('is-loading')
-        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(overlay)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
@@ -566,11 +566,11 @@ class PostFinance(fetch.bank.Bank):
         balance = balance.replace('\u2212', '-')
         # Sign is at the end.
         balance = balance[-1] + balance[:-1]
-        return fetch.parse_decimal_number(balance, 'de_CH')
+        return download.parse_decimal_number(balance, 'de_CH')
 
     def _check_logged_in(self):
         if not self._logged_in:
-            raise fetch.FetchError('Not logged in.')
+            raise download.FetchError('Not logged in.')
 
     def _get_tile_by_title(self, title):
         return self._browser.find_element_by_xpath(

@@ -14,15 +14,15 @@ from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
 from selenium.webdriver import chrome
-import fetch
-import fetch.bank
+import download
+import download.bank
 import model
 
 
 logger = logging.getLogger(__name__)
 
 
-class InteractiveBrokers(fetch.bank.Bank):
+class InteractiveBrokers(download.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
     _LOGIN_URL = 'https://www.interactivebrokers.co.uk/sso/Login'
     _MAIN_URL = 'https://www.interactivebrokers.co.uk/portal/'
@@ -72,7 +72,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             try:
                 login_form = browser.find_element_by_name('loginform')
             except exceptions.NoSuchElementException:
-                raise fetch.FetchError('Login form not found.')
+                raise download.FetchError('Login form not found.')
             login_form.find_element_by_name('user_name').send_keys(username)
             login_form.find_element_by_name('password').send_keys(password)
             # Weirldy, the login button has to be clicked twice.
@@ -82,7 +82,7 @@ class InteractiveBrokers(fetch.bank.Bank):
             input('Please follow the log-in instructions and press enter.')
 
             if not self._is_logged_in():
-                raise fetch.FetchError('Login failed.')
+                raise download.FetchError('Login failed.')
 
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
@@ -99,7 +99,7 @@ class InteractiveBrokers(fetch.bank.Bank):
 
         try:
             browser.find_element_by_id('ib-bar-user-icon').click()
-            fetch.find_element_by_text(browser, 'Log Out')
+            download.find_element_by_text(browser, 'Log Out')
             # Often the portal isn't properly connected to the backend even if
             # the login was successful. Perform an additional check.
             fetch \
@@ -117,7 +117,7 @@ class InteractiveBrokers(fetch.bank.Bank):
     def logout(self):
         browser = self._browser
         browser.find_element_by_id('ib-bar-user-icon').click()
-        fetch.find_element_by_text(browser, 'Log out').click()
+        download.find_element_by_text(browser, 'Log out').click()
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -416,15 +416,15 @@ class InteractiveBrokers(fetch.bank.Bank):
         try:
             dialog = browser.find_element_by_css_selector('am-modal')
         except exceptions.NoSuchElementException:
-            raise fetch.FetchError('Activity statements dialog not found.')
+            raise download.FetchError('Activity statements dialog not found.')
 
         # Check statement type.
         if dialog.find_element_by_css_selector('.modal-header .modal-title') \
                 .text != 'Activity':
-            raise fetch.FetchError('Expected activity statement type.')
+            raise download.FetchError('Expected activity statement type.')
 
         # Select date range.
-        period_select = fetch.find_element_by_text(dialog, 'Period') \
+        period_select = download.find_element_by_text(dialog, 'Period') \
                 .find_element_by_xpath('../..//select')
         ui.Select(period_select).select_by_value('string:DATE_RANGE')
         # Switching period will refresh the form.
@@ -434,7 +434,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         self._select_date_in_activity_statement('toDate', end)
 
         # Select CSV format.
-        format_select = fetch.find_element_by_text(dialog, 'Format') \
+        format_select = download.find_element_by_text(dialog, 'Format') \
                 .find_element_by_xpath('../..//select')
         ui.Select(format_select).select_by_visible_text('CSV')
 
@@ -447,14 +447,14 @@ class InteractiveBrokers(fetch.bank.Bank):
         try:
             csv_filename = lambda: self._get_downloaded_filename_newer_than(
                     before_download_timestamp)
-            fetch.wait_until(csv_filename)
+            download.wait_until(csv_filename)
             filename = csv_filename()
             with open(filename, 'r') as csvfile:
                 csv_dict = self._parse_csv_into_dict(csvfile)
                 os.remove(filename)
                 return csv_dict
-        except fetch.OperationTimeoutError:
-            raise fetch.FetchError('Activity statement failed to load.')
+        except download.OperationTimeoutError:
+            raise download.FetchError('Activity statement failed to load.')
 
     def _get_downloaded_filename_newer_than(self, timestamp):
         for root, dirs, files in os.walk(self._download_dir):
@@ -533,10 +533,10 @@ class InteractiveBrokers(fetch.bank.Bank):
         browser.implicitly_wait(1)
 
         overlay = lambda: browser.find_element_by_tag_name('loading-overlay')
-        fetch.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(overlay)
 
         progressbar = lambda: browser.find_element_by_class_name('progress-bar')
-        fetch.wait_for_element_to_appear_and_disappear(progressbar)
+        download.wait_for_element_to_appear_and_disappear(progressbar)
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
@@ -544,7 +544,7 @@ class InteractiveBrokers(fetch.bank.Bank):
         """Doesn't wait for an element but returns if it's displayed now."""
         browser = self._browser
         browser.implicitly_wait(0)
-        displayed = fetch.is_element_displayed(lookup_callable)
+        displayed = download.is_element_displayed(lookup_callable)
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         return displayed
 
@@ -569,4 +569,4 @@ class InteractiveBrokers(fetch.bank.Bank):
 
     def _check_logged_in(self):
         if not self._logged_in:
-            raise fetch.FetchError('Not logged in.')
+            raise download.FetchError('Not logged in.')
