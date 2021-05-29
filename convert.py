@@ -16,12 +16,14 @@ import getopt
 import sys
 
 import importer.dkb
+import importer.ib
 import importer.postfinance
 import qif
 
 IMPORTER_BY_NAME = {
     'dkb-checking': importer.dkb.DkbCheckingImporter,
     'dkb-credit-card': importer.dkb.DkbCreditCardImporter,
+    'interactive-brokers': importer.ib.InteractiveBrokersImporter,
     'postfinance-checking': importer.postfinance.PostFinanceCheckingImporter,
     'postfinance-credit-card':
             importer.postfinance.PostFinanceCreditCardImporter,
@@ -41,6 +43,7 @@ class Usage(Exception):
     Options:
     [-h|--help]
     [-i importer|--importer=importer]
+    [-c currency|--currency=USD]       Filters the transaction for a currency.
     [-d|--debug]
     """
     def __init__(self, msg=''):
@@ -55,10 +58,11 @@ class Usage(Exception):
 def _parse_args(argv):
     importer_name = None
     input_filename = None
+    currency = None
     debug = False
 
-    options = 'hi:d'
-    options_long = ['help', 'importer=', 'debug']
+    options = 'hi:c:d'
+    options_long = ['help', 'importer=', 'currency=', 'debug']
     try:
         opts, other_args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error as msg:
@@ -69,6 +73,8 @@ def _parse_args(argv):
             return 0
         if opt in ('-i', '--importer'):
             importer_name = arg
+        if opt in ('-c', '--currency'):
+            currency = arg
         if opt in ('-d', '--debug'):
             debug = True
 
@@ -80,15 +86,17 @@ def _parse_args(argv):
     if len(other_args) > 1:
         raise Usage('Too many non-option arguments: %s.' % other_args)
 
-    return (importer_name, debug, other_args[0] if other_args else None)
+    return (
+            importer_name, currency, debug,
+            other_args[0] if other_args else None)
 
 
-def _convert_file(importer_name, input_filename, debug):
+def _convert_file(importer_name, currency, debug, input_filename):
     importer_class = IMPORTER_BY_NAME[importer_name]
     importer = importer_class(debug)
     input_file = None if input_filename else sys.stdin
     transactions = importer.import_transactions(
-            file=input_file, filename=input_filename)
+            file=input_file, filename=input_filename, currency=currency)
 
     try:
         txns_qif = (qif.serialize_transaction(t) for t in transactions)
@@ -102,7 +110,7 @@ def main(argv=None):
     if argv is None:
         argv = sys.argv
     try:
-        (importer_name, debug, input_filename) = _parse_args(argv)
+        (importer_name, currency, debug, input_filename) = _parse_args(argv)
     except Usage as err:
         print(err, file=sys.stderr)
         return 2
@@ -113,7 +121,7 @@ def main(argv=None):
         logging.basicConfig(format=LOG_FORMAT, level=logging.INFO)
 
     try:
-        _convert_file(importer_name, input_filename, debug)
+        _convert_file(importer_name, currency, debug, input_filename)
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:

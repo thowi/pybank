@@ -19,7 +19,7 @@ class Importer(object):
         """
         self._debug = debug
 
-    def import_transactions(self, file=None, filename=None):
+    def import_transactions(self, file=None, filename=None, currency=None):
         """Imports transactions from a file or filename and returns Model data.
 
         @type file: io.IOBase or None
@@ -27,6 +27,9 @@ class Importer(object):
 
         @type filename: str or None
         @param filename: The filename to read from.
+
+        @type currency: str or None
+        @param currency: Optionally filter the transactions for a currency.
 
         @rtype: [model.Transaction]
         @return: The imported transactions.

@@ -14,10 +14,11 @@ class DkbCheckingImporter(importer.Importer):
     """Importer for DKB checking accounts (http://www.dkb.de/).
     """
 
-    def import_transactions(self, file=None, filename=None):
+    def import_transactions(self, file=None, filename=None, currency=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            # Read header.
             reader = csv.reader(file, delimiter=';', quotechar='"')
+
+            # Read header.
             account_row = next(reader)
             next(reader)
             from_date_row = next(reader)
@@ -55,8 +56,9 @@ class DkbCreditCardImporter(importer.Importer):
 
     def import_transactions(self, file=None, filename=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            # Read header.
             reader = csv.reader(file, delimiter=';', quotechar='"')
+
+            # Read header.
             card_row = next(reader)
             next(reader)
             from_date_row = next(reader)

@@ -14,10 +14,11 @@ class PostFinanceCheckingImporter(importer.Importer):
     """Importer for PostFinance checking accounts (http://www.postfincance.ch/).
     """
 
-    def import_transactions(self, file=None, filename=None):
+    def import_transactions(self, file=None, filename=None, currency=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            # Read header.
             reader = csv.reader(file, delimiter=';', quotechar='"')
+
+            # Read header.
             from_date_row = next(reader)
             to_date_row = next(reader)
             types_row = next(reader)
@@ -51,8 +52,9 @@ class PostFinanceCreditCardImporter(importer.Importer):
 
     def import_transactions(self, file=None, filename=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            # Read header.
             reader = csv.reader(file, delimiter=';', quotechar='"')
+
+            # Read header.
             card_account_row = next(reader)
             card_row = next(reader)
             date_range_row = next(reader)
