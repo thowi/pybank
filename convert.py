@@ -15,10 +15,13 @@ import logging
 import getopt
 import sys
 
+import importer.dkb
 import importer.postfinance
 import qif
 
 IMPORTER_BY_NAME = {
+    'dkb-checking': importer.dkb.DkbCheckingImporter,
+    'dkb-credit-card': importer.dkb.DkbCreditCardImporter,
     'postfinance-checking': importer.postfinance.PostFinanceCheckingImporter,
     'postfinance-credit-card':
             importer.postfinance.PostFinanceCreditCardImporter,
