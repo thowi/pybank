@@ -262,7 +262,8 @@ class DeutscheKreditBank(download.bank.Bank):
                 # Amount
                 amount = download.parse_decimal_number(cells[3].text, 'de_DE')
 
-                transactions.append(model.Payment(date, amount, payee, memo))
+                transactions.append(
+                        model.Payment(date, amount, payee=payee, memo=memo))
             except ValueError as e:
                 logger.warning(
                         'Skipping invalid row: %s. Error: %s' % (row.text, e))

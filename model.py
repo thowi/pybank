@@ -97,6 +97,9 @@ class Payment(Transaction):
     @type amount: num
     @param amount: The amount of the payment.
 
+    @type payer: unicode or None
+    @param payer: The payer of the payment, if any.
+
     @type payee: unicode or None
     @param payee: The payee of the payment, if any.
 
@@ -106,13 +109,19 @@ class Payment(Transaction):
     @type category: unicode or None
     @param category: The category of the payment, if any.
     """
-    def __init__(self, date, amount, payee=None, memo=None, category=None):
+    def __init__(
+            self, date, amount, payer=None, payee=None, memo=None,
+            category=None):
         super(Payment, self).__init__(date, amount, memo, category)
+        self.payer = payer
         self.payee = payee
 
     def __str__(self):
-        return 'Date: %s. Amount: %.2f. Payee: %s. Memo: %s. Category: %s.' % (
-                self.date, self.amount, self.payee, self.memo, self.category)
+        return (
+                'Date: %s. Amount: %.2f. Payer: %s. Payee: %s. Memo: %s. '
+                'Category: %s.' % (
+                        self.date, self.amount, self.payer, self.payee,
+                        self.memo, self.category))
 
 
 class InvestmentSecurityTransaction(Transaction):
