@@ -276,7 +276,7 @@ class InteractiveBrokers(download.bank.Bank):
             # TODO: Find out the main currency/account. Don't just hardcode
             # CHF.
             transactions_by_currency['CHF'].append(model.InvestmentMiscExpense(
-                    date, symbol, commissions, 'Forex commissions'))
+                    date, commissions, symbol=symbol, memo='Forex commissions'))
 
         return transactions_by_currency
 
@@ -295,11 +295,11 @@ class InteractiveBrokers(download.bank.Bank):
             memo = description
             if amount < 0:
                 transaction = model.InvestmentMiscExpense(
-                       date, symbol, amount, memo)
+                       date, amount, symbol=symbol, memo=memo)
             else:
                 # Possibly a correction for previous withholding tax.
                 transaction = model.InvestmentMiscIncome(
-                       date, symbol, amount, memo)
+                       date, amount, symbol=symbol, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -355,7 +355,7 @@ class InteractiveBrokers(download.bank.Bank):
             memo = description
             symbol = ''
             transaction = model.InvestmentMiscExpense(
-                    date, symbol, amount, memo)
+                    date, amount, symbol=symbol, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency

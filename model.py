@@ -254,11 +254,11 @@ class InvestmentMiscExpense(Transaction):
     @type date: datetime.datetime
     @param date: The date of the dividend.
 
-    @type symbol: str
-    @param symbol: The symbol of the security of the expense.
-
     @type amount: float
     @param amount: The total amount of the expense.
+
+    @type symbol: str or None
+    @param symbol: The symbol of the security of the expense.
 
     @type memo: unicode or None
     @param memo: The memo of the expense, if any.
@@ -267,7 +267,7 @@ class InvestmentMiscExpense(Transaction):
     @param category: The category of the expense, if any.
     """
     def __init__(
-            self, date, symbol, amount, memo=None, category=None):
+            self, date, amount, symbol=None, memo=None, category=None):
         super(InvestmentMiscExpense, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -279,11 +279,11 @@ class InvestmentMiscIncome(Transaction):
     @type date: datetime.datetime
     @param date: The date of the dividend.
 
-    @type symbol: str
-    @param symbol: The symbol of the security of the dividend.
-
     @type amount: float
     @param amount: The total amount of the dividend.
+
+    @type symbol: str or None
+    @param symbol: The symbol of the security of the income.
 
     @type memo: unicode or None
     @param memo: The memo of the dividend, if any.
@@ -292,7 +292,7 @@ class InvestmentMiscIncome(Transaction):
     @param category: The category of the dividend, if any.
     """
     def __init__(
-            self, date, symbol, amount, memo=None, category=None):
+            self, date, amount, symbol=None, memo=None, category=None):
         super(InvestmentMiscIncome, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol

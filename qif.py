@@ -219,7 +219,7 @@ def serialize_investment_transaction(transaction, action):
         fields.append(ITEMS['memo'] + format_memo_(transaction.memo))
     if transaction.category:
         fields.append(ITEMS['category'] + transaction.category)
-    if hasattr(transaction, 'symbol'):
+    if hasattr(transaction, 'symbol') and transaction.symbol is not None:
         fields.append(INVESTMENT_ITEMS['security'] + transaction.symbol)
     if hasattr(transaction, 'quantity'):
         fields.append(
