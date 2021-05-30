@@ -18,6 +18,7 @@ import sys
 import importer.dkb
 import importer.ib
 import importer.postfinance
+import importer.revolut
 import qif
 
 IMPORTER_BY_NAME = {
@@ -27,6 +28,7 @@ IMPORTER_BY_NAME = {
     'postfinance-checking': importer.postfinance.PostFinanceCheckingImporter,
     'postfinance-credit-card':
             importer.postfinance.PostFinanceCreditCardImporter,
+    'revolut': importer.revolut.RevolutImporter,
 }
 LOG_FORMAT = '%(message)s'
 LOG_FORMAT_DEBUG = '%(levelname)s %(name)s: %(message)s'
