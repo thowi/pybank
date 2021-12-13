@@ -5,7 +5,7 @@ import logging
 import importer
 import model
 
-DATE_FORMAT = '%b %d, %Y'
+DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class RevolutImporter(importer.Importer):
 
     def import_transactions(self, file=None, filename=None, currency=None):
         with importer.open_input_file(file, filename) as file:
-            reader = csv.reader(file, delimiter=';', quotechar='"')
+            reader = csv.reader(file, delimiter=',', quotechar='"')
 
             # Read header.
             headers_row = next(reader)
@@ -24,23 +24,27 @@ class RevolutImporter(importer.Importer):
             # Get transactions.
             transactions = []
             for row in reader:
-                if len(row) < 9 or row[1] == 'No Transactions':
+                if len(row) < 10:
                     continue
                 row = [c.strip() if c is not None else None for c in row]
-                date = datetime.datetime.strptime(row[0], DATE_FORMAT)
-                description = row[1]
-                debit = importer.parse_decimal_number(row[2], 'en_GB') \
-                        if row[2] else None
-                credit = importer.parse_decimal_number(row[3], 'en_GB') \
-                        if row[3] else None
-                exchange_out = row[4]
-                exchange_in = row[5]
-                balance_str = row[6]
-                category = row[7]
-                notes = row[8]
+                date = datetime.datetime.strptime(row[3], DATE_TIME_FORMAT)
+                description = row[4]
+                amount = importer.parse_decimal_number(row[5], 'en_GB') \
+                        if row[5] else None
+                fee = importer.parse_decimal_number(row[6], 'en_GB') \
+                        if row[6] else None
+                curr = row[7]
+                if currency != None and currency != curr:
+                    logger.debug("Skipping transaction with wrong currency: " +
+                            str(row))
+                    continue
+                state = row[8]
+                balance = importer.parse_decimal_number(row[9], 'en_GB') \
+                        if row[9] else None
+                if state != 'COMPLETED':
+                    logger.debug("Skipping incomplete transaction: " + str(row))
 
-                amount = credit if credit else -debit
-                memo_parts = (description, exchange_in, exchange_out, notes)
+                memo_parts = (description, 'Fee: %.2f' % fee if fee else None)
                 memo = '. '.join(filter(bool, memo_parts))
 
                 transactions.append(model.Payment(date, amount, memo=memo))

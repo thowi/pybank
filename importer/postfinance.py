@@ -50,7 +50,7 @@ class PostFinanceCreditCardImporter(importer.Importer):
 
     _DATE_FORMAT = '%Y-%m-%d'
 
-    def import_transactions(self, file=None, filename=None):
+    def import_transactions(self, file=None, filename=None, currency=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
             reader = csv.reader(file, delimiter=';', quotechar='"')
 
@@ -70,7 +70,7 @@ class PostFinanceCreditCardImporter(importer.Importer):
                 memo =  importer.normalize_text(row[1].strip())
                 credit = float(row[2]) if row[2] else None
                 debit = float(row[3]) if row[3] else None
-                amount = credit if credit else debit
+                amount = credit if credit else -debit
                 transactions.append(model.Payment(date, amount, memo=memo))
             logger.debug("Imported %d transactions." % len(transactions))
             return transactions

@@ -54,7 +54,7 @@ class DkbCreditCardImporter(importer.Importer):
     """Importer for DKB credit cards (http://www.dkb.de/).
     """
 
-    def import_transactions(self, file=None, filename=None):
+    def import_transactions(self, file=None, filename=None, currency=None):
         with importer.open_input_file(file, filename, 'iso-8859-1') as file:
             reader = csv.reader(file, delimiter=';', quotechar='"')
 
@@ -80,8 +80,7 @@ class DkbCreditCardImporter(importer.Importer):
                 date = datetime.datetime.strptime(receipt_date, DATE_FORMAT)
                 memo =  importer.normalize_text(row[3].strip())
                 amount = importer.parse_decimal_number(row[4], 'de_DE')
-                orig_amount = importer.parse_decimal_number(row[5], 'de_DE') \
-                        if row[5] else None
+                orig_amount = row[5] if row[5] else None
                 if orig_amount:
                     memo = memo + '. Original amount: ' + orig_amount + '.'
                 transactions.append(model.Payment(date, amount, memo=memo))

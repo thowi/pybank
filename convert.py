@@ -49,7 +49,7 @@ class Usage(Exception):
     Options:
     [-h|--help]
     [-i importer|--importer=importer]
-    [-c currency|--currency=USD]       Filters the transaction for a currency.
+    [-c currency|--currency=USD]       Filters the transactions for a currency.
     [-d|--debug]
     """
     def __init__(self, msg=''):
