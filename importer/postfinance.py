@@ -63,6 +63,11 @@ def _process_csv(file=None, filename=None):
         
         return metadata, rows
 
+
+def _parse_float(string):
+    return float(string.replace('\'', ''))
+
+
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
     def import_transactions(self, file=None, filename=None, currency=None):
@@ -78,8 +83,9 @@ class _PostFinanceImporter(importer.Importer):
             date_str = row.get('Buchungsdatum') or row.get('Datum')
             date = _parse_date(date_str)
             
-            credit = float(row[credit_col]) if row[credit_col] else None
-            debit = -abs(float(row[debit_col])) if row[debit_col] else None
+            credit = _parse_float(row[credit_col]) if row[credit_col] else None
+            debit = -abs(_parse_float(row[debit_col])) if row[debit_col] \
+                    else None
             amount = credit if credit else debit
             
             memo_str = row.get('Buchungsdetails') or row.get('Bezeichnung') or \
