@@ -1,4 +1,5 @@
 import codecs
+import csv
 import locale
 import logging
 import re
@@ -115,3 +116,50 @@ def open_input_file(file=None, filename=None, encoding=None):
         return codecs.open(filename, 'r', encoding)
     else:
         raise Exception('Either file or filename must be specified.')
+
+
+def read_csv_with_header(file=None, filename=None):
+    """Processes a CSV file with a header and returns metadata and transactions.
+
+    Some CSV files are a bit special and have a multi-line header, body, and
+    perhaps a footer.
+
+    Using this intermediate data structure allows for easier processing of some
+    CSV files.
+
+    @type file: io.IOBase or None
+    @param file: The file object to read from.
+
+    @type filename: str or None
+    @param filename: The filename to read from.
+
+    @rtype: (dict, [{str: str}])
+    @return: The metadata as a dict and the rows as a list of dicts, each
+    mapping from the columen name to the value (similar to `DictReader`).
+    """
+    with open_input_file(file, filename) as file:
+        reader = csv.reader(file, delimiter=';', quotechar='"')
+        # Read metadata.
+        metadata = {}
+        col_names = None
+        rows = []
+        for row in reader:
+            # Skip empty/irrelevant rows.
+            if len(row) < 2:
+                continue
+            
+            # Read metadata.
+            if len(row) == 2 and not col_names:
+                metadata[row[0]] = row[1]
+                continue
+            
+            # Read column names.
+            if not col_names:
+                col_names = row
+                continue
+            
+            # Read transaction rows.
+            rows.append(dict(zip(col_names, row)))
+        
+        return metadata, rows
+

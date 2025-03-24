@@ -1,4 +1,3 @@
-import csv
 import datetime
 import logging
 
@@ -18,52 +17,6 @@ def _parse_date(date_str):
         return datetime.datetime.strptime(date_str, DATE_FORMAT_DE)
 
 
-def _process_csv(file=None, filename=None):
-    """Processes a PostFinance CSV file and returns metadata and transactions.
-
-    The CSV file is a bit special as it has a multi-line header, body, and
-    footer.
-
-    Over time, the format has changed and this function tries to support 
-    different versions of the CSV file.
-
-    @type file: io.IOBase or None
-    @param file: The file object to read from.
-
-    @type filename: str or None
-    @param filename: The filename to read from.
-
-    @rtype: (dict, [{str: str}])
-    @return: The metadata as a dict and the rows as a list of dicts, each
-    mapping from the columen name to the value (similar to `DictReader`).
-    """
-    with importer.open_input_file(file, filename) as file:
-        reader = csv.reader(file, delimiter=';', quotechar='"')
-        # Read metadata.
-        metadata = {}
-        col_names = None
-        rows = []
-        for row in reader:
-            # Skip empty/irrelevant rows.
-            if len(row) < 2:
-                continue
-            
-            # Read metadata.
-            if len(row) == 2 and not col_names:
-                metadata[row[0]] = row[1]
-                continue
-            
-            # Read column names.
-            if not col_names:
-                col_names = row
-                continue
-            
-            # Read transaction rows.
-            rows.append(dict(zip(col_names, row)))
-        
-        return metadata, rows
-
-
 def _parse_float(string):
     return float(string.replace('\'', ''))
 
@@ -71,7 +24,7 @@ def _parse_float(string):
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
     def import_transactions(self, file=None, filename=None, currency=None):
-        metadata, rows = _process_csv(file, filename)
+        metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
         currency = 'CHF'
         credit_col = 'Gutschrift in ' + currency
