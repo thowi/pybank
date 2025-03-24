@@ -63,7 +63,6 @@ class Usage(Exception):
 
 def _parse_args(argv):
     importer_name = None
-    input_filename = None
     currency = None
     debug = False
 

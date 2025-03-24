@@ -5,72 +5,101 @@ import logging
 import importer
 import model
 
-DATE_FORMAT = '%Y-%m-%d'
+DATE_FORMAT_ISO = '%Y-%m-%d'
+DATE_FORMAT_DE = '%d.%m.%Y'
 
 logger = logging.getLogger(__name__)
 
 
-class PostFinanceCheckingImporter(importer.Importer):
+def _parse_date(date_str):
+    try:
+        return datetime.datetime.strptime(date_str, DATE_FORMAT_ISO)
+    except ValueError:
+        return datetime.datetime.strptime(date_str, DATE_FORMAT_DE)
+
+
+def _process_csv(file=None, filename=None):
+    """Processes a PostFinance CSV file and returns metadata and transactions.
+
+    The CSV file is a bit special as it has a multi-line header, body, and
+    footer.
+
+    Over time, the format has changed and this function tries to support 
+    different versions of the CSV file.
+
+    @type file: io.IOBase or None
+    @param file: The file object to read from.
+
+    @type filename: str or None
+    @param filename: The filename to read from.
+
+    @rtype: (dict, [{str: str}])
+    @return: The metadata as a dict and the rows as a list of dicts, each
+    mapping from the columen name to the value (similar to `DictReader`).
+    """
+    with importer.open_input_file(file, filename) as file:
+        reader = csv.reader(file, delimiter=';', quotechar='"')
+        # Read metadata.
+        metadata = {}
+        col_names = None
+        rows = []
+        for row in reader:
+            # Skip empty/irrelevant rows.
+            if len(row) < 2:
+                continue
+            
+            # Read metadata.
+            if len(row) == 2 and not col_names:
+                metadata[row[0]] = row[1]
+                continue
+            
+            # Read column names.
+            if not col_names:
+                col_names = row
+                continue
+            
+            # Read transaction rows.
+            rows.append(dict(zip(col_names, row)))
+        
+        return metadata, rows
+
+class _PostFinanceImporter(importer.Importer):
+    # This base method is generic enough for both checking and credit card.
+    def import_transactions(self, file=None, filename=None, currency=None):
+        metadata, rows = _process_csv(file, filename)
+        # TODO: Support different currencies.
+        currency = 'CHF'
+        credit_col = 'Gutschrift in ' + currency
+        debit_col = 'Lastschrift in ' + currency
+
+        # Get transactions.
+        transactions = []
+        for row in rows:
+            date_str = row.get('Buchungsdatum') or row.get('Datum')
+            date = _parse_date(date_str)
+            
+            credit = float(row[credit_col]) if row[credit_col] else None
+            debit = -abs(float(row[debit_col])) if row[debit_col] else None
+            amount = credit if credit else debit
+            
+            memo_str = row.get('Buchungsdetails') or row.get('Bezeichnung') or \
+                    row.get('Avisierungstext')
+            memo = importer.normalize_text(memo_str)
+
+            # Skip "Total" row.
+            if memo == 'Total' and not amount:
+                continue
+            
+            transactions.append(model.Payment(date, amount, memo=memo))
+        logger.info("Imported %d transactions." % len(transactions))
+        return transactions
+
+
+class PostFinanceCheckingImporter(_PostFinanceImporter):
     """Importer for PostFinance checking accounts (http://www.postfincance.ch/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
-        with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            reader = csv.reader(file, delimiter=';', quotechar='"')
 
-            # Read header.
-            from_date_row = next(reader)
-            to_date_row = next(reader)
-            types_row = next(reader)
-            account_row = next(reader)
-            currency_row = next(reader)
-            currency = currency_row[1]
-            headers_row = next(reader)
-
-            # Get transactions.
-            transactions = []
-            for row in reader:
-                if len(row) < 6:
-                    continue
-                settled_date = row[0]
-                memo = importer.normalize_text(row[1].strip())
-                credit = float(row[2]) if row[2] else None
-                debit = float(row[3]) if row[3] else None
-                value_date = row[4]
-                date = datetime.datetime.strptime(settled_date, DATE_FORMAT)
-                amount = credit if credit else debit
-                transactions.append(model.Payment(date, amount, memo=memo))
-            logger.debug("Imported %d transactions." % len(transactions))
-            return transactions
-
-
-class PostFinanceCreditCardImporter(importer.Importer):
+class PostFinanceCreditCardImporter(_PostFinanceImporter):
     """Importer for PostFinance credit cards (http://www.postfincance.ch/).
     """
-
-    _DATE_FORMAT = '%Y-%m-%d'
-
-    def import_transactions(self, file=None, filename=None, currency=None):
-        with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            reader = csv.reader(file, delimiter=';', quotechar='"')
-
-            # Read header.
-            card_account_row = next(reader)
-            card_row = next(reader)
-            date_range_row = next(reader)
-            headers_row = next(reader)
-
-            # Get transactions.
-            transactions = []
-            for row in reader:
-                print(row)
-                if len(row) != 4:
-                    continue
-                date = datetime.datetime.strptime(row[0], DATE_FORMAT)
-                memo =  importer.normalize_text(row[1].strip())
-                credit = float(row[2]) if row[2] else None
-                debit = float(row[3]) if row[3] else None
-                amount = credit if credit else -debit
-                transactions.append(model.Payment(date, amount, memo=memo))
-            logger.debug("Imported %d transactions." % len(transactions))
-            return transactions

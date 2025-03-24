@@ -1,11 +1,17 @@
 import codecs
 import locale
+import logging
 import re
 import string
 import sys
 
+import chardet
+
 
 WHITESPACE_PATTERN = re.compile(r' +')
+
+logging.getLogger('chardet.charsetprober').setLevel(logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 class Importer(object):
@@ -86,7 +92,23 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def open_input_file(file=None, filename=None, encoding='utf-8'):
+def _detect_encoding(file=None, filename=None):
+    if file is None and filename is not None:
+        file = open(filename, 'rb')
+    rawdata = file.read()
+    file.seek(0)
+    result = chardet.detect(rawdata)
+    encoding = result['encoding'] if result['confidence'] > 0.5 else None
+    if encoding:
+        logger.debug('Detected encoding: %s' % encoding)
+        return encoding
+    else:
+        logger.warning('Failed to detect encoding. Falling back to utf-8.')
+        return 'utf-8'
+
+
+def open_input_file(file=None, filename=None, encoding=None):
+    encoding = _detect_encoding(file, filename)
     if file:
         return codecs.getreader(encoding)(sys.stdin.detach())
     elif filename:
