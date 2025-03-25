@@ -29,6 +29,7 @@ class _PostFinanceImporter(importer.Importer):
         currency = 'CHF'
         credit_col = 'Gutschrift in ' + currency
         debit_col = 'Lastschrift in ' + currency
+        category_col = 'Kategorie'
 
         # Get transactions.
         transactions = []
@@ -46,11 +47,14 @@ class _PostFinanceImporter(importer.Importer):
                     row.get('Avisierungstext')
             memo = importer.normalize_text(memo_str)
 
+            category = row.get(category_col)
+            
             # Skip "Total" row.
             if memo == 'Total' and not amount:
                 continue
             
-            transactions.append(model.Payment(date, amount, memo=memo))
+            transactions.append(
+                model.Payment(date, amount, memo=memo, category=category))
         logger.info("Imported %d transactions." % len(transactions))
         return transactions
 
