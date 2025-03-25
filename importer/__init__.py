@@ -55,6 +55,8 @@ def normalize_text(text):
     @rtype: unicode
     @return: A normalized version of the input text.
     """
+    if text is None:
+        return None
     text = WHITESPACE_PATTERN.sub(' ', text)
     lines = []
     for line in text.splitlines():
@@ -144,6 +146,10 @@ def read_csv_with_header(file=None, filename=None):
         col_names = None
         rows = []
         for row in reader:
+            # Remove empty metadata columns.
+            if not col_names:
+                row = [col for col in row if col]
+
             # Skip empty/irrelevant rows.
             if len(row) < 2:
                 continue
@@ -163,3 +169,19 @@ def read_csv_with_header(file=None, filename=None):
         
         return metadata, rows
 
+def get_value(row, keys):
+    """Returns the first value found in the row dict for the given keys.
+    
+    @type row: {str: str}
+    @param row: The row to search.
+
+    @type keys: [str]
+    @param keys: The keys to search for.
+
+    @rtype: str or None
+    @return: The first value found in the row for the given keys.
+    """
+    for key in keys:
+        if key in row:
+            return row[key]
+    return None

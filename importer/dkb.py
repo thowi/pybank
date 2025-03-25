@@ -1,88 +1,82 @@
-import csv
 import datetime
 import logging
 
 import importer
 import model
 
-DATE_FORMAT = '%d.%m.%Y'
+DATE_FORMAT_LONG = '%d.%m.%Y'
+DATE_FORMAT_SHORT = '%d.%m.%y'
 
 logger = logging.getLogger(__name__)
 
 
-class DkbCheckingImporter(importer.Importer):
+def _parse_date(date_str):
+    try:
+        return datetime.datetime.strptime(date_str, DATE_FORMAT_LONG)
+    except ValueError:
+        return datetime.datetime.strptime(date_str, DATE_FORMAT_SHORT)
+
+
+class _DkbImporter(importer.Importer):
+    # This base method is generic enough for both checking and credit card.
+    def import_transactions(self, file=None, filename=None, currency=None):
+        metadata, rows = importer.read_csv_with_header(file, filename)
+        # TODO: Support different currencies.
+        date_cols = 'Buchungstag', 'Buchungsdatum', 'Belegdatum'
+        payee_payer_col = 'Auftraggeber / Begünstigter'
+        payer_col = 'Zahlungspflichtige*r'
+        payee_col = 'Zahlungsempfänger*in'
+        acc_col = 'Kontonummer'
+        routing_col = 'BLZ'
+        amount_cols = 'Betrag (EUR)', 'Betrag (€)'
+        orig_amount_col = 'Ursprünglicher Betrag'
+        memo_cols = (
+                'Verwendungszweck', 'Bezeichnung', 'Avisierungstext',
+                'Beschreibung')
+
+        # Get transactions.
+        transactions = []
+        for row in rows:
+            date_str = importer.get_value(row, date_cols)
+            date = _parse_date(date_str)
+
+            amount_str = importer.get_value(row, amount_cols)
+            amount = importer.parse_decimal_number(amount_str, 'de_DE')
+
+            # Older DKB CSVs have a single column for payee and payer.
+            payer_payee_str = row.get(payee_payer_col)
+            if payer_payee_str:
+                payer_payee = importer.normalize_text(payer_payee_str)
+                if amount < 0:
+                    payee = payer_payee
+                else:
+                    payer = payer_payee
+            else:
+                payer = importer.normalize_text(row.get(payer_col))
+                payee = importer.normalize_text(row.get(payee_col))
+
+            memo_str = importer.get_value(row, memo_cols)
+            memo = importer.normalize_text(memo_str)
+
+            acc = 'Account: ' + row[acc_col] if row.get(acc_col) else None
+            routing = 'Routing: ' + row[routing_col] if row.get(routing_col) \
+                    else None
+            orig_amount = 'Original amount: ' + row[orig_amount_col] \
+                    if row.get(orig_amount_col) else None
+            
+            memo_parts = memo, orig_amount, acc, routing
+            memo = '. '.join(filter(bool, memo_parts))
+
+            transactions.append(
+                model.Payment(date, amount, payer, payee, memo=memo))
+        logger.info("Imported %d transactions." % len(transactions))
+        return transactions
+
+
+class DkbCheckingImporter(_DkbImporter):
     """Importer for DKB checking accounts (http://www.dkb.de/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
-        with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            reader = csv.reader(file, delimiter=';', quotechar='"')
-
-            # Read header.
-            account_row = next(reader)
-            next(reader)
-            from_date_row = next(reader)
-            to_date_row = next(reader)
-            balance_row = next(reader)
-            next(reader)
-            headers_row = next(reader)
-
-            # Get transactions.
-            transactions = []
-            for row in reader:
-                if len(row) < 8:
-                    continue
-                settled_date = row[0]
-                value_date = row[1]
-                booking_type = row[2]
-                counterpart = importer.normalize_text(row[3])
-                memo = importer.normalize_text(row[4])
-                counterpart_account = row[5]
-                counterpart_routing = row[6]
-                amount = importer.parse_decimal_number(row[7], 'de_DE')
-                date = datetime.datetime.strptime(settled_date, DATE_FORMAT)
-                memo_parts = (
-                        memo, counterpart, counterpart_account,
-                        counterpart_routing)
-                memo = '. '.join(filter(bool, memo_parts))
-                transactions.append(model.Payment(date, amount, memo=memo))
-            logger.debug("Imported %d transactions." % len(transactions))
-            return transactions
-
-
-class DkbCreditCardImporter(importer.Importer):
+class DkbCreditCardImporter(_DkbImporter):
     """Importer for DKB credit cards (http://www.dkb.de/).
     """
-
-    def import_transactions(self, file=None, filename=None, currency=None):
-        with importer.open_input_file(file, filename, 'iso-8859-1') as file:
-            reader = csv.reader(file, delimiter=';', quotechar='"')
-
-            # Read header.
-            card_row = next(reader)
-            next(reader)
-            from_date_row = next(reader)
-            to_date_row = next(reader)
-            balance_row = next(reader)
-            date_row = next(reader)
-            next(reader)
-            headers_row = next(reader)
-
-            # Get transactions.
-            transactions = []
-            for row in reader:
-                print(row)
-                if len(row) < 5:
-                    continue
-                value_missing_from_balance = row[0]
-                value_date = row[1]
-                receipt_date = row[2]
-                date = datetime.datetime.strptime(receipt_date, DATE_FORMAT)
-                memo =  importer.normalize_text(row[3].strip())
-                amount = importer.parse_decimal_number(row[4], 'de_DE')
-                orig_amount = row[5] if row[5] else None
-                if orig_amount:
-                    memo = memo + '. Original amount: ' + orig_amount + '.'
-                transactions.append(model.Payment(date, amount, memo=memo))
-            logger.debug("Imported %d transactions." % len(transactions))
-            return transactions
