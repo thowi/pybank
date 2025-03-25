@@ -13,11 +13,11 @@ class Bank(object):
 class Account(object):
     """An account.
 
-    @param name: Account name.
-    @param currency: Currency symbol (usually 3-letter uppercase).
-    @param balance: Balance.
-    @param balance_date: Balance date.
-    @param transactions: The transactions.
+    :param name: Account name.
+    :param currency: Currency symbol (usually 3-letter uppercase).
+    :param balance: Balance.
+    :param balance_date: Balance date.
+    :param transactions: The transactions.
     """
     def __init__(
             self,
@@ -63,10 +63,10 @@ class CreditCard(Account):
 class Transaction(object):
     """A transaction.
 
-    @param date: The date of the transaction.
-    @param amount: The amount of the transaction.
-    @param memo: The memo of the transaction, if any.
-    @param category: The category of the transaction, if any.
+    :param date: The date of the transaction.
+    :param amount: The amount of the transaction.
+    :param memo: The memo of the transaction, if any.
+    :param category: The category of the transaction, if any.
     """
     def __init__(
             self,
@@ -87,12 +87,12 @@ class Transaction(object):
 class Payment(Transaction):
     """A payment.
 
-    @param date: The date of the payment.
-    @param amount: The amount of the payment.
-    @param payer: The payer of the payment, if any.
-    @param payee: The payee of the payment, if any.
-    @param memo: The memo of the payment, if any.
-    @param category: The category of the payment, if any.
+    :param date: The date of the payment.
+    :param amount: The amount of the payment.
+    :param payer: The payer of the payment, if any.
+    :param payee: The payee of the payment, if any.
+    :param memo: The memo of the payment, if any.
+    :param category: The category of the payment, if any.
     """
     def __init__(
             self,
@@ -119,14 +119,14 @@ class InvestmentSecurityTransaction(Transaction):
 
     Base class for SecurityPurchase and SecuritySale.
 
-    @param date: The date of the transaction.
-    @param symbol: The symbol of the security of the transaction.
-    @param quantity: The quantity of the transaction.
-    @param price: The price of the security of the transaction.
-    @param commissions: The commissions of the transaction.
-    @param amount: The total amount of the transaction incl. commissions.
-    @param memo: The memo of the transaction, if any.
-    @param category: The category of the transaction, if any.
+    :param date: The date of the transaction.
+    :param symbol: The symbol of the security of the transaction.
+    :param quantity: The quantity of the transaction.
+    :param price: The price of the security of the transaction.
+    :param commissions: The commissions of the transaction.
+    :param amount: The total amount of the transaction incl. commissions.
+    :param memo: The memo of the transaction, if any.
+    :param category: The category of the transaction, if any.
     """
     def __init__(
             self,
@@ -189,11 +189,11 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
 class InvestmentDividend(Transaction):
     """A dividend.
 
-    @param date: The date of the dividend.
-    @param symbol: The symbol of the security of the dividend.
-    @param amount: The total amount of the dividend.
-    @param memo: The memo of the dividend, if any.
-    @param category: The category of the dividend, if any.
+    :param date: The date of the dividend.
+    :param symbol: The symbol of the security of the dividend.
+    :param amount: The total amount of the dividend.
+    :param memo: The memo of the dividend, if any.
+    :param category: The category of the dividend, if any.
     """
     def __init__(
             self,
@@ -210,10 +210,10 @@ class InvestmentDividend(Transaction):
 class InvestmentInterestExpense(Transaction):
     """An interest expense.
 
-    @param date: The date of the dividend.
-    @param amount: The total amount of the dividend.
-    @param memo: The memo of the dividend, if any.
-    @param category: The category of the dividend, if any.
+    :param date: The date of the dividend.
+    :param amount: The total amount of the dividend.
+    :param memo: The memo of the dividend, if any.
+    :param category: The category of the dividend, if any.
     """
     def __init__(
             self,
@@ -228,10 +228,10 @@ class InvestmentInterestExpense(Transaction):
 class InvestmentInterestIncome(Transaction):
     """An interest income.
 
-    @param date: The date of the dividend.
-    @param amount: The total amount of the dividend.
-    @param memo: The memo of the dividend, if any.
-    @param category: The category of the dividend, if any.
+    :param date: The date of the dividend.
+    :param amount: The total amount of the dividend.
+    :param memo: The memo of the dividend, if any.
+    :param category: The category of the dividend, if any.
     """
     def __init__(
             self,
@@ -246,11 +246,11 @@ class InvestmentInterestIncome(Transaction):
 class InvestmentMiscExpense(Transaction):
     """A misc expense.
 
-    @param date: The date of the dividend.
-    @param amount: The total amount of the expense.
-    @param symbol: The symbol of the security of the expense.
-    @param memo: The memo of the expense, if any.
-    @param category: The category of the expense, if any.
+    :param date: The date of the dividend.
+    :param amount: The total amount of the expense.
+    :param symbol: The symbol of the security of the expense.
+    :param memo: The memo of the expense, if any.
+    :param category: The category of the expense, if any.
     """
     def __init__(
             self,
@@ -267,11 +267,11 @@ class InvestmentMiscExpense(Transaction):
 class InvestmentMiscIncome(Transaction):
     """A misc income.
 
-    @param date: The date of the dividend.
-    @param amount: The total amount of the dividend.
-    @param symbol: The symbol of the security of the income.
-    @param memo: The memo of the dividend, if any.
-    @param category: The category of the dividend, if any.
+    :param date: The date of the dividend.
+    :param amount: The total amount of the dividend.
+    :param symbol: The symbol of the security of the income.
+    :param memo: The memo of the dividend, if any.
+    :param category: The category of the dividend, if any.
     """
     def __init__(
             self,

@@ -25,7 +25,7 @@ class Importer(object):
     def __init__(self, debug: bool = False):
         """Create a new importer.
 
-        @param debug: Whether to run in debug mode.
+        :param debug: Whether to run in debug mode
         """
         self._debug = debug
 
@@ -36,10 +36,10 @@ class Importer(object):
             currency: Optional[str] = None) -> List[model.Transaction]:
         """Imports transactions from a file or filename and returns Model data.
 
-        @param file: The file object to read from.
-        @param filename: The filename to read from.
-        @param currency: Optionally filter the transactions for a currency.
-        @return: The imported transactions.
+        :param file: The file object to read from
+        :param filename: The filename to read from
+        :param currency: Optionally filter the transactions for a currency
+        :return: The imported transactions
         """
         raise NotImplementedError()
 
@@ -49,8 +49,8 @@ def normalize_text(text: Optional[str]) -> Optional[str]:
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
 
-    @param text: The input text.
-    @return: A normalized version of the input text.
+    :param text: The input text.
+    :return: A normalized version of the input text.
     """
     if text is None:
         return None
@@ -69,10 +69,10 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
 
     Can also handle thousands separators.
 
-    @param number_string: The decimal number as a string.
-    @param lang: The locale of the format.
-    @return: The parsed number.
-    @raise ValueError: If the string is not a valid decimal number.
+    :param number_string: The decimal number as a string.
+    :param lang: The locale of the format.
+    :return: The parsed number.
+    :raises ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
     locale.setlocale(locale.LC_ALL, lang)
@@ -128,9 +128,9 @@ def read_csv_with_header(
     Using this intermediate data structure allows for easier processing of some
     CSV files.
 
-    @param file: The file object to read from.
-    @param filename: The filename to read from.
-    @return: The metadata as a dict and the rows as a list of dicts, each
+    :param file: The file object to read from.
+    :param filename: The filename to read from.
+    :return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
     with open_input_file(file, filename) as file:
@@ -166,9 +166,9 @@ def read_csv_with_header(
 def get_value(row: Dict[str, str], keys: List[str]) -> Optional[str]:
     """Returns the first value found in the row dict for the given keys.
     
-    @param row: The row to search.
-    @param keys: The keys to search for.
-    @return: The first value found in the row for the given keys.
+    :param row: The row to search.
+    :param keys: The keys to search for.
+    :return: The first value found in the row for the given keys.
     """
     for key in keys:
         if key in row:

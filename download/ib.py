@@ -556,8 +556,8 @@ class InteractiveBrokers(download.bank.Bank):
         """Splits a combined account name in the form ACCNAME.CUR into the
         account name and currency parts.
 
-        @param account_name: The combined account name in the form ACCNAME.CUR.
-        @returns: The account name and currency parts as a tuple.
+        :param account_name: The combined account name in the form ACCNAME.CUR.
+        :returns: The account name and currency parts as a tuple.
         """
         last_dot = account_name.rfind('.')
         return account_name[:last_dot], account_name[last_dot + 1:]

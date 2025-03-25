@@ -24,8 +24,8 @@ def normalize_text(text: str) -> str:
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
 
-    @param text: The input text.
-    @return: A normalized version of the input text.
+    :param text: The input text
+    :return: A normalized version of the input text
     """
     text = WHITESPACE_PATTERN.sub(' ', text)
     lines = []
@@ -42,10 +42,10 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
 
     Can also handle thousands separators.
 
-    @param number_string: The decimal number as a string.
-    @param lang: The locale of the format.
-    @return: The parsed number.
-    @raise ValueError: If the string is not a valid decimal number.
+    :param number_string: The decimal number as a string.
+    :param lang: The locale of the format.
+    :param: The parsed number.
+    :raises ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
     locale.setlocale(locale.LC_ALL, lang)
@@ -128,8 +128,8 @@ def get_element_or_none(
         lookup_callable: Callable[[], WebElement]) -> Optional[WebElement]:
     """Returns the element for the lookup or None if not found.
 
-    @param lookup_callable: The lookup to execute.
-    @return: The element for the lookup or None if not found.
+    :param lookup_callable: The lookup to execute
+    :return: The element for the lookup or None if not found
     """
     try:
         return lookup_callable()
@@ -141,8 +141,8 @@ def is_element_present(lookup_callable: Callable[[], WebElement]) -> bool:
     """Returns whether the lookup was successful or a NoSuchElementException was
     caught.
 
-    @param lookup_callable: The lookup to execute.
-    @return: Returns whether the lookup was successful.
+    :param lookup_callable: The lookup to execute
+    :return: Returns whether the lookup was successful
     """
     return get_element_or_none(lookup_callable) is not None
 
@@ -151,8 +151,8 @@ def is_element_displayed(lookup_callable: Callable[[], WebElement]) -> bool:
     """Returns whether the lookup was successful, the element was found, and it
     is displayed.
 
-    @param lookup_callable: The lookup to execute.
-    @return: Returns whether the was found and is displayed.
+    :param lookup_callable: The lookup to execute
+    :return: Returns whether the was found and is displayed
     """
     element = get_element_or_none(lookup_callable)
     return element is not None and element.is_displayed()
@@ -164,8 +164,8 @@ def wait_for_element_to_appear_and_disappear(
 
     If the element doesn't appear it is assumed to be gone already.
 
-    @param lookup_callable: The lookup to find the element.
-    @param timeout_s: The timeout to wait for the element to disappear.
+    :param lookup_callable: The lookup to find the element.
+    :param timeout_s: The timeout to wait for the element to disappear.
     """
     element_displayed = lambda: is_element_displayed(lookup_callable)
     try:
@@ -189,10 +189,10 @@ def wait_until(
         raise_exceptions: bool = False) -> None:
     """Waits for the condition to become true.
 
-    @param condition: The condition to check periodically.
-    @param timeout_s: The timeout.
-    @param sleep_s: The time to sleep between the tries.
-    @param raise_exceptions: Whether to raise any caught exceptions.
+    :param condition: The condition to check periodically.
+    :param timeout_s: The timeout.
+    :param sleep_s: The time to sleep between the tries.
+    :param raise_exceptions: Whether to raise any caught exceptions.
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout_s)
     while datetime.datetime.now() < end_time:

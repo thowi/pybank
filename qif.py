@@ -93,8 +93,8 @@ class SerializationError(Exception):
 def serialize_account(account: model.Account) -> str:
     """Serializes an account to the QIF format.
 
-    @param account: The account to serialize
-    @return: The QIF serialization of the account.
+    :param account: The account to serialize
+    :return: The QIF serialization of the account.
     """
     account_fields = []
 
@@ -131,9 +131,9 @@ def serialize_account(account: model.Account) -> str:
 def serialize_transaction(transaction: model.Transaction) -> str:
     """Serializes a transaction to the QIF format.
 
-    @param transaction: The transaction to serialize
-    @return: The QIF serialization of the transaction.
-    @raise SerializationError: For unknown transaction types.
+    :param transaction: The transaction to serialize
+    :return: The QIF serialization of the transaction.
+    :raises SerializationError: For unknown transaction types.
     """
     if isinstance(transaction, model.Payment):
         return serialize_payment(transaction)
@@ -167,8 +167,8 @@ def serialize_transaction(transaction: model.Transaction) -> str:
 def serialize_payment(payment: model.Payment) -> str:
     """Serializes a payment to the QIF format.
 
-    @param payment: The payment to serialize
-    @return: The QIF serialization of the payment.
+    :param payment: The payment to serialize
+    :return: The QIF serialization of the payment.
     """
     fields = []
 
@@ -190,9 +190,9 @@ def serialize_investment_transaction(
         transaction: model.InvestmentTransaction, action: str) -> str:
     """Serializes a investment transaction to the QIF format.
 
-    @param transaction: The investment transaction to serialize.
-    @param action: The "action" of the transaction to serialize.
-    @return: The QIF serialization of the investment transaction.
+    :param transaction: The investment transaction to serialize.
+    :param action: The "action" of the transaction to serialize.
+    :return: The QIF serialization of the investment transaction.
     """
     fields = []
 
