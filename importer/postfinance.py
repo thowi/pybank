@@ -36,8 +36,9 @@ class _PostFinanceImporter(importer.Importer):
             date_str = row.get('Buchungsdatum') or row.get('Datum')
             date = _parse_date(date_str)
             
-            credit = _parse_float(row[credit_col]) if row[credit_col] else None
-            debit = -abs(_parse_float(row[debit_col])) if row[debit_col] \
+            credit = _parse_float(row[credit_col]) if row.get(credit_col) \
+                    else None
+            debit = -abs(_parse_float(row[debit_col])) if row.get(debit_col) \
                     else None
             amount = credit if credit else debit
             
