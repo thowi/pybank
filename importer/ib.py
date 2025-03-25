@@ -3,6 +3,7 @@ import csv
 import datetime
 import logging
 import re
+from typing import Dict, List, Optional, Any, TextIO
 
 import importer
 import model
@@ -17,7 +18,12 @@ class InteractiveBrokersImporter(importer.Importer):
     """Importer for Interactive Brokers (https://www.interactivebrokers.com/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[TextIO] = None, 
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Transaction]:
+        """Import transactions from IB statement file"""
         with importer.open_input_file(file, filename) as file:
             csv_dict = self._parse_csv_into_dict(file)
 
@@ -43,7 +49,8 @@ class InteractiveBrokersImporter(importer.Importer):
                 len(transactions), currency))
         return transactions
 
-    def _parse_csv_into_dict(self, csvfile):
+    def _parse_csv_into_dict(self, csvfile: TextIO) -> Dict[str, Any]:
+        """Parse CSV file into nested dictionary structure"""
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
         nested_default_dict = lambda: collections.defaultdict(nested_default_dict)
         csv_dict = nested_default_dict()
@@ -220,5 +227,6 @@ class InteractiveBrokersImporter(importer.Importer):
         return transactions_by_currency
 
 
-def _parse_float(string):
+def _parse_float(string: str) -> float:
+    """Parse float value from string"""
     return importer.parse_decimal_number(string, 'en_US')

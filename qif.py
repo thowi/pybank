@@ -90,13 +90,10 @@ class SerializationError(Exception):
     """An error while serializing the data."""
 
 
-def serialize_account(account):
+def serialize_account(account: model.Account) -> str:
     """Serializes an account to the QIF format.
 
-    @type account: model.Account
     @param account: The account to serialize
-
-    @rtype: unicode
     @return: The QIF serialization of the account.
     """
     account_fields = []
@@ -131,15 +128,11 @@ def serialize_account(account):
     return '\n'.join(account_fields)
 
 
-def serialize_transaction(transaction):
+def serialize_transaction(transaction: model.Transaction) -> str:
     """Serializes a transaction to the QIF format.
 
-    @type transaction: model.Transaction
     @param transaction: The transaction to serialize
-
-    @rtype: unicode
     @return: The QIF serialization of the transaction.
-
     @raise SerializationError: For unknown transaction types.
     """
     if isinstance(transaction, model.Payment):
@@ -171,13 +164,10 @@ def serialize_transaction(transaction):
         raise SerializationError('Unknown transaction type: ' + transaction)
 
 
-def serialize_payment(payment):
+def serialize_payment(payment: model.Payment) -> str:
     """Serializes a payment to the QIF format.
 
-    @type payment: model.Payment
     @param payment: The payment to serialize
-
-    @rtype: unicode
     @return: The QIF serialization of the payment.
     """
     fields = []
@@ -196,16 +186,12 @@ def serialize_payment(payment):
     return '\n'.join(fields)
 
 
-def serialize_investment_transaction(transaction, action):
+def serialize_investment_transaction(
+        transaction: model.InvestmentTransaction, action: str) -> str:
     """Serializes a investment transaction to the QIF format.
 
-    @type transaction: model.InvestmentTransaction
     @param transaction: The investment transaction to serialize.
-
-    @type action: str
     @param action: The "action" of the transaction to serialize.
-
-    @rtype: unicode
     @return: The QIF serialization of the investment transaction.
     """
     fields = []
@@ -236,7 +222,7 @@ def serialize_investment_transaction(transaction, action):
     return '\n'.join(fields)
 
 
-def format_memo_(memo):
+def format_memo_(memo: str) -> str:
     lines = []
     for line in memo.splitlines():
         line = line.strip()

@@ -8,8 +8,8 @@ import os.path
 import re
 import tempfile
 import time
+from typing import List, Optional, TextIO
 
-from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
@@ -32,7 +32,11 @@ class InteractiveBrokers(download.bank.Bank):
     _WEBDRIVER_TIMEOUT = 30
     _SESSION_TIMEOUT_S = 30 * 60
 
-    def login(self, username=None, password=None, statements=None):
+    def login(
+            self,
+            username: Optional[str] = None, 
+            password: Optional[str] = None,
+            statements: Optional[List[str]] = None) -> None:
         chrome_options = chrome.options.Options()
         # Download to a custom location. Don't show dialog.
         self._download_dir = tempfile.mkdtemp()
@@ -548,14 +552,11 @@ class InteractiveBrokers(download.bank.Bank):
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
         return displayed
 
-    def _split_account_name(self, account_name):
+    def _split_account_name(self, account_name: str) -> Tuple[str, str]:
         """Splits a combined account name in the form ACCNAME.CUR into the
         account name and currency parts.
 
-        @type account_name: str
         @param account_name: The combined account name in the form ACCNAME.CUR.
-
-        @rtype: (str, str)
         @returns: The account name and currency parts as a tuple.
         """
         last_dot = account_name.rfind('.')

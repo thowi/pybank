@@ -1,6 +1,8 @@
 import csv
 import datetime
+import io
 import logging
+from typing import Optional, List
 
 import importer
 import model
@@ -14,7 +16,11 @@ class SchwabBrokerageImporter(importer.Importer):
     """Importer for Schwab brokerage accounts (http://www.schwab.com/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[io.IOBase] = None,
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Transaction]:
         with importer.open_input_file(file, filename) as file:
             reader = csv.reader(file, delimiter=',', quotechar='"')
 
@@ -60,7 +66,11 @@ class SchwabEacImporter(importer.Importer):
     (http://www.schwab.com/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[io.IOBase] = None,
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Transaction]:
         with importer.open_input_file(file, filename) as file:
             reader = csv.reader(file, delimiter=',', quotechar='"')
 
@@ -77,5 +87,5 @@ class SchwabEacImporter(importer.Importer):
             return transactions
 
 
-def parse_dollar_amount(string):
+def parse_dollar_amount(string: str) -> float:
     return importer.parse_decimal_number(string.replace('$', ''), 'en_US')

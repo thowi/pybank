@@ -1,12 +1,16 @@
 import codecs
 import csv
+import io
 import locale
 import logging
 import re
 import string
 import sys
+from typing import Optional, List, Tuple, Dict, Union
 
 import chardet
+
+import model
 
 
 WHITESPACE_PATTERN = re.compile(r' +')
@@ -18,41 +22,34 @@ logger = logging.getLogger(__name__)
 class Importer(object):
     """Base class for an importer for financial transactions."""
 
-    def __init__(self, debug=False):
+    def __init__(self, debug: bool = False):
         """Create a new importer.
 
-        @type debug: bool
         @param debug: Whether to run in debug mode.
         """
         self._debug = debug
 
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[io.IOBase] = None,
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Transaction]:
         """Imports transactions from a file or filename and returns Model data.
 
-        @type file: io.IOBase or None
         @param file: The file object to read from.
-
-        @type filename: str or None
         @param filename: The filename to read from.
-
-        @type currency: str or None
         @param currency: Optionally filter the transactions for a currency.
-
-        @rtype: [model.Transaction]
         @return: The imported transactions.
         """
         raise NotImplementedError()
 
 
-def normalize_text(text):
+def normalize_text(text: Optional[str]) -> Optional[str]:
     """Returns a normalized version of the input text.
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
 
-    @type text: unicode
     @param text: The input text.
-
-    @rtype: unicode
     @return: A normalized version of the input text.
     """
     if text is None:
@@ -67,20 +64,14 @@ def normalize_text(text):
     return '\n'.join(lines)
 
 
-def parse_decimal_number(number_string, lang):
+def parse_decimal_number(number_string: str, lang: str) -> float:
     """Parses a decimal number string into a float.
 
     Can also handle thousands separators.
 
-    @type number_string: unicode
     @param number_string: The decimal number as a string.
-
-    @type lang: str
     @param lang: The locale of the format.
-
-    @rtype: float
     @return: The parsed number.
-
     @raise ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
@@ -95,7 +86,9 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def _detect_encoding(file=None, filename=None):
+def _detect_encoding(
+        file: Optional[io.IOBase] = None,
+        filename: Optional[str] = None) -> str:
     if file is None and filename is not None:
         file = open(filename, 'rb')
     rawdata = file.read()
@@ -110,7 +103,10 @@ def _detect_encoding(file=None, filename=None):
         return 'utf-8'
 
 
-def open_input_file(file=None, filename=None, encoding=None):
+def open_input_file(
+        file: Optional[io.IOBase] = None,
+        filename: Optional[str] = None,
+        encoding: Optional[str] = None) -> object:
     encoding = _detect_encoding(file, filename)
     if file:
         return codecs.getreader(encoding)(sys.stdin.detach())
@@ -120,7 +116,10 @@ def open_input_file(file=None, filename=None, encoding=None):
         raise Exception('Either file or filename must be specified.')
 
 
-def read_csv_with_header(file=None, filename=None):
+def read_csv_with_header(
+        file: Optional[io.IOBase] = None,
+        filename: Optional[str] = None) \
+        -> Tuple[Dict[str, str], List[Dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 
     Some CSV files are a bit special and have a multi-line header, body, and
@@ -129,13 +128,8 @@ def read_csv_with_header(file=None, filename=None):
     Using this intermediate data structure allows for easier processing of some
     CSV files.
 
-    @type file: io.IOBase or None
     @param file: The file object to read from.
-
-    @type filename: str or None
     @param filename: The filename to read from.
-
-    @rtype: (dict, [{str: str}])
     @return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
@@ -169,16 +163,11 @@ def read_csv_with_header(file=None, filename=None):
         
         return metadata, rows
 
-def get_value(row, keys):
+def get_value(row: Dict[str, str], keys: List[str]) -> Optional[str]:
     """Returns the first value found in the row dict for the given keys.
     
-    @type row: {str: str}
     @param row: The row to search.
-
-    @type keys: [str]
     @param keys: The keys to search for.
-
-    @rtype: str or None
     @return: The first value found in the row for the given keys.
     """
     for key in keys:

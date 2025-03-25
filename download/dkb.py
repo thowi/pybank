@@ -5,6 +5,7 @@ import getpass
 import logging
 import re
 import time
+from typing import Optional, List
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -30,7 +31,11 @@ class DeutscheKreditBank(download.bank.Bank):
     _WEBDRIVER_TIMEOUT = 10
     _SESSION_TIMEOUT_S = 12 * 60
 
-    def login(self, username=None, password=None, statements=None):
+    def login(
+            self, 
+            username: Optional[str] = None,
+            password: Optional[str] = None, 
+            statements: Optional[List[str]] = None) -> None:
         if self._debug:
             self._browser = webdriver.Chrome()
         else:
@@ -85,7 +90,7 @@ class DeutscheKreditBank(download.bank.Bank):
         return download.is_element_present(
                 lambda: self._browser.find_element_by_link_text('Finanzstatus'))
 
-    def logout(self):
+    def logout(self) -> None:
         self._browser.find_element_by_id('logout').click()
         self._browser.quit()
         self._logged_in = False
@@ -93,7 +98,7 @@ class DeutscheKreditBank(download.bank.Bank):
         self.delete_cookies(self._username)
         self._username = None
 
-    def get_accounts(self):
+    def get_accounts(self) -> List[model.Account]:
         self._check_logged_in()
 
         if self._accounts is not None:
@@ -129,7 +134,11 @@ class DeutscheKreditBank(download.bank.Bank):
         logger.info('Found %i accounts.' % len(self._accounts))
         return self._accounts
 
-    def get_transactions(self, account, start, end):
+    def get_transactions(
+            self,
+            account: model.Account,
+            start: datetime.datetime, 
+            end: datetime.datetime) -> List[model.Transaction]:
         is_credit_card = isinstance(account, model.CreditCard)
         if is_credit_card:
             return self._get_credit_card_transactions(account, start, end)

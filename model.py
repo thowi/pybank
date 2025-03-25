@@ -2,6 +2,9 @@
 
 """Bank account model."""
 
+from typing import Optional, Tuple, Union
+import datetime
+
 
 class Bank(object):
     """A bank."""
@@ -10,24 +13,19 @@ class Bank(object):
 class Account(object):
     """An account.
 
-    @type name: unicode
     @param name: Account name.
-
-    @type currency: unicode or None
     @param currency: Currency symbol (usually 3-letter uppercase).
-
-    @type balance: float or None
     @param balance: Balance.
-
-    @type balance_date: datetime.datetime or None
     @param balance_date: Balance date.
-
-    @type transactions: (Transaction,) or None
     @param transactions: The transactions.
     """
     def __init__(
-            self, name, currency=None, balance=None, balance_date=None,
-            transactions=None):
+            self,
+            name: str,
+            currency: Optional[str] = None,
+            balance: Optional[float] = None,
+            balance_date: Optional[datetime.datetime] = None,
+            transactions: Optional[Tuple['Transaction', ...]] = None):
         self.name = name
         self.currency = currency
         self.balance = balance
@@ -37,7 +35,7 @@ class Account(object):
         else:
             self.transactions = ()
 
-    def __str__(self):
+    def __str__(self) -> str:
         repr = [self.name]
         if self.transactions:
             repr.append('%i transactions' % len(self.transactions))
@@ -65,25 +63,23 @@ class CreditCard(Account):
 class Transaction(object):
     """A transaction.
 
-    @type date: datetime.datetime
     @param date: The date of the transaction.
-
-    @type amount: num
     @param amount: The amount of the transaction.
-
-    @type memo: unicode or None
     @param memo: The memo of the transaction, if any.
-
-    @type category: unicode or None
     @param category: The category of the transaction, if any.
     """
-    def __init__(self, date, amount, memo=None, category=None):
+    def __init__(
+            self,
+            date: datetime.datetime,
+            amount: Union[int, float],
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         self.date = date
         self.amount = amount
         self.memo = memo
         self.category = category
 
-    def __str__(self):
+    def __str__(self) -> str:
         return 'Date: %s. Amount: %.2f. Memo: %s. Category: %s.' % (
                 self.date, self.amount, self.memo, self.category)
 
@@ -91,32 +87,26 @@ class Transaction(object):
 class Payment(Transaction):
     """A payment.
 
-    @type date: datetime.datetime
     @param date: The date of the payment.
-
-    @type amount: num
     @param amount: The amount of the payment.
-
-    @type payer: unicode or None
     @param payer: The payer of the payment, if any.
-
-    @type payee: unicode or None
     @param payee: The payee of the payment, if any.
-
-    @type memo: unicode or None
     @param memo: The memo of the payment, if any.
-
-    @type category: unicode or None
     @param category: The category of the payment, if any.
     """
     def __init__(
-            self, date, amount, payer=None, payee=None, memo=None,
-            category=None):
+            self,
+            date: datetime.datetime,
+            amount: Union[int, float],
+            payer: Optional[str] = None,
+            payee: Optional[str] = None,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(Payment, self).__init__(date, amount, memo, category)
         self.payer = payer
         self.payee = payee
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (
                 'Date: %s. Amount: %.2f. Payer: %s. Payee: %s. Memo: %s. '
                 'Category: %s.' % (
@@ -129,33 +119,25 @@ class InvestmentSecurityTransaction(Transaction):
 
     Base class for SecurityPurchase and SecuritySale.
 
-    @type date: datetime.datetime
     @param date: The date of the transaction.
-
-    @type symbol: str
     @param symbol: The symbol of the security of the transaction.
-
-    @type quantity: int
     @param quantity: The quantity of the transaction.
-
-    @type price: float
     @param price: The price of the security of the transaction.
-
-    @type commissions: float
     @param commissions: The commissions of the transaction.
-
-    @type amount: float
     @param amount: The total amount of the transaction incl. commissions.
-
-    @type memo: unicode or None
     @param memo: The memo of the transaction, if any.
-
-    @type category: unicode or None
     @param category: The category of the transaction, if any.
     """
     def __init__(
-            self, date, symbol, quantity, price, commissions, amount, memo=None,
-            category=None):
+            self,
+            date: datetime.datetime,
+            symbol: str,
+            quantity: int,
+            price: float,
+            commissions: float,
+            amount: float,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentSecurityTransaction, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -170,8 +152,15 @@ class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
     See SecurityTransaction for parameters.
     """
     def __init__(
-            self, date, symbol, quantity, price, commissions, amount, memo=None,
-            category=None):
+            self,
+            date: datetime.datetime,
+            symbol: str,
+            quantity: int,
+            price: float,
+            commissions: float,
+            amount: float,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentSecurityPurchase, self).__init__(
                 date, symbol, quantity, price, commissions, amount, memo,
                 category)
@@ -183,8 +172,15 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
     See SecurityTransaction for parameters.
     """
     def __init__(
-            self, date, symbol, quantity, price, commissions, amount, memo=None,
-            category=None):
+            self,
+            date: datetime.datetime,
+            symbol: str,
+            quantity: int,
+            price: float,
+            commissions: float,
+            amount: float, 
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentSecuritySale, self).__init__(
                 date, symbol, quantity, price, commissions, amount, memo,
                 category)
@@ -193,23 +189,19 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
 class InvestmentDividend(Transaction):
     """A dividend.
 
-    @type date: datetime.datetime
     @param date: The date of the dividend.
-
-    @type symbol: str
     @param symbol: The symbol of the security of the dividend.
-
-    @type amount: float
     @param amount: The total amount of the dividend.
-
-    @type memo: unicode or None
     @param memo: The memo of the dividend, if any.
-
-    @type category: unicode or None
     @param category: The category of the dividend, if any.
     """
     def __init__(
-            self, date, symbol, amount, memo=None, category=None):
+            self,
+            date: datetime.datetime,
+            symbol: str,
+            amount: float,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentDividend, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -218,20 +210,17 @@ class InvestmentDividend(Transaction):
 class InvestmentInterestExpense(Transaction):
     """An interest expense.
 
-    @type date: datetime.datetime
     @param date: The date of the dividend.
-
-    @type amount: float
     @param amount: The total amount of the dividend.
-
-    @type memo: unicode or None
     @param memo: The memo of the dividend, if any.
-
-    @type category: unicode or None
     @param category: The category of the dividend, if any.
     """
     def __init__(
-            self, date, amount, memo=None, category=None):
+            self,
+            date: datetime.datetime,
+            amount: float,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentInterestExpense, self).__init__(
                 date, amount, memo, category)
 
@@ -239,20 +228,17 @@ class InvestmentInterestExpense(Transaction):
 class InvestmentInterestIncome(Transaction):
     """An interest income.
 
-    @type date: datetime.datetime
     @param date: The date of the dividend.
-
-    @type amount: float
     @param amount: The total amount of the dividend.
-
-    @type memo: unicode or None
     @param memo: The memo of the dividend, if any.
-
-    @type category: unicode or None
     @param category: The category of the dividend, if any.
     """
     def __init__(
-            self, date, amount, memo=None, category=None):
+            self,
+            date: datetime.datetime,
+            amount: float,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentInterestIncome, self).__init__(
                 date, amount, memo, category)
 
@@ -260,23 +246,19 @@ class InvestmentInterestIncome(Transaction):
 class InvestmentMiscExpense(Transaction):
     """A misc expense.
 
-    @type date: datetime.datetime
     @param date: The date of the dividend.
-
-    @type amount: float
     @param amount: The total amount of the expense.
-
-    @type symbol: str or None
     @param symbol: The symbol of the security of the expense.
-
-    @type memo: unicode or None
     @param memo: The memo of the expense, if any.
-
-    @type category: unicode or None
     @param category: The category of the expense, if any.
     """
     def __init__(
-            self, date, amount, symbol=None, memo=None, category=None):
+            self,
+            date: datetime.datetime,
+            amount: float,
+            symbol: Optional[str] = None,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentMiscExpense, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -285,23 +267,19 @@ class InvestmentMiscExpense(Transaction):
 class InvestmentMiscIncome(Transaction):
     """A misc income.
 
-    @type date: datetime.datetime
     @param date: The date of the dividend.
-
-    @type amount: float
     @param amount: The total amount of the dividend.
-
-    @type symbol: str or None
     @param symbol: The symbol of the security of the income.
-
-    @type memo: unicode or None
     @param memo: The memo of the dividend, if any.
-
-    @type category: unicode or None
     @param category: The category of the dividend, if any.
     """
     def __init__(
-            self, date, amount, symbol=None, memo=None, category=None):
+            self,
+            date: datetime.datetime,
+            amount: float,
+            symbol: Optional[str] = None,
+            memo: Optional[str] = None,
+            category: Optional[str] = None):
         super(InvestmentMiscIncome, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol

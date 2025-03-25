@@ -1,6 +1,7 @@
 import csv
 import datetime
 import logging
+from typing import Optional, List
 
 import importer
 import model
@@ -14,7 +15,11 @@ class RevolutImporter(importer.Importer):
     """Importer for Revolut (http://www.revolut.com/).
     """
 
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[object] = None,
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Payment]:
         with importer.open_input_file(file, filename) as file:
             reader = csv.reader(file, delimiter=',', quotechar='"')
 

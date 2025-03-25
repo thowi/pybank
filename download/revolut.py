@@ -5,6 +5,7 @@ import glob
 import itertools
 import logging
 import re
+from typing import List, Optional
 
 import download
 import download.bank
@@ -31,7 +32,11 @@ class Revolut(download.bank.Bank):
     _EXCHANGE_IN_HEADER = 'Exchange In'
     _NOTES_HEADER = 'Notes'
 
-    def login(self, username=None, password=None, statements=[]):
+    def login(
+            self, 
+            username: Optional[str] = None,
+            password: Optional[str] = None, 
+            statements: List[str] = []) -> None:
         self._accounts_cache = None
 
         # Collect readable statement files.
@@ -52,10 +57,10 @@ class Revolut(download.bank.Bank):
         else:
             raise download.FetchError('Couldn\'t read any statement files.')
 
-    def logout(self):
+    def logout(self) -> None:
         pass
 
-    def get_accounts(self):
+    def get_accounts(self) -> List[model.Account]:
         if self._accounts_cache is not None:
             return self._accounts_cache
 
@@ -131,7 +136,11 @@ class Revolut(download.bank.Bank):
                 notes) if v))
         return model.Payment(date, amount, memo=memo)
 
-    def get_transactions(self, account, start, end):
+    def get_transactions(
+            self,
+            account: model.Account,
+            start: datetime.datetime, 
+            end: datetime.datetime) -> List[model.Transaction]:
         # Filter transactions in matching account for date range.
         transactions = []
         for acc in self.get_accounts():

@@ -1,5 +1,7 @@
 import datetime
+import io
 import logging
+from typing import Optional, List
 
 import importer
 import model
@@ -10,20 +12,24 @@ DATE_FORMAT_DE = '%d.%m.%Y'
 logger = logging.getLogger(__name__)
 
 
-def _parse_date(date_str):
+def _parse_date(date_str: str) -> datetime.datetime:
     try:
         return datetime.datetime.strptime(date_str, DATE_FORMAT_ISO)
     except ValueError:
         return datetime.datetime.strptime(date_str, DATE_FORMAT_DE)
 
 
-def _parse_float(string):
+def _parse_float(string: str) -> float:
     return importer.parse_decimal_number(string, 'de_CH')
 
 
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[io.IOBase] = None,
+            filename: Optional[str] = None,
+            currency: Optional[str] = None) -> List[model.Payment]:
         metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
         currency = 'CHF'

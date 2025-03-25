@@ -4,8 +4,10 @@ import logging
 import re
 import string
 import time
+from typing import List, Optional, Any, Callable
 
 from selenium.common import exceptions
+from selenium.webdriver.remote.webelement import WebElement
 
 
 WHITESPACE_PATTERN = re.compile(r' +')
@@ -17,15 +19,12 @@ class FetchError(Exception):
     """An error while fetching the account data."""
 
 
-def normalize_text(text):
+def normalize_text(text: str) -> str:
     """Returns a normalized version of the input text.
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
 
-    @type text: unicode
     @param text: The input text.
-
-    @rtype: unicode
     @return: A normalized version of the input text.
     """
     text = WHITESPACE_PATTERN.sub(' ', text)
@@ -38,20 +37,14 @@ def normalize_text(text):
     return '\n'.join(lines)
 
 
-def parse_decimal_number(number_string, lang):
+def parse_decimal_number(number_string: str, lang: str) -> float:
     """Parses a decimal number string into a float.
 
     Can also handle thousands separators.
 
-    @type number_string: unicode
     @param number_string: The decimal number as a string.
-
-    @type lang: str
     @param lang: The locale of the format.
-
-    @rtype: float
     @return: The parsed number.
-
     @raise ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
@@ -66,15 +59,16 @@ def parse_decimal_number(number_string, lang):
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def format_iban(iban):
+def format_iban(iban: str) -> str:
     return format_string_into_blocks(iban, 4)
 
 
-def format_cc_account_name(account_name):
+def format_cc_account_name(account_name: str) -> str:
     return format_string_into_blocks(account_name, 4)
 
 
-def format_string_into_blocks(string, block_length, separator=' '):
+def format_string_into_blocks(
+        string: str, block_length: int, separator: str = ' ') -> str:
     parts = []
     index = 0
     while index < len(string):
@@ -83,57 +77,58 @@ def format_string_into_blocks(string, block_length, separator=' '):
     return separator.join(parts)
 
 
-def find_element_by_title(parent, title):
+def find_element_by_title(parent: WebElement, title: str) -> WebElement:
     return parent.find_element_by_xpath(
             ".//*[normalize-space(@title) = '%s']" % title)
 
 
-def find_element_by_tag_name_and_text(parent, tag_name, text):
+def find_element_by_tag_name_and_text(
+        parent: WebElement, tag_name: str, text: str) -> WebElement:
     return parent.find_element_by_xpath(
             ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
 
 
-def find_elements_by_tag_name_and_text(parent, tag_name, text):
+def find_elements_by_tag_name_and_text(
+        parent: WebElement, tag_name: str, text: str) -> List[WebElement]:
     return parent.find_elements_by_xpath(
             ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
 
 
-def find_element_by_text(parent, text):
+def find_element_by_text(parent: WebElement, text: str) -> WebElement:
     return find_element_by_tag_name_and_text(parent, '*', text)
 
 
-def find_elements_by_text(parent, text):
+def find_elements_by_text(parent: WebElement, text: str) -> List[WebElement]:
     return find_elements_by_tag_name_and_text(parent, '*', text)
 
 
-def get_first_displayed(elements):
+def get_first_displayed(elements: List[WebElement]) -> Optional[WebElement]:
     for e in elements:
         if e.is_displayed():
             return e
 
 
-def find_element_by_tag_name_and_text(parent, tag_name, text):
+def find_element_by_tag_name_and_text(
+        parent: WebElement, tag_name: str, text: str) -> WebElement:
     return parent.find_element_by_xpath(
             ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
 
 
-def find_button_by_text(parent, text):
+def find_button_by_text(parent: WebElement, text: str) -> WebElement:
     return find_element_by_tag_name_and_text(parent, 'button', text)
 
 
-def find_input_button_by_text(parent, text):
+def find_input_button_by_text(parent: WebElement, text: str) -> WebElement:
     return parent.find_element_by_xpath(
             ".//input[@type = 'button' and normalize-space(@value) = '%s']" %
             text)
 
 
-def get_element_or_none(lookup_callable):
+def get_element_or_none(
+        lookup_callable: Callable[[], WebElement]) -> Optional[WebElement]:
     """Returns the element for the lookup or None if not found.
 
-    @type lookup_callable: callable
     @param lookup_callable: The lookup to execute.
-
-    @rtype: Element or None
     @return: The element for the lookup or None if not found.
     """
     try:
@@ -142,41 +137,34 @@ def get_element_or_none(lookup_callable):
         return None
 
 
-def is_element_present(lookup_callable):
+def is_element_present(lookup_callable: Callable[[], WebElement]) -> bool:
     """Returns whether the lookup was successful or a NoSuchElementException was
     caught.
 
-    @type lookup_callable: callable
     @param lookup_callable: The lookup to execute.
-
-    @rtype: bool
     @return: Returns whether the lookup was successful.
     """
     return get_element_or_none(lookup_callable) is not None
 
 
-def is_element_displayed(lookup_callable):
+def is_element_displayed(lookup_callable: Callable[[], WebElement]) -> bool:
     """Returns whether the lookup was successful, the element was found, and it
     is displayed.
 
-    @type lookup_callable: callable
     @param lookup_callable: The lookup to execute.
-
-    @rtype: bool
     @return: Returns whether the was found and is displayed.
     """
     element = get_element_or_none(lookup_callable)
     return element is not None and element.is_displayed()
 
 
-def wait_for_element_to_appear_and_disappear(lookup_callable, timeout_s=10):
+def wait_for_element_to_appear_and_disappear(
+        lookup_callable: Callable[[], WebElement], timeout_s: int = 10) -> None:
     """Waits for an element to appear and then disappear.
 
     If the element doesn't appear it is assumed to be gone already.
 
-    @type lookup_callable: callable
     @param lookup_callable: The lookup to find the element.
-    @type timeout_s: int
     @param timeout_s: The timeout to wait for the element to disappear.
     """
     element_displayed = lambda: is_element_displayed(lookup_callable)
@@ -194,19 +182,16 @@ def wait_for_element_to_appear_and_disappear(lookup_callable, timeout_s=10):
 
 
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
-def wait_until(condition, timeout_s=10, sleep_s=0.5, raise_exceptions=False):
+def wait_until(
+        condition: Callable[[], bool],
+        timeout_s: int = 10,
+        sleep_s: float = 0.5,
+        raise_exceptions: bool = False) -> None:
     """Waits for the condition to become true.
 
-    @type condition: callable
     @param condition: The condition to check periodically.
-
-    @type timeout_s: int
     @param timeout_s: The timeout.
-
-    @type sleep_s: float
     @param sleep_s: The time to sleep between the tries.
-
-    @type raise_exceptions: bool
     @param raise_exceptions: Whether to raise any caught exceptions.
     """
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout_s)

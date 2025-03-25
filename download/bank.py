@@ -3,6 +3,11 @@ import os
 import os.path
 import pickle
 import time
+from typing import Optional, List
+
+import selenium.webdriver
+
+import model
 
 logger = logging.getLogger(__name__)
 
@@ -10,53 +15,47 @@ logger = logging.getLogger(__name__)
 class Bank(object):
     """Base class for a fetcher that logs into a bank account website."""
 
-    def __init__(self, debug=False):
+    def __init__(self, debug: bool = False) -> None:
         """Create a new Bank instance.
 
-        @type debug: bool
         @param debug: Whether to run in debug mode.
         """
         self._debug = debug
 
-    def login(self, username=None, password=None, statements=None):
+    def login(
+            self, 
+            username: Optional[str] = None,
+            password: Optional[str] = None, 
+            statements: Optional[List[str]] = None) -> None:
         """Will prompt the user if either user name or password are not defined.
 
-        @type username: unicode
         @param username: The user name.
-
-        @type password: unicode
         @param password: The password.
-
-        @type statements: list or None
         @param statements: A list of statement files to read for import.
         """
         raise NotImplementedError()
 
-    def logout(self):
+    def logout(self) -> None:
         """Will log out of the bank account."""
         raise NotImplementedError()
 
-    def get_accounts(self):
+    def get_accounts(self) -> List[model.Account]:
         """Returns the names of all accounts.
 
-        @rtype: [model.Account]
         @return: The available accounts on this bank.
         """
         raise NotImplementedError()
 
-    def get_transactions(self, account, start, end):
+    def get_transactions(
+            self,
+            account: model.Account,
+            start: datetime.datetime, 
+            end: datetime.datetime) -> List[model.Transaction]:
         """Returns all transactions within the given date range.
 
-        @type account: model.Account
         @param account: The account.
-
-        @type start: datetime.datetime
         @param start: Start date, inclusive.
-
-        @type end: datetime.datetime
         @param end: End date, exclusive.
-
-        @rtype: [model.Transaction]
         @return: The matching transactions.
         """
         raise NotImplementedError()
@@ -64,32 +63,26 @@ class Bank(object):
     def _get_cookies_filename(self, username):
         return self.__class__.__name__ + '_' + username + '.cookies'
 
-    def save_cookies(self, browser, username):
+    def save_cookies(self, browser: selenium.webdriver, username: str) -> None:
         """Saves the seesion cookies into a file.
 
-        @type browser: selenium.webdriver
         @param browser: The browser instance.
-
-        @type username: str
         @param str: The username that owns the session.
         """
         cookies_filename = self._get_cookies_filename(username)
         logger.info('Saving cookies to %s...' % cookies_filename)
         pickle.dump(browser.get_cookies(), open(cookies_filename, 'wb'))
 
-    def ask_and_restore_cookies(self, browser, username, timeout_secs=None):
+    def ask_and_restore_cookies(
+            self,
+            browser: selenium.webdriver,
+            username: str,
+            timeout_secs: Optional[int] = None) -> bool:
         """Checks if cookies were found for a session and asks to restore them.
 
-        @type browser: selenium.webdriver
         @param browser: The browser instance.
-
-        @type username: str
         @param str: The username that owned the session.
-
-        @type timeout_secs: int or None
         @param str: The timeout in seconds after which cookies are invalid.
-
-        @rtype bool
         @return: True if any cookies were restored. False otherwise.
         """
         cookies_filename = self._get_cookies_filename(username)
@@ -122,10 +115,9 @@ class Bank(object):
             return True
         return False
 
-    def delete_cookies(self, username):
+    def delete_cookies(self, username: str) -> None:
         """Deletes any cookies for a session.
 
-        @type username: str
         @param str: The username that owned the session.
         """
         cookies_filename = self._get_cookies_filename(username)

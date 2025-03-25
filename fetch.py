@@ -200,7 +200,7 @@ def _open_file(output_filename, bank_name, account_name, from_date, till_date):
         print(err.msg, file=sys.stderr)
 
 
-def main(argv=None):
+def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv
     try:

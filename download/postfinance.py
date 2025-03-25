@@ -3,6 +3,7 @@ import getpass
 import logging
 import re
 import urllib.parse
+from typing import Optional, List
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -32,7 +33,11 @@ class PostFinance(download.bank.Bank):
     _WEBDRIVER_TIMEOUT = 10
     _SESSION_TIMEOUT_S = 60 * 60
 
-    def login(self, username=None, password=None, statements=None):
+    def login(
+            self, 
+            username: Optional[str] = None,
+            password: Optional[str] = None, 
+            statements: Optional[List[str]] = None) -> None:
         if self._debug:
             self._browser = webdriver.Chrome()
         else:
@@ -132,7 +137,7 @@ class PostFinance(download.bank.Bank):
         return download.is_element_present(
                 lambda: self._browser.find_element_by_css_selector('a.logout'))
 
-    def logout(self):
+    def logout(self) -> None:
         self._browser.find_element_by_css_selector('a.logout').click()
         self._browser.quit()
         self._logged_in = False
@@ -140,7 +145,7 @@ class PostFinance(download.bank.Bank):
         self.delete_cookies(self._username)
         self._username = None
 
-    def get_accounts(self):
+    def get_accounts(self) -> List[model.Account]:
         if self._accounts is not None:
             return self._accounts
 
@@ -243,7 +248,11 @@ class PostFinance(download.bank.Bank):
         self._close_tile()
         return accounts
 
-    def get_transactions(self, account, start, end):
+    def get_transactions(
+            self,
+            account: model.Account,
+            start: datetime.datetime, 
+            end: datetime.datetime) -> List[model.Transaction]:
         self._check_logged_in()
 
         if (isinstance(account, model.CheckingAccount) or

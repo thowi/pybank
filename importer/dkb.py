@@ -1,5 +1,6 @@
 import datetime
 import logging
+from typing import Optional, TextIO, List, Any
 
 import importer
 import model
@@ -10,7 +11,8 @@ DATE_FORMAT_SHORT = '%d.%m.%y'
 logger = logging.getLogger(__name__)
 
 
-def _parse_date(date_str):
+def _parse_date(date_str: str) -> datetime.datetime:
+    """Parse date from string in DKB format"""
     try:
         return datetime.datetime.strptime(date_str, DATE_FORMAT_LONG)
     except ValueError:
@@ -19,7 +21,12 @@ def _parse_date(date_str):
 
 class _DkbImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(self, file=None, filename=None, currency=None):
+    def import_transactions(
+            self,
+            file: Optional[TextIO] = None,
+            filename: Optional[str] = None, 
+            currency: Optional[str] = None) -> List[model.Payment]:
+        """Import transactions from DKB CSV file"""
         metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
         date_cols = 'Buchungstag', 'Buchungsdatum', 'Belegdatum'
@@ -74,9 +81,7 @@ class _DkbImporter(importer.Importer):
 
 
 class DkbCheckingImporter(_DkbImporter):
-    """Importer for DKB checking accounts (http://www.dkb.de/).
-    """
+    pass
 
 class DkbCreditCardImporter(_DkbImporter):
-    """Importer for DKB credit cards (http://www.dkb.de/).
-    """
+    pass
