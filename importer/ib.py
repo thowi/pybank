@@ -221,4 +221,4 @@ class InteractiveBrokersImporter(importer.Importer):
 
 
 def _parse_float(string):
-    return float(string.replace(',', ''))
+    return importer.parse_decimal_number(string, 'en_US')
