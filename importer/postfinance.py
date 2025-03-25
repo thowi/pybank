@@ -18,7 +18,7 @@ def _parse_date(date_str):
 
 
 def _parse_float(string):
-    return float(string.replace('\'', ''))
+    return importer.parse_decimal_number(string, 'de_CH')
 
 
 class _PostFinanceImporter(importer.Importer):
