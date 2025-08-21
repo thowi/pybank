@@ -5,7 +5,7 @@ import getpass
 import logging
 import re
 import time
-from typing import Optional, List
+
 
 from selenium import webdriver
 from selenium.common import exceptions
@@ -32,10 +32,10 @@ class DeutscheKreditBank(download.bank.Bank):
     _SESSION_TIMEOUT_S = 12 * 60
 
     def login(
-            self, 
-            username: Optional[str] = None,
-            password: Optional[str] = None, 
-            statements: Optional[List[str]] = None) -> None:
+            self,
+            username: str | None = None,
+            password: str | None = None,
+            statements: list[str] | None = None) -> None:
         if self._debug:
             self._browser = webdriver.Chrome()
         else:
@@ -98,7 +98,7 @@ class DeutscheKreditBank(download.bank.Bank):
         self.delete_cookies(self._username)
         self._username = None
 
-    def get_accounts(self) -> List[model.Account]:
+    def get_accounts(self) -> list[model.Account]:
         self._check_logged_in()
 
         if self._accounts is not None:
@@ -137,8 +137,8 @@ class DeutscheKreditBank(download.bank.Bank):
     def get_transactions(
             self,
             account: model.Account,
-            start: datetime.datetime, 
-            end: datetime.datetime) -> List[model.Transaction]:
+            start: datetime.datetime,
+            end: datetime.datetime) -> list[model.Transaction]:
         is_credit_card = isinstance(account, model.CreditCard)
         if is_credit_card:
             return self._get_credit_card_transactions(account, start, end)

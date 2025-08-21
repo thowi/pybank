@@ -14,7 +14,6 @@ For more information see http://github.com/thowi/pybank.
 import logging
 import getopt
 import sys
-from typing import Optional
 
 import importer.dkb
 import importer.ib
@@ -112,7 +111,7 @@ def _convert_file(importer_name, currency, debug, input_filename):
         return
 
 
-def main(argv: Optional[list[str]] = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     if argv is None:
         argv = sys.argv
     try:

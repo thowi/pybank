@@ -1,7 +1,7 @@
 import datetime
 import io
 import logging
-from typing import Optional, List
+
 
 import importer
 import model
@@ -27,9 +27,9 @@ class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
     def import_transactions(
             self,
-            file: Optional[io.IOBase] = None,
-            filename: Optional[str] = None,
-            currency: Optional[str] = None) -> List[model.Payment]:
+            file: io.IOBase | None = None,
+            filename: str | None = None,
+            currency: str | None = None) -> list[model.Payment]:
         metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
         currency = 'CHF'
@@ -42,23 +42,23 @@ class _PostFinanceImporter(importer.Importer):
         for row in rows:
             date_str = row.get('Buchungsdatum') or row.get('Datum')
             date = _parse_date(date_str)
-            
+
             credit = _parse_float(row[credit_col]) if row.get(credit_col) \
                     else None
             debit = -abs(_parse_float(row[debit_col])) if row.get(debit_col) \
                     else None
             amount = credit if credit else debit
-            
+
             memo_str = row.get('Buchungsdetails') or row.get('Bezeichnung') or \
                     row.get('Avisierungstext')
             memo = importer.normalize_text(memo_str)
 
             category = row.get(category_col)
-            
+
             # Skip "Total" row.
             if memo == 'Total' and not amount:
                 continue
-            
+
             transactions.append(
                 model.Payment(date, amount, memo=memo, category=category))
         logger.info("Imported %d transactions." % len(transactions))

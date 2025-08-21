@@ -6,7 +6,7 @@ import logging
 import re
 import string
 import sys
-from typing import Optional, List, Tuple, Dict, Union
+
 
 import chardet
 
@@ -31,9 +31,9 @@ class Importer(object):
 
     def import_transactions(
             self,
-            file: Optional[io.IOBase] = None,
-            filename: Optional[str] = None,
-            currency: Optional[str] = None) -> List[model.Transaction]:
+            file: io.IOBase | None = None,
+            filename: str | None = None,
+            currency: str | None = None) -> list[model.Transaction]:
         """Imports transactions from a file or filename and returns Model data.
 
         :param file: The file object to read from
@@ -44,7 +44,7 @@ class Importer(object):
         raise NotImplementedError()
 
 
-def normalize_text(text: Optional[str]) -> Optional[str]:
+def normalize_text(text: str | None) -> str | None:
     """Returns a normalized version of the input text.
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
@@ -87,8 +87,8 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
 
 
 def _detect_encoding(
-        file: Optional[io.IOBase] = None,
-        filename: Optional[str] = None) -> str:
+        file: io.IOBase | None = None,
+        filename: str | None = None) -> str:
     if file is None and filename is not None:
         file = open(filename, 'rb')
     rawdata = file.read()
@@ -104,9 +104,9 @@ def _detect_encoding(
 
 
 def open_input_file(
-        file: Optional[io.IOBase] = None,
-        filename: Optional[str] = None,
-        encoding: Optional[str] = None) -> object:
+        file: io.IOBase | None = None,
+        filename: str | None = None,
+        encoding: str | None = None) -> object:
     encoding = _detect_encoding(file, filename)
     if file:
         return codecs.getreader(encoding)(sys.stdin.detach())
@@ -117,9 +117,9 @@ def open_input_file(
 
 
 def read_csv_with_header(
-        file: Optional[io.IOBase] = None,
-        filename: Optional[str] = None) \
-        -> Tuple[Dict[str, str], List[Dict[str, str]]]:
+        file: io.IOBase | None = None,
+        filename: str | None = None) \
+        -> tuple[dict[str, str], list[dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 
     Some CSV files are a bit special and have a multi-line header, body, and
@@ -147,25 +147,25 @@ def read_csv_with_header(
             # Skip empty/irrelevant rows.
             if len(row) < 2:
                 continue
-            
+
             # Read metadata.
             if len(row) == 2 and not col_names:
                 metadata[row[0]] = row[1]
                 continue
-            
+
             # Read column names.
             if not col_names:
                 col_names = row
                 continue
-            
+
             # Read transaction rows.
             rows.append(dict(zip(col_names, row)))
-        
+
         return metadata, rows
 
-def get_value(row: Dict[str, str], keys: List[str]) -> Optional[str]:
+def get_value(row: dict[str, str], keys: list[str]) -> str | None:
     """Returns the first value found in the row dict for the given keys.
-    
+
     :param row: The row to search.
     :param keys: The keys to search for.
     :return: The first value found in the row for the given keys.

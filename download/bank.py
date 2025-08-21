@@ -1,9 +1,10 @@
 import logging
+import datetime
 import os
 import os.path
 import pickle
 import time
-from typing import Optional, List
+
 
 import selenium.webdriver
 
@@ -23,10 +24,10 @@ class Bank(object):
         self._debug = debug
 
     def login(
-            self, 
-            username: Optional[str] = None,
-            password: Optional[str] = None, 
-            statements: Optional[List[str]] = None) -> None:
+            self,
+            username: str | None = None,
+            password: str | None = None,
+            statements: list[str] | None = None) -> None:
         """Will prompt the user if either user name or password are not defined.
 
         :param username: The user name.
@@ -39,7 +40,7 @@ class Bank(object):
         """Will log out of the bank account."""
         raise NotImplementedError()
 
-    def get_accounts(self) -> List[model.Account]:
+    def get_accounts(self) -> list[model.Account]:
         """Returns the names of all accounts.
 
         :return: The available accounts on this bank.
@@ -49,8 +50,8 @@ class Bank(object):
     def get_transactions(
             self,
             account: model.Account,
-            start: datetime.datetime, 
-            end: datetime.datetime) -> List[model.Transaction]:
+            start: datetime.datetime,
+            end: datetime.datetime) -> list[model.Transaction]:
         """Returns all transactions within the given date range.
 
         :param account: The account.
@@ -77,7 +78,7 @@ class Bank(object):
             self,
             browser: selenium.webdriver,
             username: str,
-            timeout_secs: Optional[int] = None) -> bool:
+            timeout_secs: int | None = None) -> bool:
         """Checks if cookies were found for a session and asks to restore them.
 
         :param browser: The browser instance.

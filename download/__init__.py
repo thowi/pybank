@@ -4,7 +4,7 @@ import logging
 import re
 import string
 import time
-from typing import List, Optional, Any, Callable
+from typing import Callable
 
 from selenium.common import exceptions
 from selenium.webdriver.remote.webelement import WebElement
@@ -89,7 +89,7 @@ def find_element_by_tag_name_and_text(
 
 
 def find_elements_by_tag_name_and_text(
-        parent: WebElement, tag_name: str, text: str) -> List[WebElement]:
+        parent: WebElement, tag_name: str, text: str) -> list[WebElement]:
     return parent.find_elements_by_xpath(
             ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
 
@@ -98,11 +98,11 @@ def find_element_by_text(parent: WebElement, text: str) -> WebElement:
     return find_element_by_tag_name_and_text(parent, '*', text)
 
 
-def find_elements_by_text(parent: WebElement, text: str) -> List[WebElement]:
+def find_elements_by_text(parent: WebElement, text: str) -> list[WebElement]:
     return find_elements_by_tag_name_and_text(parent, '*', text)
 
 
-def get_first_displayed(elements: List[WebElement]) -> Optional[WebElement]:
+def get_first_displayed(elements: list[WebElement]) -> WebElement | None:
     for e in elements:
         if e.is_displayed():
             return e
@@ -125,7 +125,7 @@ def find_input_button_by_text(parent: WebElement, text: str) -> WebElement:
 
 
 def get_element_or_none(
-        lookup_callable: Callable[[], WebElement]) -> Optional[WebElement]:
+        lookup_callable: Callable[[], WebElement]) -> WebElement | None:
     """Returns the element for the lookup or None if not found.
 
     :param lookup_callable: The lookup to execute

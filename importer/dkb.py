@@ -1,6 +1,6 @@
 import datetime
 import logging
-from typing import Optional, TextIO, List, Any
+from typing import TextIO, Any
 
 import importer
 import model
@@ -23,9 +23,9 @@ class _DkbImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
     def import_transactions(
             self,
-            file: Optional[TextIO] = None,
-            filename: Optional[str] = None, 
-            currency: Optional[str] = None) -> List[model.Payment]:
+            file: TextIO | None = None,
+            filename: str | None = None,
+            currency: str | None = None) -> list[model.Payment]:
         """Import transactions from DKB CSV file"""
         metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
@@ -70,7 +70,7 @@ class _DkbImporter(importer.Importer):
                     else None
             orig_amount = 'Original amount: ' + row[orig_amount_col] \
                     if row.get(orig_amount_col) else None
-            
+
             memo_parts = memo, orig_amount, acc, routing
             memo = '. '.join(filter(bool, memo_parts))
 

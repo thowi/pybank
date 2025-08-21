@@ -2,7 +2,7 @@ import csv
 import datetime
 import io
 import logging
-from typing import Optional, List
+
 
 import importer
 import model
@@ -18,9 +18,9 @@ class SchwabBrokerageImporter(importer.Importer):
 
     def import_transactions(
             self,
-            file: Optional[io.IOBase] = None,
-            filename: Optional[str] = None,
-            currency: Optional[str] = None) -> List[model.Transaction]:
+            file: io.IOBase | None = None,
+            filename: str | None = None,
+            currency: str | None = None) -> list[model.Transaction]:
         with importer.open_input_file(file, filename) as file:
             reader = csv.reader(file, delimiter=',', quotechar='"')
 
@@ -68,9 +68,9 @@ class SchwabEacImporter(importer.Importer):
 
     def import_transactions(
             self,
-            file: Optional[io.IOBase] = None,
-            filename: Optional[str] = None,
-            currency: Optional[str] = None) -> List[model.Transaction]:
+            file: io.IOBase | None = None,
+            filename: str | None = None,
+            currency: str | None = None) -> list[model.Transaction]:
         with importer.open_input_file(file, filename) as file:
             reader = csv.reader(file, delimiter=',', quotechar='"')
 

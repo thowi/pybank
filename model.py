@@ -2,7 +2,7 @@
 
 """Bank account model."""
 
-from typing import Optional, Tuple, Union
+
 import datetime
 
 
@@ -18,10 +18,10 @@ class Account(object):
     def __init__(
             self,
             name: str,
-            currency: Optional[str] = None,
-            balance: Optional[float] = None,
-            balance_date: Optional[datetime.datetime] = None,
-            transactions: Optional[Tuple['Transaction', ...]] = None):
+            currency: str | None = None,
+            balance: float | None = None,
+            balance_date: datetime.datetime | None = None,
+            transactions: tuple['Transaction', ...] | None = None):
         self.name = name
         self.currency = currency
         self.balance = balance
@@ -67,9 +67,9 @@ class Transaction(object):
     def __init__(
             self,
             date: datetime.datetime,
-            amount: Union[int, float],
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            amount: int | float,
+            memo: str | None = None,
+            category: str | None = None):
         self.date = date
         self.amount = amount
         self.memo = memo
@@ -93,11 +93,11 @@ class Payment(Transaction):
     def __init__(
             self,
             date: datetime.datetime,
-            amount: Union[int, float],
-            payer: Optional[str] = None,
-            payee: Optional[str] = None,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            amount: int | float,
+            payer: str | None = None,
+            payee: str | None = None,
+            memo: str | None = None,
+            category: str | None = None):
         super(Payment, self).__init__(date, amount, memo, category)
         self.payer = payer
         self.payee = payee
@@ -132,8 +132,8 @@ class InvestmentSecurityTransaction(Transaction):
             price: float,
             commissions: float,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentSecurityTransaction, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -155,8 +155,8 @@ class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
             price: float,
             commissions: float,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentSecurityPurchase, self).__init__(
                 date, symbol, quantity, price, commissions, amount, memo,
                 category)
@@ -175,8 +175,8 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
             price: float,
             commissions: float,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentSecuritySale, self).__init__(
                 date, symbol, quantity, price, commissions, amount, memo,
                 category)
@@ -196,8 +196,8 @@ class InvestmentDividend(Transaction):
             date: datetime.datetime,
             symbol: str,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentDividend, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -215,8 +215,8 @@ class InvestmentInterestExpense(Transaction):
             self,
             date: datetime.datetime,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentInterestExpense, self).__init__(
                 date, amount, memo, category)
 
@@ -233,8 +233,8 @@ class InvestmentInterestIncome(Transaction):
             self,
             date: datetime.datetime,
             amount: float,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentInterestIncome, self).__init__(
                 date, amount, memo, category)
 
@@ -252,9 +252,9 @@ class InvestmentMiscExpense(Transaction):
             self,
             date: datetime.datetime,
             amount: float,
-            symbol: Optional[str] = None,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            symbol: str | None = None,
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentMiscExpense, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
@@ -273,9 +273,9 @@ class InvestmentMiscIncome(Transaction):
             self,
             date: datetime.datetime,
             amount: float,
-            symbol: Optional[str] = None,
-            memo: Optional[str] = None,
-            category: Optional[str] = None):
+            symbol: str | None = None,
+            memo: str | None = None,
+            category: str | None = None):
         super(InvestmentMiscIncome, self).__init__(
                 date, amount, memo, category)
         self.symbol = symbol
