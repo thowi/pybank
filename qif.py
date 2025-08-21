@@ -187,7 +187,7 @@ def serialize_payment(payment: model.Payment) -> str:
 
 
 def serialize_investment_transaction(
-        transaction: model.InvestmentTransaction, action: str) -> str:
+        transaction: model.InvestmentSecurityTransaction, action: str) -> str:
     """Serializes a investment transaction to the QIF format.
 
     :param transaction: The investment transaction to serialize.
