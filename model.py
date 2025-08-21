@@ -6,10 +6,6 @@ from typing import Optional, Tuple, Union
 import datetime
 
 
-class Bank(object):
-    """A bank."""
-
-
 class Account(object):
     """An account.
 
@@ -178,7 +174,7 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
             quantity: int,
             price: float,
             commissions: float,
-            amount: float, 
+            amount: float,
             memo: Optional[str] = None,
             category: Optional[str] = None):
         super(InvestmentSecuritySale, self).__init__(
