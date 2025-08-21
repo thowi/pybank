@@ -5,5 +5,6 @@ description = "Download and convert bank statements"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
+    "chardet>=5.2.0",
     "selenium>=4.35.0",
 ]
