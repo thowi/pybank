@@ -19,7 +19,7 @@ logging.getLogger('chardet.charsetprober').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-class Importer(object):
+class Importer:
     """Base class for an importer for financial transactions."""
 
     def __init__(self, debug: bool = False):

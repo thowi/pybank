@@ -13,7 +13,7 @@ import model
 logger = logging.getLogger(__name__)
 
 
-class Bank(object):
+class Bank:
     """Base class for a fetcher that logs into a bank account website."""
 
     def __init__(self, debug: bool = False) -> None:
