@@ -1,0 +1,9 @@
+[project]
+name = "pybank"
+version = "0.1.0"
+description = "Download and convert bank statements"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "selenium>=4.35.0",
+]
