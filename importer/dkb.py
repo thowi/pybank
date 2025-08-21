@@ -75,7 +75,9 @@ class _DkbImporter(importer.Importer):
             memo = '. '.join(filter(bool, memo_parts))
 
             transactions.append(
-                model.Payment(date, amount, payer, payee, memo=memo))
+                model.Payment(
+                        date=date, amount=amount, payer=payer, payee=payee,
+                        memo=memo))
         logger.info("Imported %d transactions." % len(transactions))
         return transactions
 

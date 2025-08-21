@@ -74,7 +74,7 @@ class InteractiveBrokersImporter(importer.Importer):
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
             kind = row[2]
             amount = _parse_float(row[3])
-            transaction = model.Payment(date, amount)
+            transaction = model.Payment(date=date, amount=amount)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -100,10 +100,12 @@ class InteractiveBrokersImporter(importer.Importer):
             amount = proceeds - commissions
             if quantity >= 0:
                 transaction = model.InvestmentSecurityPurchase(
-                        date, symbol, quantity, price, commissions, amount)
+                        date=date, symbol=symbol, quantity=quantity,
+                        price=price, commissions=commissions, amount=amount)
             else:
                 transaction = model.InvestmentSecuritySale(
-                        date, symbol, -quantity, price, commissions, amount)
+                        date=date, symbol=symbol, quantity=-quantity,
+                        price=price, commissions=commissions, amount=amount)
             transactions_by_currency[currency].append(transaction)
 
         # Forex transactions. Treated slightly differently from stocks.
@@ -131,18 +133,21 @@ class InteractiveBrokersImporter(importer.Importer):
             quantity = abs(quantity)
             transactions_by_currency[buy_currency].append(
                     model.InvestmentSecuritySale(
-                            date, symbol, quantity, price, commissions,
-                            buy_amount, memo))
+                            date=date, symbol=symbol, quantity=quantity,
+                            price=price, commissions=commissions,
+                            amount=buy_amount, memo=memo))
             transactions_by_currency[sell_currency].append(
                     model.InvestmentSecurityPurchase(
-                            date, symbol, quantity, price, 0, sell_amount,
-                            memo))
+                            date=date, symbol=symbol, quantity=quantity,
+                            price=price, commissions=0, amount=sell_amount,
+                            memo=memo))
 
             # Forex commissions are all billed to the main (CHF) account.
             # TODO: Find out the main currency/account. Don't just hardcode
             # CHF.
             transactions_by_currency['CHF'].append(model.InvestmentMiscExpense(
-                    date, commissions, symbol=symbol, memo='Forex commissions'))
+                    date=date, amount=commissions, symbol=symbol,
+                    memo='Forex commissions'))
 
         return transactions_by_currency
 
@@ -161,11 +166,11 @@ class InteractiveBrokersImporter(importer.Importer):
             memo = description
             if amount < 0:
                 transaction = model.InvestmentMiscExpense(
-                       date, amount, symbol=symbol, memo=memo)
+                       date=date, amount=amount, symbol=symbol, memo=memo)
             else:
                 # Possibly a correction for previous withholding tax.
                 transaction = model.InvestmentMiscIncome(
-                       date, amount, symbol=symbol, memo=memo)
+                       date=date, amount=amount, symbol=symbol, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -183,7 +188,8 @@ class InteractiveBrokersImporter(importer.Importer):
             amount = _parse_float(row[3])
             symbol = re.split('[ (]', description)[0]
             memo = description
-            transaction = model.InvestmentDividend(date, symbol, amount, memo)
+            transaction = model.InvestmentDividend(
+                    date=date, symbol=symbol, amount=amount, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -202,9 +208,10 @@ class InteractiveBrokersImporter(importer.Importer):
             memo = description
             if amount < 0:
                 transaction = model.InvestmentInterestExpense(
-                        date, amount, memo)
+                        date=date, amount=amount, memo=memo)
             else:
-                transaction = model.InvestmentInterestIncome(date, amount, memo)
+                transaction = model.InvestmentInterestIncome(
+                        date=date, amount=amount, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -221,7 +228,7 @@ class InteractiveBrokersImporter(importer.Importer):
             memo = description
             symbol = ''
             transaction = model.InvestmentMiscExpense(
-                    date, amount, symbol=symbol, memo=memo)
+                    date=date, amount=amount, symbol=symbol, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency

@@ -60,7 +60,8 @@ class _PostFinanceImporter(importer.Importer):
                 continue
 
             transactions.append(
-                model.Payment(date, amount, memo=memo, category=category))
+                model.Payment(
+                        date=date, amount=amount, memo=memo, category=category))
         logger.info("Imported %d transactions." % len(transactions))
         return transactions
 

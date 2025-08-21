@@ -123,10 +123,12 @@ class DeutscheKreditBank(download.bank.Bank):
                 balance = self._parse_balance(cells[3].text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(
-                            name, 'EUR', balance, balance_date)
+                            name=name, currency='EUR', balance=balance,
+                            balance_date=balance_date)
                 else:
                     account = model.CheckingAccount(
-                            name, 'EUR', balance, balance_date)
+                            name=name, currency='EUR', balance=balance,
+                            balance_date=balance_date)
                 self._accounts.append(account)
             except ValueError:
                 logging.error('Invalid account row. %s' % account_row)
@@ -272,7 +274,11 @@ class DeutscheKreditBank(download.bank.Bank):
                 amount = download.parse_decimal_number(cells[3].text, 'de_DE')
 
                 transactions.append(
-                        model.Payment(date, amount, payee=payee, memo=memo))
+                        model.Payment(
+                            date=date,
+                            amount=amount,
+                            payee=payee,
+                            memo=memo))
             except ValueError as e:
                 logger.warning(
                         'Skipping invalid row: %s. Error: %s' % (row.text, e))
@@ -309,7 +315,8 @@ class DeutscheKreditBank(download.bank.Bank):
                     memo += '\nOriginal amount: %s %.2f' % (
                             original_currency, original_amount)
 
-                transactions.append(model.Payment(date, amount, memo=memo))
+                transactions.append(
+                        model.Payment(date=date, amount=amount, memo=memo))
             except ValueError as e:
                 logger.warning(
                         'Skipping invalid row: %s. Error: %s' % (row.text, e))

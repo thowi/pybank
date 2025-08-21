@@ -13,6 +13,6 @@ transactions = (
     model.Transaction(datetime.datetime.now(), -100, 'Payee4', 'Memo4', 'Cat4'),
 )
 
-account = model.Account('Test', transactions)
+account = model.Account(name='Test', transactions=transactions)
 
 print(qif.serialize_account(account))

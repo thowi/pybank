@@ -63,7 +63,7 @@ class WiseImporter(importer.Importer):
 
                 transactions.append(
                         model.Payment(
-                                date, amount, payer=payer_name, payee=payee,
-                                memo=memo))
+                                date=date, amount=amount, payer=payer_name,
+                                payee=payee, memo=memo))
             logger.debug("Imported %d transactions." % len(transactions))
             return transactions

@@ -198,13 +198,16 @@ class PostFinance(download.bank.Bank):
                     balance_date = datetime.datetime.now()
                     if acc_type == 'Private account':
                         account = model.CheckingAccount(
-                                acc_number, currency, balance, balance_date)
+                                name=acc_number, currency=currency,
+                                balance=balance, balance_date=balance_date)
                     elif acc_type == 'E-savings account':
                         account = model.SavingsAccount(
-                                acc_number, currency, balance, balance_date)
+                                name=acc_number, currency=currency,
+                                balance=balance, balance_date=balance_date)
                     elif acc_type in ('E-trading', 'Safe custody deposit'):
                         account = model.InvestmentsAccount(
-                                acc_number, currency, balance, balance_date)
+                                name=acc_number, currency=currency,
+                                balance=balance, balance_date=balance_date)
                     else:
                         logger.warning(
                                 'Skipping account %s with unknown type %s.' %
@@ -243,7 +246,8 @@ class PostFinance(download.bank.Bank):
                 balance_date = datetime.datetime.now()
                 currency = 'CHF'
                 account = model.CreditCard(
-                        name, currency, balance, balance_date)
+                        name=name, currency=currency, balance=balance,
+                        balance_date=balance_date)
                 accounts.append(account)
         self._close_tile()
         return accounts
@@ -444,7 +448,7 @@ class PostFinance(download.bank.Bank):
                 logger.debug('Adding marker transaction for page break.')
                 if transactions:
                     transactions.append(model.Payment(
-                            transactions[-1].date, amount=0,
+                            date=transactions[-1].date, amount=0,
                             memo='[Next billing cycle]'))
 
             # Load earlier transactions.
@@ -543,7 +547,7 @@ class PostFinance(download.bank.Bank):
                     'Skipping transaction with invalid amount %s.', amount)
             return
 
-        return model.Payment(date, amount, memo=memo)
+        return model.Payment(date=date, amount=amount, memo=memo)
 
     def _go_to_assets(self):
         self._browser.get(self._ASSETS_URL)

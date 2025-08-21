@@ -116,7 +116,8 @@ class Revolut(download.bank.Bank):
         for currency, transactions in transactions_by_currency.items():
             balance_date, balance = balance_by_currency[currency]
             accounts.append(model.CreditCard(
-                    currency, currency, balance, balance_date, transactions))
+                    name=currency, currency=currency, balance=balance,
+                    balance_date=balance_date, transactions=transactions))
         return accounts
 
     def _get_transaction_from_row(self, row, currency):
@@ -134,7 +135,7 @@ class Revolut(download.bank.Bank):
         memo = '. '.join(
                 (v for v in (description, exchange_in_str, exchange_out_str,
                 notes) if v))
-        return model.Payment(date, amount, memo=memo)
+        return model.Payment(date=date, amount=amount, memo=memo)
 
     def get_transactions(
             self,

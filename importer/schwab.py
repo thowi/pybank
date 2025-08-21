@@ -46,13 +46,14 @@ class SchwabBrokerageImporter(importer.Importer):
                 if action in (
                         'Journal', 'Misc Cash Entry', 'Wire Funds',
                         'Wire Funds Adj', 'Wire Funds Received'):
-                    transaction = model.Payment(date, amount, memo=memo)
+                    transaction = model.Payment(
+                            date=date, amount=amount, memo=memo)
                 elif action == 'Credit Interest':
                     transaction = model.InvestmentInterestIncome(
-                            date, amount, memo=memo)
+                            date=date, amount=amount, memo=memo)
                 elif action == 'Service Fee':
                     transaction = model.InvestmentMiscExpense(
-                            date, amount, memo=memo)
+                            date=date, amount=amount, memo=memo)
                 else:
                     # TODO: Add support for purchases, sales, dividends etc.
                     raise Exception('Unknown action: ' + action)

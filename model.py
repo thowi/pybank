@@ -4,9 +4,10 @@
 
 
 import datetime
+from pydantic import BaseModel, Field
 
 
-class Account(object):
+class Account(BaseModel):
     """An account.
 
     :param name: Account name.
@@ -15,21 +16,11 @@ class Account(object):
     :param balance_date: Balance date.
     :param transactions: The transactions.
     """
-    def __init__(
-            self,
-            name: str,
-            currency: str | None = None,
-            balance: float | None = None,
-            balance_date: datetime.datetime | None = None,
-            transactions: tuple['Transaction', ...] | None = None):
-        self.name = name
-        self.currency = currency
-        self.balance = balance
-        self.balance_date = balance_date
-        if transactions:
-            self.transactions = transactions
-        else:
-            self.transactions = ()
+    name: str
+    currency: str | None = None
+    balance: float | None = None
+    balance_date: datetime.datetime | None = None
+    transactions: tuple['Transaction', ...] = Field(default_factory=tuple)
 
     def __str__(self) -> str:
         repr = [self.name]
@@ -56,7 +47,7 @@ class CreditCard(Account):
     """A credit card."""
 
 
-class Transaction(object):
+class Transaction(BaseModel):
     """A transaction.
 
     :param date: The date of the transaction.
@@ -64,16 +55,10 @@ class Transaction(object):
     :param memo: The memo of the transaction, if any.
     :param category: The category of the transaction, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: int | float,
-            memo: str | None = None,
-            category: str | None = None):
-        self.date = date
-        self.amount = amount
-        self.memo = memo
-        self.category = category
+    date: datetime.datetime
+    amount: int | float
+    memo: str | None = None
+    category: str | None = None
 
     def __str__(self) -> str:
         return 'Date: %s. Amount: %.2f. Memo: %s. Category: %s.' % (
@@ -90,17 +75,8 @@ class Payment(Transaction):
     :param memo: The memo of the payment, if any.
     :param category: The category of the payment, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: int | float,
-            payer: str | None = None,
-            payee: str | None = None,
-            memo: str | None = None,
-            category: str | None = None):
-        super(Payment, self).__init__(date, amount, memo, category)
-        self.payer = payer
-        self.payee = payee
+    payer: str | None = None
+    payee: str | None = None
 
     def __str__(self) -> str:
         return (
@@ -124,22 +100,10 @@ class InvestmentSecurityTransaction(Transaction):
     :param memo: The memo of the transaction, if any.
     :param category: The category of the transaction, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            symbol: str,
-            quantity: int,
-            price: float,
-            commissions: float,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentSecurityTransaction, self).__init__(
-                date, amount, memo, category)
-        self.symbol = symbol
-        self.quantity = quantity
-        self.price = price
-        self.commissions = commissions
+    symbol: str
+    quantity: float
+    price: float
+    commissions: float
 
 
 class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
@@ -147,19 +111,7 @@ class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
 
     See SecurityTransaction for parameters.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            symbol: str,
-            quantity: int,
-            price: float,
-            commissions: float,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentSecurityPurchase, self).__init__(
-                date, symbol, quantity, price, commissions, amount, memo,
-                category)
+    pass
 
 
 class InvestmentSecuritySale(InvestmentSecurityTransaction):
@@ -167,19 +119,7 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
 
     See SecurityTransaction for parameters.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            symbol: str,
-            quantity: int,
-            price: float,
-            commissions: float,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentSecuritySale, self).__init__(
-                date, symbol, quantity, price, commissions, amount, memo,
-                category)
+    pass
 
 
 class InvestmentDividend(Transaction):
@@ -191,16 +131,7 @@ class InvestmentDividend(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            symbol: str,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentDividend, self).__init__(
-                date, amount, memo, category)
-        self.symbol = symbol
+    symbol: str
 
 
 class InvestmentInterestExpense(Transaction):
@@ -211,14 +142,7 @@ class InvestmentInterestExpense(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentInterestExpense, self).__init__(
-                date, amount, memo, category)
+    pass
 
 
 class InvestmentInterestIncome(Transaction):
@@ -229,14 +153,7 @@ class InvestmentInterestIncome(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: float,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentInterestIncome, self).__init__(
-                date, amount, memo, category)
+    pass
 
 
 class InvestmentMiscExpense(Transaction):
@@ -246,18 +163,9 @@ class InvestmentMiscExpense(Transaction):
     :param amount: The total amount of the expense.
     :param symbol: The symbol of the security of the expense.
     :param memo: The memo of the expense, if any.
-    :param category: The category of the expense, if any.
+    :param category: The category of the dividend, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: float,
-            symbol: str | None = None,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentMiscExpense, self).__init__(
-                date, amount, memo, category)
-        self.symbol = symbol
+    symbol: str | None = None
 
 
 class InvestmentMiscIncome(Transaction):
@@ -269,13 +177,8 @@ class InvestmentMiscIncome(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
-    def __init__(
-            self,
-            date: datetime.datetime,
-            amount: float,
-            symbol: str | None = None,
-            memo: str | None = None,
-            category: str | None = None):
-        super(InvestmentMiscIncome, self).__init__(
-                date, amount, memo, category)
-        self.symbol = symbol
+    symbol: str | None = None
+
+
+# Resolve forward references
+Account.model_rebuild()

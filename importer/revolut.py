@@ -52,6 +52,7 @@ class RevolutImporter(importer.Importer):
                 memo_parts = (description, 'Fee: %.2f' % fee if fee else None)
                 memo = '. '.join(filter(bool, memo_parts))
 
-                transactions.append(model.Payment(date, amount, memo=memo))
+                transactions.append(
+                        model.Payment(date=date, amount=amount, memo=memo))
             logger.debug("Imported %d transactions." % len(transactions))
             return transactions
