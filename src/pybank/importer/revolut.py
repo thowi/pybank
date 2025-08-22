@@ -2,9 +2,9 @@ import csv
 import datetime
 import logging
 
+from .. import importer
+from .. import model
 
-import importer
-import model
 
 DATE_TIME_FORMAT = '%Y-%m-%d %H:%M:%S'
 

@@ -2,8 +2,9 @@ import datetime
 import logging
 from typing import TextIO, Any
 
-import importer
-import model
+from .. import importer
+from .. import model
+
 
 DATE_FORMAT_LONG = '%d.%m.%Y'
 DATE_FORMAT_SHORT = '%d.%m.%y'

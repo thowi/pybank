@@ -3,9 +3,9 @@ import datetime
 import io
 import logging
 
+from .. import importer
+from .. import model
 
-import importer
-import model
 
 DATE_FORMAT = '%d-%m-%Y'
 

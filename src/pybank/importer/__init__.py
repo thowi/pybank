@@ -7,10 +7,9 @@ import re
 import string
 import sys
 
-
 import chardet
 
-import model
+from .. import model
 
 
 WHITESPACE_PATTERN = re.compile(r' +')

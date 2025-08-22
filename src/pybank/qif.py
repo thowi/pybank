@@ -5,7 +5,7 @@ Not complete.
 See http://www.respmech.com/mym2qifw/qif_new.htm for the spec.
 """
 
-import model
+from . import model
 
 DATE_FORMAT = '%x'
 AMOUNT_FORMAT = '%.4f'

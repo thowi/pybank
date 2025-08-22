@@ -18,17 +18,17 @@ import getopt
 import re
 import sys
 
-import download.dkb
-import download.ib
-import download.postfinance
-import download.revolut
-import qif
+import pybank.download.dkb
+import pybank.download.ib
+import pybank.download.postfinance
+import pybank.download.revolut
+from . import qif
 
 BANK_BY_NAME = {
-    'dkb': download.dkb.DeutscheKreditBank,
-    'interactivebrokers': download.ib.InteractiveBrokers,
-    'postfinance': download.postfinance.PostFinance,
-    'revolut': download.revolut.Revolut,
+    'dkb': pybank.download.dkb.DeutscheKreditBank,
+    'interactivebrokers': pybank.download.ib.InteractiveBrokers,
+    'postfinance': pybank.download.postfinance.PostFinance,
+    'revolut': pybank.download.revolut.Revolut,
 }
 DATE_FORMAT = '%Y-%m-%d'
 INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z0-9-_.]')

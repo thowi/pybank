@@ -8,7 +8,7 @@ import time
 
 import selenium.webdriver
 
-import model
+from .. import model
 
 logger = logging.getLogger(__name__)
 

@@ -6,10 +6,8 @@ import itertools
 import logging
 import re
 
-
-import download
-import download.bank
-import model
+from .. import download
+from .. import model
 
 
 logger = logging.getLogger(__name__)

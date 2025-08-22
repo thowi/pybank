@@ -5,8 +5,9 @@ import logging
 import re
 from typing import Any, TextIO
 
-import importer
-import model
+from .. import importer
+from .. import model
+
 
 DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
 DATE_FORMAT = '%Y-%m-%d'

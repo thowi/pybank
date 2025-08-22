@@ -9,14 +9,12 @@ import re
 import tempfile
 import time
 
-
 from selenium import webdriver
 from selenium.common import exceptions
 from selenium.webdriver.support import ui
 from selenium.webdriver import chrome
-import download
-import download.bank
-import model
+from .. import download
+from .. import model
 
 
 logger = logging.getLogger(__name__)
