@@ -1,12 +1,13 @@
 [build-system]
-requires = ["setuptools>=65.5.1", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
 [project]
 name = "pybank"
 version = "0.1.0"
 description = "Download and convert bank statements"
-license = {text = "MIT"}
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{name = "Thomas Wittek", email = "thomas@wittek.me"}]
 readme = "README.md"
 requires-python = ">=3.13"
