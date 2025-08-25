@@ -108,7 +108,7 @@ def open_input_file(
         encoding: str | None = None) -> object:
     encoding = _detect_encoding(file, filename)
     if file:
-        return codecs.getreader(encoding)(sys.stdin.detach())
+        return codecs.getreader(encoding)(file)
     elif filename:
         return codecs.open(filename, 'r', encoding)
     else:
