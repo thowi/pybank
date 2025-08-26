@@ -100,10 +100,14 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
 def _detect_encoding(
         file: io.IOBase | None = None,
         filename: str | None = None) -> str:
-    if file is None and filename is not None:
-        file = open(filename, 'rb')
-    rawdata = file.read()
-    file.seek(0)
+    if file:
+        rawdata = file.read()
+        file.seek(0)
+    elif filename:
+        with open(filename, 'rb') as file:
+            rawdata = file.read()
+    else:
+        raise Exception('Either file or filename must be specified.')
     result = chardet.detect(rawdata)
     encoding = result['encoding'] if result['confidence'] > 0.5 else None
     if encoding:
@@ -118,6 +122,12 @@ def open_input_file(
         file: io.IOBase | None = None,
         filename: str | None = None,
         encoding: str | None = None) -> object:
+    """Returns a file that can be read with the proper encoding.
+
+    For already opened files, only detects the encoding and wraps it in the
+    proper reader.
+    For filenames, opens the file with the proper encoding.
+    """
     encoding = _detect_encoding(file, filename)
     if file:
         return codecs.getreader(encoding)(file)
@@ -146,36 +156,36 @@ def read_csv_with_header(
     :return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
-    with open_input_file(file, filename) as f:
-        f.seek(0)  # In case the file was read before.
-        reader = csv.reader(f, delimiter=';', quotechar='"')
+    f = open_input_file(file, filename)
+    f.seek(0)  # In case the file was read before.
+    reader = csv.reader(f, delimiter=';', quotechar='"')
+    # Read metadata.
+    metadata = {}
+    col_names = None
+    rows = []
+    for row in reader:
+        # Remove empty metadata columns.
+        if not col_names:
+            row = [col for col in row if col]
+
+        # Skip empty/irrelevant rows.
+        if len(row) < 2:
+            continue
+
         # Read metadata.
-        metadata = {}
-        col_names = None
-        rows = []
-        for row in reader:
-            # Remove empty metadata columns.
-            if not col_names:
-                row = [col for col in row if col]
+        if len(row) == 2 and not col_names:
+            metadata[row[0]] = row[1]
+            continue
 
-            # Skip empty/irrelevant rows.
-            if len(row) < 2:
-                continue
+        # Read column names.
+        if not col_names:
+            col_names = row
+            continue
 
-            # Read metadata.
-            if len(row) == 2 and not col_names:
-                metadata[row[0]] = row[1]
-                continue
+        # Read transaction rows.
+        rows.append(dict(zip(col_names, row)))
 
-            # Read column names.
-            if not col_names:
-                col_names = row
-                continue
-
-            # Read transaction rows.
-            rows.append(dict(zip(col_names, row)))
-
-        return metadata, rows
+    return metadata, rows
 
 
 def get_value(row: dict[str, str], keys: list[str]) -> str | None:
