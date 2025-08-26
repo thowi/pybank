@@ -15,6 +15,7 @@ import logging
 import getopt
 import sys
 
+import pybank.importer.auto
 import pybank.importer.dkb
 import pybank.importer.ib
 import pybank.importer.postfinance
@@ -23,7 +24,9 @@ import pybank.importer.schwab
 import pybank.importer.wise
 from pybank import qif
 
+
 IMPORTER_BY_NAME = {
+    'auto': pybank.importer.auto.AutoImporter,
     'dkb-checking': pybank.importer.dkb.DkbCheckingImporter,
     'dkb-credit-card': pybank.importer.dkb.DkbCreditCardImporter,
     'interactive-brokers': pybank.importer.ib.InteractiveBrokersImporter,
@@ -37,6 +40,7 @@ IMPORTER_BY_NAME = {
 }
 LOG_FORMAT = '%(message)s'
 LOG_FORMAT_DEBUG = '%(levelname)s %(name)s: %(message)s'
+
 
 logger = logging.getLogger(__name__)
 

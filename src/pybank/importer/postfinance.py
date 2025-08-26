@@ -1,6 +1,7 @@
 import datetime
 import io
 import logging
+from typing import TextIO
 
 from .. import importer
 from .. import model
@@ -8,6 +9,14 @@ from .. import model
 
 DATE_FORMAT_ISO = '%Y-%m-%d'
 DATE_FORMAT_DE = '%d.%m.%Y'
+
+CURRENCY = 'CHF'
+DATE_COLS = 'Buchungsdatum', 'Datum'
+CREDIT_COL = 'Gutschrift in ' + CURRENCY
+DEBIT_COL = 'Lastschrift in ' + CURRENCY
+MEMO_COLS = 'Buchungsdetails', 'Bezeichnung', 'Avisierungstext', 'Buchungstext'
+AMOUNT_COLS = CREDIT_COL, DEBIT_COL
+CATEGORY_COL = 'Kategorie'
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +32,13 @@ def _parse_float(string: str) -> float:
     return importer.parse_decimal_number(string, 'de_CH')
 
 
+def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
+    return (
+        importer.get_value(rows[0], DATE_COLS) is not None and
+        importer.get_value(rows[0], AMOUNT_COLS) is not None and
+        importer.get_value(rows[0], MEMO_COLS) is not None)
+
+
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
     def import_transactions(
@@ -32,28 +48,23 @@ class _PostFinanceImporter(importer.Importer):
             currency: str | None = None) -> list[model.Payment]:
         metadata, rows = importer.read_csv_with_header(file, filename)
         # TODO: Support different currencies.
-        currency = 'CHF'
-        credit_col = 'Gutschrift in ' + currency
-        debit_col = 'Lastschrift in ' + currency
-        category_col = 'Kategorie'
 
         # Get transactions.
         transactions = []
         for row in rows:
-            date_str = row.get('Buchungsdatum') or row.get('Datum')
+            date_str = importer.get_value(row, DATE_COLS)
             date = _parse_date(date_str)
 
-            credit = _parse_float(row[credit_col]) if row.get(credit_col) \
+            credit = _parse_float(row[CREDIT_COL]) if row.get(CREDIT_COL) \
                     else None
-            debit = -abs(_parse_float(row[debit_col])) if row.get(debit_col) \
+            debit = -abs(_parse_float(row[DEBIT_COL])) if row.get(DEBIT_COL) \
                     else None
             amount = credit if credit else debit
 
-            memo_str = row.get('Buchungsdetails') or row.get('Bezeichnung') or \
-                    row.get('Avisierungstext')
+            memo_str = importer.get_value(row, MEMO_COLS)
             memo = importer.normalize_text(memo_str)
 
-            category = row.get(category_col)
+            category = row.get(CATEGORY_COL)
 
             # Skip "Total" row.
             if memo == 'Total' and not amount:
@@ -69,8 +80,28 @@ class _PostFinanceImporter(importer.Importer):
 class PostFinanceCheckingImporter(_PostFinanceImporter):
     """Importer for PostFinance checking accounts (http://www.postfincance.ch/).
     """
+    def can_import(
+            self,
+            file: TextIO | None = None,
+            filename: str | None = None) -> bool:
+        metadata, rows = importer.read_csv_with_header(file, filename)
+        return (
+            'Konto:' in metadata and
+            # Yeah, weird CSV formatting.
+            metadata['Konto:'].startswith('="CH0209000000') and
+            _has_minimal_columns(rows))
 
 
 class PostFinanceCreditCardImporter(_PostFinanceImporter):
     """Importer for PostFinance credit cards (http://www.postfincance.ch/).
     """
+    def can_import(
+            self,
+            file: TextIO | None = None,
+            filename: str | None = None) -> bool:
+        metadata, rows = importer.read_csv_with_header(file, filename)
+        return (
+            'Kartenkonto:' in metadata and
+            'Karte:' in metadata and
+            metadata['Karte:'].startswith('XXXX') and
+            _has_minimal_columns(rows))

@@ -22,7 +22,7 @@ import pybank.download.dkb
 import pybank.download.ib
 import pybank.download.postfinance
 import pybank.download.revolut
-from . import qif
+from pybank import qif
 
 BANK_BY_NAME = {
     'dkb': pybank.download.dkb.DeutscheKreditBank,

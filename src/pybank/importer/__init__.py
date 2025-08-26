@@ -5,7 +5,6 @@ import locale
 import logging
 import re
 import string
-import sys
 
 import chardet
 
@@ -39,6 +38,19 @@ class Importer:
         :param filename: The filename to read from
         :param currency: Optionally filter the transactions for a currency
         :return: The imported transactions
+        :raises Exception: If any import error occurs
+        """
+        raise NotImplementedError()
+
+    def can_import(
+            self,
+            file: io.IOBase | None = None,
+            filename: str | None = None) -> bool:
+        """Returns whether the importer can import the given file or filename.
+
+        :param file: The file object to read from
+        :param filename: The filename to read from
+        :return: Whether the importer can import the given file or filename
         """
         raise NotImplementedError()
 
@@ -127,13 +139,16 @@ def read_csv_with_header(
     Using this intermediate data structure allows for easier processing of some
     CSV files.
 
+    Will use either the file object or the filename to read the file.
+
     :param file: The file object to read from.
     :param filename: The filename to read from.
     :return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
-    with open_input_file(file, filename) as file:
-        reader = csv.reader(file, delimiter=';', quotechar='"')
+    with open_input_file(file, filename) as f:
+        f.seek(0)  # In case the file was read before.
+        reader = csv.reader(f, delimiter=';', quotechar='"')
         # Read metadata.
         metadata = {}
         col_names = None
@@ -161,6 +176,7 @@ def read_csv_with_header(
             rows.append(dict(zip(col_names, row)))
 
         return metadata, rows
+
 
 def get_value(row: dict[str, str], keys: list[str]) -> str | None:
     """Returns the first value found in the row dict for the given keys.
