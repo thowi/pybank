@@ -15,6 +15,8 @@ import logging
 import getopt
 import sys
 
+import charset_normalizer
+
 import pybank.importer.auto
 import pybank.importer.dkb
 import pybank.importer.ib
@@ -101,12 +103,17 @@ def _parse_args(argv):
             other_args[0] if other_args else None)
 
 
-def _convert_file(importer_name, currency, debug, input_filename):
+def _convert_file(importer_name, currency, debug, filename):
     importer_class = IMPORTER_BY_NAME[importer_name]
     importer = importer_class(debug)
-    input_file = None if input_filename else sys.stdin
-    transactions = importer.import_transactions(
-            file=input_file, filename=input_filename, currency=currency)
+
+    if filename:
+        with _open_file(filename) as file:
+            transactions = importer.import_transactions(
+                    file=file, currency=currency)
+    else:
+        transactions = importer.import_transactions(
+                file=sys.stdin, currency=currency)
 
     try:
         txns_qif = (qif.serialize_transaction(t) for t in transactions)
@@ -114,6 +121,21 @@ def _convert_file(importer_name, currency, debug, input_filename):
     except qif.SerializationError as e:
         logger.error('Serialization error: %s.', e)
         return
+
+
+def _open_file(filename):
+    encoding_guess = charset_normalizer.from_path(filename).best()
+    if encoding_guess:
+        logger.debug('Detected encoding: %s.' % encoding_guess.encoding)
+        encoding = encoding_guess.encoding
+        # Strip the BOM from UTF-8 files.
+        if encoding.lower() == 'utf_8':
+            encoding = 'utf-8-sig'
+    else:
+        logger.warning('Failed to detect encoding. Falling back to utf-8.')
+        encoding = 'utf-8-sig'
+    # Use newline='' as suggested by the csv.readerdocs.
+    return open(filename, 'r', encoding=encoding, newline='')
 
 
 def main(argv: list[str] | None = None) -> int:

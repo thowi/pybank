@@ -41,12 +41,9 @@ def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
 
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(
-            self,
-            file: io.IOBase | None = None,
-            filename: str | None = None,
-            currency: str | None = None) -> list[model.Payment]:
-        metadata, rows = importer.read_csv_with_header(file, filename)
+    def import_transactions(self, file: TextIO, currency: str | None = None) \
+            -> list[model.Payment]:
+        metadata, rows = importer.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
@@ -80,26 +77,19 @@ class _PostFinanceImporter(importer.Importer):
 class PostFinanceCheckingImporter(_PostFinanceImporter):
     """Importer for PostFinance checking accounts (http://www.postfincance.ch/).
     """
-    def can_import(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None) -> bool:
-        metadata, rows = importer.read_csv_with_header(file, filename)
+    def can_import(self, file: TextIO) -> bool:
+        metadata, rows = importer.read_csv_with_header(file)
         return (
             'Konto:' in metadata and
-            # Yeah, weird CSV formatting.
-            metadata['Konto:'].startswith('="CH0209000000') and
+            metadata['Konto:'].startswith('CH') and
             _has_minimal_columns(rows))
 
 
 class PostFinanceCreditCardImporter(_PostFinanceImporter):
     """Importer for PostFinance credit cards (http://www.postfincance.ch/).
     """
-    def can_import(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None) -> bool:
-        metadata, rows = importer.read_csv_with_header(file, filename)
+    def can_import(self, file: TextIO) -> bool:
+        metadata, rows = importer.read_csv_with_header(file)
         return (
             'Kartenkonto:' in metadata and
             'Karte:' in metadata and

@@ -43,13 +43,10 @@ def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
 
 class _DkbImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None,
-            currency: str | None = None) -> list[model.Payment]:
+    def import_transactions(self, file: TextIO, currency: str | None = None) \
+                -> list[model.Payment]:
         """Import transactions from DKB CSV file"""
-        metadata, rows = importer.read_csv_with_header(file, filename)
+        metadata, rows = importer.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
@@ -94,11 +91,8 @@ class _DkbImporter(importer.Importer):
 
 
 class DkbCheckingImporter(_DkbImporter):
-    def can_import(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None) -> bool:
-        metadata, rows = importer.read_csv_with_header(file, filename)
+    def can_import(self, file: TextIO) -> bool:
+        metadata, rows = importer.read_csv_with_header(file)
         return (
             'Girokonto' in metadata and
             metadata['Girokonto'].startswith('DE6412030000') and
@@ -106,11 +100,8 @@ class DkbCheckingImporter(_DkbImporter):
 
 
 class DkbCreditCardImporter(_DkbImporter):
-    def can_import(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None) -> bool:
-        metadata, rows = importer.read_csv_with_header(file, filename)
+    def can_import(self, file: TextIO) -> bool:
+        metadata, rows = importer.read_csv_with_header(file)
         return (
             'Kreditkarte:' in metadata and
             any(metadata['Kreditkarte:'].startswith(p) for p in CC_PREFIXES) and

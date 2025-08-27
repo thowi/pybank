@@ -1,4 +1,3 @@
-import codecs
 import csv
 import io
 import locale
@@ -6,14 +5,11 @@ import logging
 import re
 import string
 
-import chardet
-
 from .. import model
 
 
 WHITESPACE_PATTERN = re.compile(r' +')
 
-logging.getLogger('chardet.charsetprober').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
 
 
@@ -28,29 +24,22 @@ class Importer:
         self._debug = debug
 
     def import_transactions(
-            self,
-            file: io.IOBase | None = None,
-            filename: str | None = None,
-            currency: str | None = None) -> list[model.Transaction]:
-        """Imports transactions from a file or filename and returns Model data.
+            self, file: io.IOBase, currency: str | None = None) \
+            -> list[model.Transaction]:
+        """Imports transactions from a file and returns Model data.
 
         :param file: The file object to read from
-        :param filename: The filename to read from
         :param currency: Optionally filter the transactions for a currency
         :return: The imported transactions
         :raises Exception: If any import error occurs
         """
         raise NotImplementedError()
 
-    def can_import(
-            self,
-            file: io.IOBase | None = None,
-            filename: str | None = None) -> bool:
-        """Returns whether the importer can import the given file or filename.
+    def can_import(self, file: io.IOBase) -> bool:
+        """Returns whether the importer can import the given file.
 
         :param file: The file object to read from
-        :param filename: The filename to read from
-        :return: Whether the importer can import the given file or filename
+        :return: Whether the importer can import the given file
         """
         raise NotImplementedError()
 
@@ -97,49 +86,7 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def _detect_encoding(
-        file: io.IOBase | None = None,
-        filename: str | None = None) -> str:
-    if file:
-        rawdata = file.read()
-        file.seek(0)
-    elif filename:
-        with open(filename, 'rb') as file:
-            rawdata = file.read()
-    else:
-        raise Exception('Either file or filename must be specified.')
-    result = chardet.detect(rawdata)
-    encoding = result['encoding'] if result['confidence'] > 0.5 else None
-    if encoding:
-        logger.debug('Detected encoding: %s' % encoding)
-        return encoding
-    else:
-        logger.warning('Failed to detect encoding. Falling back to utf-8.')
-        return 'utf-8'
-
-
-def open_input_file(
-        file: io.IOBase | None = None,
-        filename: str | None = None,
-        encoding: str | None = None) -> object:
-    """Returns a file that can be read with the proper encoding.
-
-    For already opened files, only detects the encoding and wraps it in the
-    proper reader.
-    For filenames, opens the file with the proper encoding.
-    """
-    encoding = _detect_encoding(file, filename)
-    if file:
-        return codecs.getreader(encoding)(file)
-    elif filename:
-        return codecs.open(filename, 'r', encoding)
-    else:
-        raise Exception('Either file or filename must be specified.')
-
-
-def read_csv_with_header(
-        file: io.IOBase | None = None,
-        filename: str | None = None) \
+def read_csv_with_header(file: io.IOBase) \
         -> tuple[dict[str, str], list[dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 
@@ -149,22 +96,28 @@ def read_csv_with_header(
     Using this intermediate data structure allows for easier processing of some
     CSV files.
 
-    Will use either the file object or the filename to read the file.
-
     :param file: The file object to read from.
-    :param filename: The filename to read from.
     :return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
-    f = open_input_file(file, filename)
-    f.seek(0)  # In case the file was read before.
-    reader = csv.reader(f, delimiter=';', quotechar='"')
+    # In case the file was read before, e.g. in the can_import pass.
+    file.seek(0)
+    reader = csv.reader(file, delimiter=';', quotechar='"')
     # Read metadata.
     metadata = {}
     col_names = None
     rows = []
     for row in reader:
-        # Remove empty metadata columns.
+        # Clean up the row.
+        # Some CSVs wrap the values in a formula syntax.
+        clean_row = []
+        for col in row:
+            if col.startswith('="') and col.endswith('"'):
+                col = col[2:-1]  # strip ="
+            clean_row.append(col)
+        row = clean_row
+
+       # Remove empty metadata columns.
         if not col_names:
             row = [col for col in row if col]
 

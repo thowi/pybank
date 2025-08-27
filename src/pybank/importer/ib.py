@@ -19,14 +19,10 @@ class InteractiveBrokersImporter(importer.Importer):
     """Importer for Interactive Brokers (https://www.interactivebrokers.com/).
     """
 
-    def import_transactions(
-            self,
-            file: TextIO | None = None,
-            filename: str | None = None,
-            currency: str | None = None) -> list[model.Transaction]:
+    def import_transactions(self, file: TextIO, currency: str | None = None) \
+                -> list[model.Transaction]:
         """Import transactions from IB statement file"""
-        with importer.open_input_file(file, filename) as file:
-            csv_dict = self._parse_csv_into_dict(file)
+        csv_dict = self._parse_csv_into_dict(file)
 
         transfers = self._get_transfers(csv_dict)
         trades = self._get_trades(csv_dict)
