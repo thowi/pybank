@@ -1,9 +1,9 @@
 import csv
-import io
 import locale
 import logging
 import re
 import string
+from typing import TextIO
 
 from .. import model
 
@@ -24,7 +24,7 @@ class Importer:
         self._debug = debug
 
     def import_transactions(
-            self, file: io.IOBase, currency: str | None = None) \
+            self, file: TextIO, currency: str | None = None) \
             -> list[model.Transaction]:
         """Imports transactions from a file and returns Model data.
 
@@ -35,7 +35,7 @@ class Importer:
         """
         raise NotImplementedError()
 
-    def can_import(self, file: io.IOBase) -> bool:
+    def can_import(self, file: TextIO) -> bool:
         """Returns whether the importer can import the given file.
 
         :param file: The file object to read from
@@ -86,7 +86,7 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def read_csv_with_header(file: io.IOBase) \
+def read_csv_with_header(file: TextIO) \
         -> tuple[dict[str, str], list[dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 

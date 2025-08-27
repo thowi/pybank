@@ -1,6 +1,5 @@
 import csv
 import datetime
-import io
 import logging
 from typing import TextIO
 
@@ -64,7 +63,7 @@ class SchwabEacImporter(importer.Importer):
     (http://www.schwab.com/).
     """
 
-    def import_transactions(self, file: io.IOBase, currency: str | None = None) \
+    def import_transactions(self, file: TextIO, currency: str | None = None) \
             -> list[model.Transaction]:
         reader = csv.reader(file, delimiter=',', quotechar='"')
 

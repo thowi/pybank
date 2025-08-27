@@ -1,4 +1,3 @@
-import io
 import logging
 from typing import TextIO
 
@@ -34,7 +33,7 @@ class AutoImporter(importer.Importer):
             raise ValueError('No importer found for input')
         return importer.import_transactions(file=file, currency=currency)
 
-    def _detect(self, file: io.IOBase) -> importer.Importer:
+    def _detect(self, file: TextIO) -> importer.Importer:
         for importer_class in IMPORTERS:
             importer = importer_class(self._debug)
             if importer.can_import(file):
