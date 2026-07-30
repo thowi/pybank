@@ -68,30 +68,36 @@ def format_cc_account_name(account_name: str) -> str:
 
 
 def format_string_into_blocks(
-        string: str, block_length: int, separator: str = ' ') -> str:
+    string: str, block_length: int, separator: str = ' '
+) -> str:
     parts = []
     index = 0
     while index < len(string):
-        parts.append(string[index:index + block_length])
+        parts.append(string[index : index + block_length])
         index += block_length
     return separator.join(parts)
 
 
 def find_element_by_title(parent: WebElement, title: str) -> WebElement:
     return parent.find_element_by_xpath(
-            ".//*[normalize-space(@title) = '%s']" % title)
+        ".//*[normalize-space(@title) = '%s']" % title
+    )
 
 
 def find_element_by_tag_name_and_text(
-        parent: WebElement, tag_name: str, text: str) -> WebElement:
+    parent: WebElement, tag_name: str, text: str
+) -> WebElement:
     return parent.find_element_by_xpath(
-            ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
+        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
+    )
 
 
 def find_elements_by_tag_name_and_text(
-        parent: WebElement, tag_name: str, text: str) -> list[WebElement]:
+    parent: WebElement, tag_name: str, text: str
+) -> list[WebElement]:
     return parent.find_elements_by_xpath(
-            ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
+        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
+    )
 
 
 def find_element_by_text(parent: WebElement, text: str) -> WebElement:
@@ -109,9 +115,11 @@ def get_first_displayed(elements: list[WebElement]) -> WebElement | None:
 
 
 def find_element_by_tag_name_and_text(
-        parent: WebElement, tag_name: str, text: str) -> WebElement:
+    parent: WebElement, tag_name: str, text: str
+) -> WebElement:
     return parent.find_element_by_xpath(
-            ".//%s[normalize-space(text()) = '%s']" % (tag_name, text))
+        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
+    )
 
 
 def find_button_by_text(parent: WebElement, text: str) -> WebElement:
@@ -120,12 +128,13 @@ def find_button_by_text(parent: WebElement, text: str) -> WebElement:
 
 def find_input_button_by_text(parent: WebElement, text: str) -> WebElement:
     return parent.find_element_by_xpath(
-            ".//input[@type = 'button' and normalize-space(@value) = '%s']" %
-            text)
+        ".//input[@type = 'button' and normalize-space(@value) = '%s']" % text
+    )
 
 
 def get_element_or_none(
-        lookup_callable: Callable[[], WebElement]) -> WebElement | None:
+    lookup_callable: Callable[[], WebElement],
+) -> WebElement | None:
     """Returns the element for the lookup or None if not found.
 
     :param lookup_callable: The lookup to execute
@@ -159,7 +168,8 @@ def is_element_displayed(lookup_callable: Callable[[], WebElement]) -> bool:
 
 
 def wait_for_element_to_appear_and_disappear(
-        lookup_callable: Callable[[], WebElement], timeout_s: int = 10) -> None:
+    lookup_callable: Callable[[], WebElement], timeout_s: int = 10
+) -> None:
     """Waits for an element to appear and then disappear.
 
     If the element doesn't appear it is assumed to be gone already.
@@ -183,10 +193,11 @@ def wait_for_element_to_appear_and_disappear(
 
 # Mostly copied from https://github.com/wiredrive/wtframework/blob/master/wtframework/wtf/utils/wait_utils.py
 def wait_until(
-        condition: Callable[[], bool],
-        timeout_s: int = 10,
-        sleep_s: float = 0.5,
-        raise_exceptions: bool = False) -> None:
+    condition: Callable[[], bool],
+    timeout_s: int = 10,
+    sleep_s: float = 0.5,
+    raise_exceptions: bool = False,
+) -> None:
     """Waits for the condition to become true.
 
     :param condition: The condition to check periodically.
@@ -207,9 +218,10 @@ def wait_until(
                 pass
         time.sleep(sleep_s)
 
-    raise OperationTimeoutError("Operation timed out.")
+    raise OperationTimeoutError('Operation timed out.')
 
 
 class OperationTimeoutError(Exception):
     """Thrown when a wait function times out."""
+
     pass

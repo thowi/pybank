@@ -14,11 +14,11 @@ logger = logging.getLogger(__name__)
 
 
 class WiseImporter(importer.Importer):
-    """Importer for Wise accounts (http://www.wise.com/).
-    """
+    """Importer for Wise accounts (http://www.wise.com/)."""
 
-    def import_transactions(self, file: TextIO, currency: str | None = None) \
-                -> list[model.Payment]:
+    def import_transactions(
+        self, file: TextIO, currency: str | None = None
+    ) -> list[model.Payment]:
         reader = csv.reader(file, delimiter=',', quotechar='"')
 
         # Read header.
@@ -59,8 +59,13 @@ class WiseImporter(importer.Importer):
             payee = ', '.join(filter(bool, (payee_name, payee_acc)))
 
             transactions.append(
-                    model.Payment(
-                            date=date, amount=amount, payer=payer_name,
-                            payee=payee, memo=memo))
-        logger.debug("Imported %d transactions." % len(transactions))
+                model.Payment(
+                    date=date,
+                    amount=amount,
+                    payer=payer_name,
+                    payee=payee,
+                    memo=memo,
+                )
+            )
+        logger.debug('Imported %d transactions.' % len(transactions))
         return transactions

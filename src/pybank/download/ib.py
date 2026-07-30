@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 
 class InteractiveBrokers(download.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
+
     _LOGIN_URL = 'https://www.interactivebrokers.co.uk/sso/Login'
     _MAIN_URL = 'https://www.interactivebrokers.co.uk/portal/'
     _ACTIVITY_FORM_DATE_FORMAT = '%Y-%m-%d'
@@ -31,19 +32,23 @@ class InteractiveBrokers(download.bank.Bank):
     _SESSION_TIMEOUT_S = 30 * 60
 
     def login(
-            self,
-            username: str | None = None,
-            password: str | None = None,
-            statements: list[str] | None = None) -> None:
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        statements: list[str] | None = None,
+    ) -> None:
         chrome_options = chrome.options.Options()
         # Download to a custom location. Don't show dialog.
         self._download_dir = tempfile.mkdtemp()
         logger.debug('Downloading files to: ' + self._download_dir)
-        chrome_options.add_experimental_option('prefs', {
-          'download.default_directory': self._download_dir,
-          'download.prompt_for_download': False,
-          'download.directory_upgrade': True,
-        })
+        chrome_options.add_experimental_option(
+            'prefs',
+            {
+                'download.default_directory': self._download_dir,
+                'download.prompt_for_download': False,
+                'download.directory_upgrade': True,
+            },
+        )
         if not self._debug:
             chrome_options.add_argument('--headless')
         self._browser = webdriver.Chrome(chrome_options=chrome_options)
@@ -63,7 +68,8 @@ class InteractiveBrokers(download.bank.Bank):
             username = input('User name: ')
 
         if self.ask_and_restore_cookies(
-                browser, username, self._SESSION_TIMEOUT_S):
+            browser, username, self._SESSION_TIMEOUT_S
+        ):
             browser.get(self._MAIN_URL)
 
         if not self._is_logged_in():
@@ -104,10 +110,11 @@ class InteractiveBrokers(download.bank.Bank):
             download.find_element_by_text(browser, 'Log Out')
             # Often the portal isn't properly connected to the backend even if
             # the login was successful. Perform an additional check.
-            fetch \
-                    .find_element_by_text(browser, 'Manage Your Account') \
-                    .find_element_by_xpath('../..') \
-                    .find_element_by_link_text('Transaction Status & History')
+            fetch.find_element_by_text(
+                browser, 'Manage Your Account'
+            ).find_element_by_xpath('../..').find_element_by_link_text(
+                'Transaction Status & History'
+            )
             browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
             return True
         except exceptions.NoSuchElementException:
@@ -142,13 +149,15 @@ class InteractiveBrokers(download.bank.Bank):
         logger.debug('Getting account name…')
         self._navigate_to('Settings', 'Account Settings')
         account_name = browser.find_element_by_css_selector(
-                '.page-head .account-numbers').text.strip()
+            '.page-head .account-numbers'
+        ).text.strip()
 
         logger.debug('Getting balances from activity statement…')
         yesterday = datetime.datetime.today() - datetime.timedelta(1)
         accounts = []
         csv_dict = self._download_activity_statement(
-                account_name, yesterday, yesterday)
+            account_name, yesterday, yesterday
+        )
         account_data = csv_dict['Account Information']['Data']['Account']
         account_name = account_data['__rows'][0][0]
         ending_cash = csv_dict['Cash Report']['Data']['Ending Cash']
@@ -157,9 +166,14 @@ class InteractiveBrokers(download.bank.Bank):
         for currency in currencies:
             name = '%s.%s' % (account_name, currency)
             balance = self._parse_float(ending_cash[currency]['__rows'][0][0])
-            accounts.append(model.InvestmentsAccount(
-                    name=name, currency=currency, balance=balance,
-                    balance_date=yesterday))
+            accounts.append(
+                model.InvestmentsAccount(
+                    name=name,
+                    currency=currency,
+                    balance=balance,
+                    balance_date=yesterday,
+                )
+            )
         return accounts
 
     def get_transactions(self, account, start, end):
@@ -168,15 +182,18 @@ class InteractiveBrokers(download.bank.Bank):
         cached_transactions = self._transactions_cache.get(cache_key)
         if cached_transactions:
             transactions = cached_transactions[currency]
-            logger.info('Found %i cached transactions for account %s.' % (
-                    len(transactions), account))
+            logger.info(
+                'Found %i cached transactions for account %s.'
+                % (len(transactions), account)
+            )
             return transactions
 
         self._check_logged_in()
 
         end_inclusive = end - datetime.timedelta(1)
         csv_dict = self._download_activity_statement(
-                account_name, start, end_inclusive)
+            account_name, start, end_inclusive
+        )
 
         transfers = self._get_transfers(csv_dict, account_name)
         trades = self._get_trades(csv_dict, account_name)
@@ -188,16 +205,23 @@ class InteractiveBrokers(download.bank.Bank):
         # Collect transactions for all currencies. Later select by currency.
         transactions_by_currency = collections.defaultdict(list)
         for category in (
-                transfers, trades, withholding_tax, dividends, interest,
-                other_fees):
+            transfers,
+            trades,
+            withholding_tax,
+            dividends,
+            interest,
+            other_fees,
+        ):
             for category_currency, transactions in list(category.items()):
                 transactions_by_currency[category_currency] += transactions
 
         self._transactions_cache[cache_key] = transactions_by_currency
 
         transactions = transactions_by_currency[currency]
-        logger.info('Found %i transactions for account %s.' % (
-                len(transactions), account))
+        logger.info(
+            'Found %i transactions for account %s.'
+            % (len(transactions), account)
+        )
         return transactions
 
     def _get_transfers(self, csv_dict, account_name):
@@ -212,7 +236,8 @@ class InteractiveBrokers(download.bank.Bank):
             kind = row[2]
             amount = self._parse_float(row[3])
             transaction = model.Payment(
-                    date=date, amount=amount, payee=account_name)
+                date=date, amount=amount, payee=account_name
+            )
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -224,8 +249,9 @@ class InteractiveBrokers(download.bank.Bank):
 
         # Stock and options transactions:
         st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
-        ot = csv_dict['Trades']['Data']['Order']['Equity and Index Options'] \
-                .get('__rows', [])
+        ot = csv_dict['Trades']['Data']['Order'][
+            'Equity and Index Options'
+        ].get('__rows', [])
         for row in st + ot:
             currency = row[0]
             symbol = row[1]
@@ -234,16 +260,26 @@ class InteractiveBrokers(download.bank.Bank):
             price = self._parse_float(row[4])
             proceeds = self._parse_float(row[6])
             # Commissions are reported as a negative number.
-            commissions =  - self._parse_float(row[7])
+            commissions = -self._parse_float(row[7])
             amount = proceeds - commissions
             if quantity >= 0:
                 transaction = model.InvestmentSecurityPurchase(
-                        date=date, symbol=symbol, quantity=quantity,
-                        price=price, commissions=commissions, amount=amount)
+                    date=date,
+                    symbol=symbol,
+                    quantity=quantity,
+                    price=price,
+                    commissions=commissions,
+                    amount=amount,
+                )
             else:
                 transaction = model.InvestmentSecuritySale(
-                        date=date, symbol=symbol, quantity=-quantity,
-                        price=price, commissions=commissions, amount=amount)
+                    date=date,
+                    symbol=symbol,
+                    quantity=-quantity,
+                    price=price,
+                    commissions=commissions,
+                    amount=amount,
+                )
             transactions_by_currency[currency].append(transaction)
 
         # Forex transactions. Treated slightly differently from stocks.
@@ -258,7 +294,7 @@ class InteractiveBrokers(download.bank.Bank):
             price = self._parse_float(row[4])
             proceeds = self._parse_float(row[6])
             # Commissions are reported as a negative number.
-            commissions =  - self._parse_float(row[7])
+            commissions = -self._parse_float(row[7])
 
             if quantity >= 0:
                 buy_currency, sell_currency = to_currency, from_currency
@@ -267,25 +303,46 @@ class InteractiveBrokers(download.bank.Bank):
                 buy_currency, sell_currency = from_currency, to_currency
                 buy_amount, sell_amount = proceeds, -quantity
             memo = 'Buy %.2f %s, sell %.2f %s' % (
-                    buy_amount, buy_currency, sell_amount, sell_currency)
+                buy_amount,
+                buy_currency,
+                sell_amount,
+                sell_currency,
+            )
             quantity = abs(quantity)
             transactions_by_currency[buy_currency].append(
-                    model.InvestmentSecuritySale(
-                            date=date, symbol=symbol, quantity=quantity,
-                            price=price, commissions=commissions,
-                            amount=buy_amount, memo=memo))
+                model.InvestmentSecuritySale(
+                    date=date,
+                    symbol=symbol,
+                    quantity=quantity,
+                    price=price,
+                    commissions=commissions,
+                    amount=buy_amount,
+                    memo=memo,
+                )
+            )
             transactions_by_currency[sell_currency].append(
-                    model.InvestmentSecurityPurchase(
-                            date=date, symbol=symbol, quantity=quantity,
-                            price=price, commissions=0, amount=sell_amount,
-                            memo=memo))
+                model.InvestmentSecurityPurchase(
+                    date=date,
+                    symbol=symbol,
+                    quantity=quantity,
+                    price=price,
+                    commissions=0,
+                    amount=sell_amount,
+                    memo=memo,
+                )
+            )
 
             # Forex commissions are all billed to the main (CHF) account.
             # TODO: Find out the main currency/account. Don't just hardcode
             # CHF.
-            transactions_by_currency['CHF'].append(model.InvestmentMiscExpense(
-                    date=date, amount=commissions, symbol=symbol,
-                    memo='Forex commissions'))
+            transactions_by_currency['CHF'].append(
+                model.InvestmentMiscExpense(
+                    date=date,
+                    amount=commissions,
+                    symbol=symbol,
+                    memo='Forex commissions',
+                )
+            )
 
         return transactions_by_currency
 
@@ -304,11 +361,13 @@ class InteractiveBrokers(download.bank.Bank):
             memo = description
             if amount < 0:
                 transaction = model.InvestmentMiscExpense(
-                       date=date, amount=amount, symbol=symbol, memo=memo)
+                    date=date, amount=amount, symbol=symbol, memo=memo
+                )
             else:
                 # Possibly a correction for previous withholding tax.
                 transaction = model.InvestmentMiscIncome(
-                       date=date, amount=amount, symbol=symbol, memo=memo)
+                    date=date, amount=amount, symbol=symbol, memo=memo
+                )
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -327,7 +386,8 @@ class InteractiveBrokers(download.bank.Bank):
             symbol = re.split('[ (]', description)[0]
             memo = description
             transaction = model.InvestmentDividend(
-                    date=date, symbol=symbol, amount=amount, memo=memo)
+                date=date, symbol=symbol, amount=amount, memo=memo
+            )
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -346,10 +406,12 @@ class InteractiveBrokers(download.bank.Bank):
             memo = description
             if amount < 0:
                 transaction = model.InvestmentInterestExpense(
-                        date=date, amount=amount, memo=memo)
+                    date=date, amount=amount, memo=memo
+                )
             else:
                 transaction = model.InvestmentInterestIncome(
-                        date=date, amount=amount, memo=memo)
+                    date=date, amount=amount, memo=memo
+                )
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -366,7 +428,8 @@ class InteractiveBrokers(download.bank.Bank):
             memo = description
             symbol = ''
             transaction = model.InvestmentMiscExpense(
-                    date=date, amount=amount, symbol=symbol, memo=memo)
+                date=date, amount=amount, symbol=symbol, memo=memo
+            )
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
@@ -382,24 +445,27 @@ class InteractiveBrokers(download.bank.Bank):
         if not page:
             # Oddly, this needs to be scrolled into view using JS first.
             browser.execute_script(
-                    'Array.from(arguments[0].querySelectorAll("li"))'
-                    '.find(e => e.innerText == arguments[1])'
-                    '.scrollIntoView()',
-                    nav, section)
+                'Array.from(arguments[0].querySelectorAll("li"))'
+                '.find(e => e.innerText == arguments[1])'
+                '.scrollIntoView()',
+                nav,
+                section,
+            )
             nav.find_element_by_link_text(section).click()
             return
         menu_link = nav.find_element_by_partial_link_text(section)
         menu_item = menu_link.find_element_by_xpath('..')
         if not self._is_element_displayed_now(
-                lambda: menu_item.find_element_by_tag_name('ul')):
+            lambda: menu_item.find_element_by_tag_name('ul')
+        ):
             # Open sub menu first.
             menu_link.click()
         # There's a bug in the IB menu where the navigation closes when clicking
         # the top-level menu item the first time. Should the navigation be
         # hidden now, we need to open it again.
         if not self._is_element_displayed_now(
-                lambda: browser.find_element_by_css_selector(
-                        '.bar2-content ul')):
+            lambda: browser.find_element_by_css_selector('.bar2-content ul')
+        ):
             logger.debug('Bug in navigation. Trying again.')
             self._navigate_to(section, page)
             return
@@ -414,13 +480,12 @@ class InteractiveBrokers(download.bank.Bank):
 
         # Open Activity statements dialog.
         browser.find_element_by_xpath(
-                '//*[normalize-space(text()) = "Default Statements"]'
-                '/ancestor::section'
-                '//*[normalize-space(text()) = "Activity"]'
-                '/ancestor::div[@class="row"]'
-                '[1]') \
-                .find_element_by_css_selector('.btn-group-right a') \
-                .click()
+            '//*[normalize-space(text()) = "Default Statements"]'
+            '/ancestor::section'
+            '//*[normalize-space(text()) = "Activity"]'
+            '/ancestor::div[@class="row"]'
+            '[1]'
+        ).find_element_by_css_selector('.btn-group-right a').click()
         self._wait_to_finish_loading()
 
         # Get activity statements form.
@@ -430,13 +495,18 @@ class InteractiveBrokers(download.bank.Bank):
             raise download.FetchError('Activity statements dialog not found.')
 
         # Check statement type.
-        if dialog.find_element_by_css_selector('.modal-header .modal-title') \
-                .text != 'Activity':
+        if (
+            dialog.find_element_by_css_selector(
+                '.modal-header .modal-title'
+            ).text
+            != 'Activity'
+        ):
             raise download.FetchError('Expected activity statement type.')
 
         # Select date range.
-        period_select = download.find_element_by_text(dialog, 'Period') \
-                .find_element_by_xpath('../..//select')
+        period_select = download.find_element_by_text(
+            dialog, 'Period'
+        ).find_element_by_xpath('../..//select')
         ui.Select(period_select).select_by_value('string:DATE_RANGE')
         # Switching period will refresh the form.
         self._wait_to_finish_loading()
@@ -445,8 +515,9 @@ class InteractiveBrokers(download.bank.Bank):
         self._select_date_in_activity_statement('toDate', end)
 
         # Select CSV format.
-        format_select = download.find_element_by_text(dialog, 'Format') \
-                .find_element_by_xpath('../..//select')
+        format_select = download.find_element_by_text(
+            dialog, 'Format'
+        ).find_element_by_xpath('../..//select')
         ui.Select(format_select).select_by_visible_text('CSV')
 
         # Download report.
@@ -457,7 +528,8 @@ class InteractiveBrokers(download.bank.Bank):
         # Find file on disk, load, parse CSV.
         try:
             csv_filename = lambda: self._get_downloaded_filename_newer_than(
-                    before_download_timestamp)
+                before_download_timestamp
+            )
             download.wait_until(csv_filename)
             filename = csv_filename()
             with open(filename, 'r') as csvfile:
@@ -481,7 +553,9 @@ class InteractiveBrokers(download.bank.Bank):
 
     def _parse_csv_into_dict(self, csvfile):
         reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-        nested_default_dict = lambda: collections.defaultdict(nested_default_dict)
+        nested_default_dict = lambda: collections.defaultdict(
+            nested_default_dict
+        )
         csv_dict = nested_default_dict()
         for row in reader:
             cur = csv_dict
@@ -489,7 +563,7 @@ class InteractiveBrokers(download.bank.Bank):
                 cur = cur[cell]
                 if '__rows' not in cur:
                     cur['__rows'] = []
-                cur['__rows'].append(row[i+1:])
+                cur['__rows'].append(row[i + 1 :])
         return csv_dict
 
     def _select_date_in_activity_statement(self, input_name, date):
@@ -523,19 +597,22 @@ class InteractiveBrokers(download.bank.Bank):
 
         # Respect the end date.
         end_date_str = self._browser.execute_script(
-                'return $("input[name=\'%s\']")'
-                '.datepicker("getEndDate")' % input_name)
+            'return $("input[name=\'%s\']")'
+            '.datepicker("getEndDate")' % input_name
+        )
         end_date = datetime.datetime.strptime(
-                end_date_str[:10], self._DATE_FORMAT)
+            end_date_str[:10], self._DATE_FORMAT
+        )
         if date > end_date:
             date = end_date
 
         formatted_date = date.strftime(self._ACTIVITY_FORM_DATE_FORMAT)
         self._browser.execute_script(
-                '$("input[name=\'%s\']")'
-                '.datepicker("show")'
-                '.datepicker("update", "%s")'
-                '.datepicker("hide")' % (input_name, formatted_date))
+            '$("input[name=\'%s\']")'
+            '.datepicker("show")'
+            '.datepicker("update", "%s")'
+            '.datepicker("hide")' % (input_name, formatted_date)
+        )
 
     def _wait_to_finish_loading(self):
         """Waits for the loading indicator to disappear on the current page."""
@@ -567,7 +644,7 @@ class InteractiveBrokers(download.bank.Bank):
         :returns: The account name and currency parts as a tuple.
         """
         last_dot = account_name.rfind('.')
-        return account_name[:last_dot], account_name[last_dot + 1:]
+        return account_name[:last_dot], account_name[last_dot + 1 :]
 
     def _parse_float(self, string):
         return float(string.replace(',', ''))

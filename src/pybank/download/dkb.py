@@ -24,6 +24,7 @@ class DeutscheKreditBank(download.bank.Bank):
     The accounts for a user will be identified by the bank account number
     (digits) or the obfuscated credit card number (1234******5678).
     """
+
     _BASE_URL = 'https://www.dkb.de/banking'
     _DATE_FORMAT = '%d.%m.%Y'
     _DATE_FORMAT_SHORT = '%d.%m.%y'
@@ -31,16 +32,18 @@ class DeutscheKreditBank(download.bank.Bank):
     _SESSION_TIMEOUT_S = 12 * 60
 
     def login(
-            self,
-            username: str | None = None,
-            password: str | None = None,
-            statements: list[str] | None = None) -> None:
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        statements: list[str] | None = None,
+    ) -> None:
         if self._debug:
             self._browser = webdriver.Chrome()
         else:
             import selenium.webdriver.chrome.options
+
             chrome_options = selenium.webdriver.chrome.options.Options()
-            chrome_options.add_argument("--headless")
+            chrome_options.add_argument('--headless')
             self._browser = webdriver.Chrome(chrome_options=chrome_options)
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
@@ -57,7 +60,8 @@ class DeutscheKreditBank(download.bank.Bank):
             username = input('User: ')
 
         if self.ask_and_restore_cookies(
-                browser, username, self._SESSION_TIMEOUT_S):
+            browser, username, self._SESSION_TIMEOUT_S
+        ):
             browser.refresh()
 
         if not self._is_logged_in():
@@ -87,7 +91,8 @@ class DeutscheKreditBank(download.bank.Bank):
 
     def _is_logged_in(self):
         return download.is_element_present(
-                lambda: self._browser.find_element_by_link_text('Finanzstatus'))
+            lambda: self._browser.find_element_by_link_text('Finanzstatus')
+        )
 
     def logout(self) -> None:
         self._browser.find_element_by_id('logout').click()
@@ -110,24 +115,34 @@ class DeutscheKreditBank(download.bank.Bank):
         self._wait_to_finish_loading()
 
         account_rows = browser.find_elements_by_css_selector(
-                '.financialStatusModule tbody tr.mainRow')
+            '.financialStatusModule tbody tr.mainRow'
+        )
         self._accounts = []
         for account_row in account_rows:
             try:
                 cells = account_row.find_elements_by_tag_name('td')
-                name = cells[0].find_elements_by_tag_name('div')[1].text \
-                        .replace(' ', '')
+                name = (
+                    cells[0]
+                    .find_elements_by_tag_name('div')[1]
+                    .text.replace(' ', '')
+                )
                 unused_acc_type = cells[1].text
                 balance_date = self._parse_date(cells[2].text)
                 balance = self._parse_balance(cells[3].text)
                 if self._is_credit_card(name):
                     account = model.CreditCard(
-                            name=name, currency='EUR', balance=balance,
-                            balance_date=balance_date)
+                        name=name,
+                        currency='EUR',
+                        balance=balance,
+                        balance_date=balance_date,
+                    )
                 else:
                     account = model.CheckingAccount(
-                            name=name, currency='EUR', balance=balance,
-                            balance_date=balance_date)
+                        name=name,
+                        currency='EUR',
+                        balance=balance,
+                        balance_date=balance_date,
+                    )
                 self._accounts.append(account)
             except ValueError:
                 logging.error('Invalid account row. %s' % account_row)
@@ -136,10 +151,11 @@ class DeutscheKreditBank(download.bank.Bank):
         return self._accounts
 
     def get_transactions(
-            self,
-            account: model.Account,
-            start: datetime.datetime,
-            end: datetime.datetime) -> list[model.Transaction]:
+        self,
+        account: model.Account,
+        start: datetime.datetime,
+        end: datetime.datetime,
+    ) -> list[model.Transaction]:
         is_credit_card = isinstance(account, model.CreditCard)
         if is_credit_card:
             return self._get_credit_card_transactions(account, start, end)
@@ -228,8 +244,9 @@ class DeutscheKreditBank(download.bank.Bank):
         content = browser.find_element_by_class_name('content')
         form = content.find_element_by_tag_name('form')
         if is_credit_card:
-            form.find_element_by_css_selector('input[value="DATE_RANGE"]') \
-                    .click()
+            form.find_element_by_css_selector(
+                'input[value="DATE_RANGE"]'
+            ).click()
         else:
             form.find_element_by_css_selector('input[value="1"]').click()
         from_name = 'postingDate' if is_credit_card else 'transactionDate'
@@ -248,7 +265,8 @@ class DeutscheKreditBank(download.bank.Bank):
     def _get_transactions_from_checking_account_statement(self):
         transactions = []
         rows = self._browser.find_elements_by_css_selector(
-                'table tbody tr.mainRow')
+            'table tbody tr.mainRow'
+        )
         for row in rows:
             try:
                 cells = row.find_elements_by_tag_name('td')
@@ -258,9 +276,13 @@ class DeutscheKreditBank(download.bank.Bank):
                 date = self._parse_date(date_text)
 
                 # Payee and memo.
-                details_lines = download.normalize_text(cells[1].text).split('\n')
+                details_lines = download.normalize_text(cells[1].text).split(
+                    '\n'
+                )
                 unused_transaction_type = details_lines[0]
-                payee = '\n'.join(details_lines[1:2])  # This line might not exist.
+                payee = '\n'.join(
+                    details_lines[1:2]
+                )  # This line might not exist.
                 memo = '\n'.join(details_lines[2:])  # Might be empty.
                 payee_lines = cells[2].text.split('\n') + ['']
                 payee_account, payee_clearing = payee_lines[:2]
@@ -273,14 +295,14 @@ class DeutscheKreditBank(download.bank.Bank):
                 amount = download.parse_decimal_number(cells[3].text, 'de_DE')
 
                 transactions.append(
-                        model.Payment(
-                            date=date,
-                            amount=amount,
-                            payee=payee,
-                            memo=memo))
+                    model.Payment(
+                        date=date, amount=amount, payee=payee, memo=memo
+                    )
+                )
             except ValueError as e:
                 logger.warning(
-                        'Skipping invalid row: %s. Error: %s' % (row.text, e))
+                    'Skipping invalid row: %s. Error: %s' % (row.text, e)
+                )
                 raise
 
         return transactions
@@ -309,16 +331,21 @@ class DeutscheKreditBank(download.bank.Bank):
                 currencies = cells[4].text.split('\n')
                 if len(currencies) > 1 and len(amounts) > 1:
                     original_amount = download.parse_decimal_number(
-                            amounts[1], 'de_DE')
+                        amounts[1], 'de_DE'
+                    )
                     original_currency = currencies[1]
                     memo += '\nOriginal amount: %s %.2f' % (
-                            original_currency, original_amount)
+                        original_currency,
+                        original_amount,
+                    )
 
                 transactions.append(
-                        model.Payment(date=date, amount=amount, memo=memo))
+                    model.Payment(date=date, amount=amount, memo=memo)
+                )
             except ValueError as e:
                 logger.warning(
-                        'Skipping invalid row: %s. Error: %s' % (row.text, e))
+                    'Skipping invalid row: %s. Error: %s' % (row.text, e)
+                )
                 raise
 
         return transactions
@@ -348,7 +375,8 @@ class DeutscheKreditBank(download.bank.Bank):
             return datetime.datetime.strptime(date_string, self._DATE_FORMAT)
         except ValueError:
             return datetime.datetime.strptime(
-                    date_string, self._DATE_FORMAT_SHORT)
+                date_string, self._DATE_FORMAT_SHORT
+            )
 
     def _check_logged_in(self):
         if not self._logged_in:

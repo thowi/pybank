@@ -51,6 +51,7 @@ class Usage(Exception):
         Variables will be replaced: %(bank)s %(account)s %(from)s %(till)s
     [-d|--debug]
     """
+
     def __init__(self, msg=''):
         self.msg = msg
 
@@ -72,8 +73,17 @@ def _parse_args(argv):
 
     options = 'hb:u:a:p:s:f:t:o:d'
     options_long = [
-            'help', 'bank=', 'username=', 'password=', 'account=',
-            'statements=', 'from=', 'till=', 'outfile=', 'debug']
+        'help',
+        'bank=',
+        'username=',
+        'password=',
+        'account=',
+        'statements=',
+        'from=',
+        'till=',
+        'outfile=',
+        'debug',
+    ]
     try:
         opts, unused_args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error as msg:
@@ -115,9 +125,9 @@ def _parse_args(argv):
         # Beginning of last month.
         now = datetime.datetime.now()
         if now.month == 1:
-            last_month = now.replace(year=now.year-1, month=12, day=1)
+            last_month = now.replace(year=now.year - 1, month=12, day=1)
         else:
-            last_month = now.replace(month=now.month-1, day=1)
+            last_month = now.replace(month=now.month - 1, day=1)
         from_date = datetime.datetime(last_month.year, last_month.month, 1)
 
     if till_date:
@@ -131,13 +141,29 @@ def _parse_args(argv):
         till_date = datetime.datetime(now.year, now.month, 1)
 
     return (
-        bank_name, username, password, accounts, statements,
-        from_date, till_date, output_filename, debug)
+        bank_name,
+        username,
+        password,
+        accounts,
+        statements,
+        from_date,
+        till_date,
+        output_filename,
+        debug,
+    )
 
 
 def _fetch_accounts(
-        bank_name, username, password, account_names, statements,
-        from_date, till_date, output_filename, debug):
+    bank_name,
+    username,
+    password,
+    account_names,
+    statements,
+    from_date,
+    till_date,
+    output_filename,
+    debug,
+):
     bank_class = BANK_BY_NAME[bank_name]
     bank = bank_class(debug)
 
@@ -149,8 +175,8 @@ def _fetch_accounts(
         return
 
     logger.info(
-            'Available accounts: %s.',
-            ', '.join(str(a) for a in available_accounts))
+        'Available accounts: %s.', ', '.join(str(a) for a in available_accounts)
+    )
 
     if not account_names:
         # Download all accounts by default.
@@ -169,13 +195,15 @@ def _fetch_accounts(
     for account in accounts:
         logger.info('Fetching account: %s.', account.name)
         account.transactions = bank.get_transactions(
-                account, from_date, till_date)
+            account, from_date, till_date
+        )
         output = _open_file(
-                output_filename, bank_name, account.name, from_date, till_date)
+            output_filename, bank_name, account.name, from_date, till_date
+        )
         try:
             print(qif.serialize_account(account), file=output)
         except qif.SerializationError as e:
-                logger.error('Serialization error: %s.', e)
+            logger.error('Serialization error: %s.', e)
 
     logout = input('Logout? [yN] ')
     if logout == 'y':
@@ -186,13 +214,15 @@ def _open_file(output_filename, bank_name, account_name, from_date, till_date):
     if not output_filename:
         return sys.stdout
     filename_vars = {
-        'bank': bank_name, 'account': account_name,
+        'bank': bank_name,
+        'account': account_name,
         'from': from_date.strftime(DATE_FORMAT),
         'till': till_date.strftime(DATE_FORMAT),
     }
     formatted_filename = output_filename % filename_vars
     escaped_filename = INVALID_FILENAME_CHARACTERS_PATTERN.sub(
-            '_', formatted_filename)
+        '_', formatted_filename
+    )
     try:
         logger.info('Writing to file: %s.', escaped_filename)
         return open(escaped_filename, 'w')
@@ -204,8 +234,17 @@ def main(argv=None) -> int:
     if argv is None:
         argv = sys.argv
     try:
-        (bank_name, username, password, accounts, statements,
-        from_date, till_date, output_filename, debug) = _parse_args(argv)
+        (
+            bank_name,
+            username,
+            password,
+            accounts,
+            statements,
+            from_date,
+            till_date,
+            output_filename,
+            debug,
+        ) = _parse_args(argv)
     except Usage as err:
         print(err, file=sys.stderr)
         return 2
@@ -217,14 +256,24 @@ def main(argv=None) -> int:
 
     try:
         _fetch_accounts(
-                bank_name, username, password, accounts, statements,
-                from_date, till_date, output_filename, debug)
+            bank_name,
+            username,
+            password,
+            accounts,
+            statements,
+            from_date,
+            till_date,
+            output_filename,
+            debug,
+        )
     except (KeyboardInterrupt, SystemExit):
         raise
     except Exception as e:
         logger.error('Error while fetching transactions: %s' % e)
         if debug:
-            import pdb; pdb.post_mortem()
+            import pdb
+
+            pdb.post_mortem()
         return 2
 
     return 0

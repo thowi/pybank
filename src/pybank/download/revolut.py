@@ -19,6 +19,7 @@ class Revolut(download.bank.Bank):
     Revolut doesn't have a Web interface, so we're just working with downloaded
     CSV files.
     """
+
     _DATE_FORMAT = '%b %d, %Y'
     _DATE_HEADER = 'Completed Date'
     _DESCRIPTION_HEADER = 'Description'
@@ -31,10 +32,11 @@ class Revolut(download.bank.Bank):
     _NOTES_HEADER = 'Notes'
 
     def login(
-            self,
-            username: str | None = None,
-            password: str | None = None,
-            statements: list[str] = []) -> None:
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        statements: list[str] = [],
+    ) -> None:
         self._accounts_cache = None
 
         # Collect readable statement files.
@@ -46,14 +48,15 @@ class Revolut(download.bank.Bank):
                 with open(filename, 'r') as f:
                     self._statement_file_names.append(filename)
             except (FileNotFoundError, OSError):
-                logger.error('Couln\'t read file: ' + filename)
+                logger.error("Couln't read file: " + filename)
                 pass
         if len(self._statement_file_names) > 0:
             logger.info(
-                    'Using statment files: %s.' %
-                    ', '.join(self._statement_file_names))
+                'Using statment files: %s.'
+                % ', '.join(self._statement_file_names)
+            )
         else:
-            raise download.FetchError('Couldn\'t read any statement files.')
+            raise download.FetchError("Couldn't read any statement files.")
 
     def logout(self) -> None:
         pass
@@ -82,8 +85,8 @@ class Revolut(download.bank.Bank):
                         currency = match.group(1)
             if not currency:
                 logger.error(
-                    'Couldn\'t find currency in statement: ' +
-                    statement_filename)
+                    "Couldn't find currency in statement: " + statement_filename
+                )
                 continue
             # Get balance and all transactions.
             balance = None
@@ -92,35 +95,52 @@ class Revolut(download.bank.Bank):
             with open(statement_filename, 'r') as csvfile:
                 reader = csv.DictReader(csvfile, delimiter=';', quotechar='"')
                 strip_or_none = lambda s: s.strip() if s is not None else None
-                rows = [{strip_or_none(k): strip_or_none(v) for k, v in row.items()}
-                        for row in reader]
-                if rows and not (len(rows) == 1 and rows[0]['Description'] == 'No Transactions'):
+                rows = [
+                    {strip_or_none(k): strip_or_none(v) for k, v in row.items()}
+                    for row in reader
+                ]
+                if rows and not (
+                    len(rows) == 1
+                    and rows[0]['Description'] == 'No Transactions'
+                ):
                     # Get balance.
                     balance_str = rows[0][
-                            self._BALANCE_HEADER_PATTERN % currency]
+                        self._BALANCE_HEADER_PATTERN % currency
+                    ]
                     balance = self._parse_float(balance_str)
                     balance_date_str = rows[0][self._DATE_HEADER]
                     balance_date = datetime.datetime.strptime(
-                            balance_date_str, self._DATE_FORMAT)
-                    if (currency not in balance_by_currency or
-                            balance_date > balance_by_currency[currency][0]):
+                        balance_date_str, self._DATE_FORMAT
+                    )
+                    if (
+                        currency not in balance_by_currency
+                        or balance_date > balance_by_currency[currency][0]
+                    ):
                         balance_by_currency[currency] = balance_date, balance
                     # Get all transactions.
                     for row in rows:
                         transactions_by_currency[currency].append(
-                                self._get_transaction_from_row(row, currency))
+                            self._get_transaction_from_row(row, currency)
+                        )
 
         accounts = []
         for currency, transactions in transactions_by_currency.items():
             balance_date, balance = balance_by_currency[currency]
-            accounts.append(model.CreditCard(
-                    name=currency, currency=currency, balance=balance,
-                    balance_date=balance_date, transactions=transactions))
+            accounts.append(
+                model.CreditCard(
+                    name=currency,
+                    currency=currency,
+                    balance=balance,
+                    balance_date=balance_date,
+                    transactions=transactions,
+                )
+            )
         return accounts
 
     def _get_transaction_from_row(self, row, currency):
         date = datetime.datetime.strptime(
-                row[self._DATE_HEADER], self._DATE_FORMAT)
+            row[self._DATE_HEADER], self._DATE_FORMAT
+        )
         description = row[self._DESCRIPTION_HEADER]
         credit_str = row[self._PAID_IN_HEADER % currency]
         debit_str = row[self._PAID_OUT_HEADER % currency]
@@ -131,15 +151,20 @@ class Revolut(download.bank.Bank):
         debit = self._parse_float(debit_str) if debit_str else None
         amount = credit if credit else -debit
         memo = '. '.join(
-                (v for v in (description, exchange_in_str, exchange_out_str,
-                notes) if v))
+            (
+                v
+                for v in (description, exchange_in_str, exchange_out_str, notes)
+                if v
+            )
+        )
         return model.Payment(date=date, amount=amount, memo=memo)
 
     def get_transactions(
-            self,
-            account: model.Account,
-            start: datetime.datetime,
-            end: datetime.datetime) -> list[model.Transaction]:
+        self,
+        account: model.Account,
+        start: datetime.datetime,
+        end: datetime.datetime,
+    ) -> list[model.Transaction]:
         # Filter transactions in matching account for date range.
         transactions = []
         for acc in self.get_accounts():
@@ -147,8 +172,10 @@ class Revolut(download.bank.Bank):
                 for transaction in acc.transactions:
                     if transaction.date >= start and transaction.date < end:
                         transactions.append(transaction)
-        logger.info('Found %i transactions for account %s.' % (
-                len(transactions), account.name))
+        logger.info(
+            'Found %i transactions for account %s.'
+            % (len(transactions), account.name)
+        )
         return transactions
 
     def _parse_float(self, string):

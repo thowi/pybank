@@ -24,8 +24,8 @@ class Importer:
         self._debug = debug
 
     def import_transactions(
-            self, file: TextIO, currency: str | None = None) \
-            -> list[model.Transaction]:
+        self, file: TextIO, currency: str | None = None
+    ) -> list[model.Transaction]:
         """Imports transactions from a file and returns Model data.
 
         :param file: The file object to read from
@@ -86,8 +86,9 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
         locale.setlocale(locale.LC_ALL, orig_locale)
 
 
-def read_csv_with_header(file: TextIO) \
-        -> tuple[dict[str, str], list[dict[str, str]]]:
+def read_csv_with_header(
+    file: TextIO,
+) -> tuple[dict[str, str], list[dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 
     Some CSV files are a bit special and have a multi-line header, body, and
@@ -117,7 +118,7 @@ def read_csv_with_header(file: TextIO) \
             clean_row.append(col)
         row = clean_row
 
-       # Remove empty metadata columns.
+        # Remove empty metadata columns.
         if not col_names:
             row = [col for col in row if col]
 

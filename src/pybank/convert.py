@@ -32,10 +32,8 @@ IMPORTER_BY_NAME = {
     'dkb-checking': pybank.importer.dkb.DkbCheckingImporter,
     'dkb-credit-card': pybank.importer.dkb.DkbCreditCardImporter,
     'interactive-brokers': pybank.importer.ib.InteractiveBrokersImporter,
-    'postfinance-checking':
-            pybank.importer.postfinance.PostFinanceCheckingImporter,
-    'postfinance-credit-card':
-            pybank.importer.postfinance.PostFinanceCreditCardImporter,
+    'postfinance-checking': pybank.importer.postfinance.PostFinanceCheckingImporter,
+    'postfinance-credit-card': pybank.importer.postfinance.PostFinanceCreditCardImporter,
     'revolut': pybank.importer.revolut.RevolutImporter,
     'schwab-brokerage': pybank.importer.schwab.SchwabBrokerageImporter,
     'wise': pybank.importer.wise.WiseImporter,
@@ -59,13 +57,15 @@ class Usage(Exception):
     [-c currency|--currency=USD]       Filters the transactions for a currency.
     [-d|--debug]
     """
+
     def __init__(self, msg=''):
         self.msg = msg
 
     def __str__(self):
         importers = ', '.join(sorted(IMPORTER_BY_NAME.keys()))
-        return '\n'.join((
-                self.__doc__, self.msg, 'Available importers: %s.' % importers))
+        return '\n'.join(
+            (self.__doc__, self.msg, 'Available importers: %s.' % importers)
+        )
 
 
 def _parse_args(argv):
@@ -99,8 +99,11 @@ def _parse_args(argv):
         raise Usage('Too many non-option arguments: %s.' % other_args)
 
     return (
-            importer_name, currency, debug,
-            other_args[0] if other_args else None)
+        importer_name,
+        currency,
+        debug,
+        other_args[0] if other_args else None,
+    )
 
 
 def _convert_file(importer_name, currency, debug, filename):
@@ -110,10 +113,12 @@ def _convert_file(importer_name, currency, debug, filename):
     if filename:
         with _open_file(filename) as file:
             transactions = importer.import_transactions(
-                    file=file, currency=currency)
+                file=file, currency=currency
+            )
     else:
         transactions = importer.import_transactions(
-                file=sys.stdin, currency=currency)
+            file=sys.stdin, currency=currency
+        )
 
     try:
         txns_qif = (qif.serialize_transaction(t) for t in transactions)
@@ -159,7 +164,9 @@ def main(argv: list[str] | None = None) -> int:
     except Exception as e:
         logger.error('Error while converting file: %s' % e)
         if debug:
-            import pdb; pdb.post_mortem()
+            import pdb
+
+            pdb.post_mortem()
         return 2
 
     return 0
@@ -167,4 +174,3 @@ def main(argv: list[str] | None = None) -> int:
 
 if __name__ == '__main__':
     sys.exit(main())
-

@@ -24,10 +24,11 @@ class Bank:
         self._debug = debug
 
     def login(
-            self,
-            username: str | None = None,
-            password: str | None = None,
-            statements: list[str] | None = None) -> None:
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        statements: list[str] | None = None,
+    ) -> None:
         """Will prompt the user if either user name or password are not defined.
 
         :param username: The user name.
@@ -48,10 +49,11 @@ class Bank:
         raise NotImplementedError()
 
     def get_transactions(
-            self,
-            account: model.Account,
-            start: datetime.datetime,
-            end: datetime.datetime) -> list[model.Transaction]:
+        self,
+        account: model.Account,
+        start: datetime.datetime,
+        end: datetime.datetime,
+    ) -> list[model.Transaction]:
         """Returns all transactions within the given date range.
 
         :param account: The account.
@@ -75,10 +77,11 @@ class Bank:
         pickle.dump(browser.get_cookies(), open(cookies_filename, 'wb'))
 
     def ask_and_restore_cookies(
-            self,
-            browser: selenium.webdriver,
-            username: str,
-            timeout_secs: int | None = None) -> bool:
+        self,
+        browser: selenium.webdriver,
+        username: str,
+        timeout_secs: int | None = None,
+    ) -> bool:
         """Checks if cookies were found for a session and asks to restore them.
 
         :param browser: The browser instance.
@@ -94,7 +97,8 @@ class Bank:
             mtime = os.path.getmtime(cookies_filename)
             if mtime + timeout_secs < time.time():
                 logger.info(
-                        'Cookies from %s expired. Deleting.' % cookies_filename)
+                    'Cookies from %s expired. Deleting.' % cookies_filename
+                )
                 os.remove(cookies_filename)
                 return False
         logger.info('Reading cookies from %s...' % cookies_filename)
@@ -105,7 +109,8 @@ class Bank:
             os.remove(cookies_filename)
             return False
         restore = input(
-                'A previous session was found for this user. Restore? [Yn] ')
+            'A previous session was found for this user. Restore? [Yn] '
+        )
         if restore.lower() in ('y', ''):
             logger.info('Restoring cookies...')
             for cookie in cookies:

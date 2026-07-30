@@ -34,15 +34,17 @@ def _parse_float(string: str) -> float:
 
 def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
     return (
-        importer.get_value(rows[0], DATE_COLS) is not None and
-        importer.get_value(rows[0], AMOUNT_COLS) is not None and
-        importer.get_value(rows[0], MEMO_COLS) is not None)
+        importer.get_value(rows[0], DATE_COLS) is not None
+        and importer.get_value(rows[0], AMOUNT_COLS) is not None
+        and importer.get_value(rows[0], MEMO_COLS) is not None
+    )
 
 
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(self, file: TextIO, currency: str | None = None) \
-            -> list[model.Payment]:
+    def import_transactions(
+        self, file: TextIO, currency: str | None = None
+    ) -> list[model.Payment]:
         metadata, rows = importer.read_csv_with_header(file)
         # TODO: Support different currencies.
 
@@ -52,10 +54,14 @@ class _PostFinanceImporter(importer.Importer):
             date_str = importer.get_value(row, DATE_COLS)
             date = _parse_date(date_str)
 
-            credit = _parse_float(row[CREDIT_COL]) if row.get(CREDIT_COL) \
-                    else None
-            debit = -abs(_parse_float(row[DEBIT_COL])) if row.get(DEBIT_COL) \
-                    else None
+            credit = (
+                _parse_float(row[CREDIT_COL]) if row.get(CREDIT_COL) else None
+            )
+            debit = (
+                -abs(_parse_float(row[DEBIT_COL]))
+                if row.get(DEBIT_COL)
+                else None
+            )
             amount = credit if credit else debit
 
             memo_str = importer.get_value(row, MEMO_COLS)
@@ -69,29 +75,33 @@ class _PostFinanceImporter(importer.Importer):
 
             transactions.append(
                 model.Payment(
-                        date=date, amount=amount, memo=memo, category=category))
-        logger.info("Imported %d transactions." % len(transactions))
+                    date=date, amount=amount, memo=memo, category=category
+                )
+            )
+        logger.info('Imported %d transactions.' % len(transactions))
         return transactions
 
 
 class PostFinanceCheckingImporter(_PostFinanceImporter):
-    """Importer for PostFinance checking accounts (http://www.postfincance.ch/).
-    """
+    """Importer for PostFinance checking accounts (http://www.postfincance.ch/)."""
+
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = importer.read_csv_with_header(file)
         return (
-            'Konto:' in metadata and
-            metadata['Konto:'].startswith('CH') and
-            _has_minimal_columns(rows))
+            'Konto:' in metadata
+            and metadata['Konto:'].startswith('CH')
+            and _has_minimal_columns(rows)
+        )
 
 
 class PostFinanceCreditCardImporter(_PostFinanceImporter):
-    """Importer for PostFinance credit cards (http://www.postfincance.ch/).
-    """
+    """Importer for PostFinance credit cards (http://www.postfincance.ch/)."""
+
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = importer.read_csv_with_header(file)
         return (
-            'Kartenkonto:' in metadata and
-            'Karte:' in metadata and
-            metadata['Karte:'].startswith('XXXX') and
-            _has_minimal_columns(rows))
+            'Kartenkonto:' in metadata
+            and 'Karte:' in metadata
+            and metadata['Karte:'].startswith('XXXX')
+            and _has_minimal_columns(rows)
+        )

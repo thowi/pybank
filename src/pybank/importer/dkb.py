@@ -18,7 +18,11 @@ ROUTING_COL = 'BLZ'
 AMOUNT_COLS = 'Betrag (EUR)', 'Betrag (€)'
 ORIG_AMOUNT_COL = 'Ursprünglicher Betrag'
 MEMO_COLS = (
-    'Verwendungszweck', 'Bezeichnung', 'Avisierungstext', 'Beschreibung')
+    'Verwendungszweck',
+    'Bezeichnung',
+    'Avisierungstext',
+    'Beschreibung',
+)
 
 CC_PREFIXES = '4748', '4917', '499811'
 
@@ -36,15 +40,17 @@ def _parse_date(date_str: str) -> datetime.datetime:
 
 def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
     return (
-        importer.get_value(rows[0], DATE_COLS) is not None and
-        importer.get_value(rows[0], AMOUNT_COLS) is not None and
-        importer.get_value(rows[0], MEMO_COLS) is not None)
+        importer.get_value(rows[0], DATE_COLS) is not None
+        and importer.get_value(rows[0], AMOUNT_COLS) is not None
+        and importer.get_value(rows[0], MEMO_COLS) is not None
+    )
 
 
 class _DkbImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(self, file: TextIO, currency: str | None = None) \
-                -> list[model.Payment]:
+    def import_transactions(
+        self, file: TextIO, currency: str | None = None
+    ) -> list[model.Payment]:
         """Import transactions from DKB CSV file"""
         metadata, rows = importer.read_csv_with_header(file)
         # TODO: Support different currencies.
@@ -74,19 +80,28 @@ class _DkbImporter(importer.Importer):
             memo = importer.normalize_text(memo_str)
 
             acc = 'Account: ' + row[ACC_COL] if row.get(ACC_COL) else None
-            routing = 'Routing: ' + row[ROUTING_COL] if row.get(ROUTING_COL) \
-                    else None
-            orig_amount = 'Original amount: ' + row[ORIG_AMOUNT_COL] \
-                    if row.get(ORIG_AMOUNT_COL) else None
+            routing = (
+                'Routing: ' + row[ROUTING_COL] if row.get(ROUTING_COL) else None
+            )
+            orig_amount = (
+                'Original amount: ' + row[ORIG_AMOUNT_COL]
+                if row.get(ORIG_AMOUNT_COL)
+                else None
+            )
 
             memo_parts = memo, orig_amount, acc, routing
             memo = '. '.join(filter(bool, memo_parts))
 
             transactions.append(
                 model.Payment(
-                        date=date, amount=amount, payer=payer, payee=payee,
-                        memo=memo))
-        logger.info("Imported %d transactions." % len(transactions))
+                    date=date,
+                    amount=amount,
+                    payer=payer,
+                    payee=payee,
+                    memo=memo,
+                )
+            )
+        logger.info('Imported %d transactions.' % len(transactions))
         return transactions
 
 
@@ -94,15 +109,17 @@ class DkbCheckingImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = importer.read_csv_with_header(file)
         return (
-            'Girokonto' in metadata and
-            metadata['Girokonto'].startswith('DE6412030000') and
-            _has_minimal_columns(rows))
+            'Girokonto' in metadata
+            and metadata['Girokonto'].startswith('DE6412030000')
+            and _has_minimal_columns(rows)
+        )
 
 
 class DkbCreditCardImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = importer.read_csv_with_header(file)
         return (
-            'Kreditkarte:' in metadata and
-            any(metadata['Kreditkarte:'].startswith(p) for p in CC_PREFIXES) and
-            _has_minimal_columns(rows))
+            'Kreditkarte:' in metadata
+            and any(metadata['Kreditkarte:'].startswith(p) for p in CC_PREFIXES)
+            and _has_minimal_columns(rows)
+        )

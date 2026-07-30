@@ -112,12 +112,13 @@ def serialize_account(account: model.Account) -> str:
 
     if account.balance is not None:
         account_fields.append(
-                ACCOUNT_INFO['balance amount'] +
-                (AMOUNT_FORMAT % account.balance))
+            ACCOUNT_INFO['balance amount'] + (AMOUNT_FORMAT % account.balance)
+        )
         if account.balance_date:
             account_fields.append(
-                    ACCOUNT_INFO['balance date'] +
-                    account.balance_date.strftime(DATE_FORMAT))
+                ACCOUNT_INFO['balance date']
+                + account.balance_date.strftime(DATE_FORMAT)
+            )
 
     account_fields.append(END_OF_ENTRY)
     account_fields.append(ACCOUNT_TYPE + acc_type)
@@ -139,27 +140,34 @@ def serialize_transaction(transaction: model.Transaction) -> str:
         return serialize_payment(transaction)
     elif isinstance(transaction, model.InvestmentSecurityPurchase):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['buy'])
+            transaction, INVESTMENT_ACTION_TYPES['buy']
+        )
     elif isinstance(transaction, model.InvestmentSecuritySale):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['sell'])
+            transaction, INVESTMENT_ACTION_TYPES['sell']
+        )
     elif isinstance(transaction, model.InvestmentDividend):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['dividend'])
+            transaction, INVESTMENT_ACTION_TYPES['dividend']
+        )
     elif isinstance(transaction, model.InvestmentInterestExpense):
         # Note: There is no "investment interest expense", so we save it as a
         # negative income.
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['interest income'])
+            transaction, INVESTMENT_ACTION_TYPES['interest income']
+        )
     elif isinstance(transaction, model.InvestmentInterestIncome):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['interest income'])
+            transaction, INVESTMENT_ACTION_TYPES['interest income']
+        )
     elif isinstance(transaction, model.InvestmentMiscExpense):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['misc expense'])
+            transaction, INVESTMENT_ACTION_TYPES['misc expense']
+        )
     elif isinstance(transaction, model.InvestmentMiscIncome):
         return serialize_investment_transaction(
-                transaction, INVESTMENT_ACTION_TYPES['misc income'])
+            transaction, INVESTMENT_ACTION_TYPES['misc income']
+        )
     else:
         raise SerializationError('Unknown transaction type: ' + transaction)
 
@@ -187,7 +195,8 @@ def serialize_payment(payment: model.Payment) -> str:
 
 
 def serialize_investment_transaction(
-        transaction: model.InvestmentSecurityTransaction, action: str) -> str:
+    transaction: model.InvestmentSecurityTransaction, action: str
+) -> str:
     """Serializes a investment transaction to the QIF format.
 
     :param transaction: The investment transaction to serialize.
@@ -198,9 +207,11 @@ def serialize_investment_transaction(
 
     fields.append(INVESTMENT_ITEMS['action'] + action)
     fields.append(
-            INVESTMENT_ITEMS['date'] + transaction.date.strftime(DATE_FORMAT))
+        INVESTMENT_ITEMS['date'] + transaction.date.strftime(DATE_FORMAT)
+    )
     fields.append(
-            INVESTMENT_ITEMS['amount'] + (AMOUNT_FORMAT % transaction.amount))
+        INVESTMENT_ITEMS['amount'] + (AMOUNT_FORMAT % transaction.amount)
+    )
     if transaction.memo:
         fields.append(ITEMS['memo'] + format_memo_(transaction.memo))
     if transaction.category:
@@ -208,15 +219,16 @@ def serialize_investment_transaction(
     if hasattr(transaction, 'symbol') and transaction.symbol is not None:
         fields.append(INVESTMENT_ITEMS['security'] + transaction.symbol)
     if hasattr(transaction, 'quantity'):
-        fields.append(
-                INVESTMENT_ITEMS['quantity'] + str(transaction.quantity))
+        fields.append(INVESTMENT_ITEMS['quantity'] + str(transaction.quantity))
     if hasattr(transaction, 'price'):
         fields.append(
-                INVESTMENT_ITEMS['price'] + (PRICE_FORMAT % transaction.price))
+            INVESTMENT_ITEMS['price'] + (PRICE_FORMAT % transaction.price)
+        )
     if hasattr(transaction, 'commissions'):
         fields.append(
-                INVESTMENT_ITEMS['commission'] +
-                (COMMISSIONS_FORMAT % transaction.commissions))
+            INVESTMENT_ITEMS['commission']
+            + (COMMISSIONS_FORMAT % transaction.commissions)
+        )
     fields.append(END_OF_ENTRY)
 
     return '\n'.join(fields)

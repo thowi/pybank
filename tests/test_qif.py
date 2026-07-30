@@ -10,22 +10,26 @@ def test_serialize_account():
             date=datetime.datetime.now(),
             amount=1000,
             memo='Memo1',
-            category='Cat1'),
+            category='Cat1',
+        ),
         model.Payment(
             date=datetime.datetime.now(),
             amount=-300,
             memo='Memo2',
-            category='Cat2'),
+            category='Cat2',
+        ),
         model.Payment(
             date=datetime.datetime.now(),
             amount=-200,
             memo='Memo3',
-            category='Cat3'),
+            category='Cat3',
+        ),
         model.Payment(
             date=datetime.datetime.now(),
             amount=-100,
             memo='Memo4',
-            category='Cat4'),
+            category='Cat4',
+        ),
     )
 
     account = model.Account(name='Test', transactions=transactions)

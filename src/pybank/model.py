@@ -2,7 +2,6 @@
 
 """Bank account model."""
 
-
 import datetime
 from pydantic import BaseModel, Field
 
@@ -16,6 +15,7 @@ class Account(BaseModel):
     :param balance_date: Balance date.
     :param transactions: The transactions.
     """
+
     name: str
     currency: str | None = None
     balance: float | None = None
@@ -55,6 +55,7 @@ class Transaction(BaseModel):
     :param memo: The memo of the transaction, if any.
     :param category: The category of the transaction, if any.
     """
+
     date: datetime.datetime
     amount: int | float
     memo: str | None = None
@@ -62,7 +63,11 @@ class Transaction(BaseModel):
 
     def __str__(self) -> str:
         return 'Date: %s. Amount: %.2f. Memo: %s. Category: %s.' % (
-                self.date, self.amount, self.memo, self.category)
+            self.date,
+            self.amount,
+            self.memo,
+            self.category,
+        )
 
 
 class Payment(Transaction):
@@ -75,15 +80,23 @@ class Payment(Transaction):
     :param memo: The memo of the payment, if any.
     :param category: The category of the payment, if any.
     """
+
     payer: str | None = None
     payee: str | None = None
 
     def __str__(self) -> str:
         return (
-                'Date: %s. Amount: %.2f. Payer: %s. Payee: %s. Memo: %s. '
-                'Category: %s.' % (
-                        self.date, self.amount, self.payer, self.payee,
-                        self.memo, self.category))
+            'Date: %s. Amount: %.2f. Payer: %s. Payee: %s. Memo: %s. '
+            'Category: %s.'
+            % (
+                self.date,
+                self.amount,
+                self.payer,
+                self.payee,
+                self.memo,
+                self.category,
+            )
+        )
 
 
 class InvestmentSecurityTransaction(Transaction):
@@ -100,6 +113,7 @@ class InvestmentSecurityTransaction(Transaction):
     :param memo: The memo of the transaction, if any.
     :param category: The category of the transaction, if any.
     """
+
     symbol: str
     quantity: float
     price: float
@@ -111,6 +125,7 @@ class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
 
     See SecurityTransaction for parameters.
     """
+
     pass
 
 
@@ -119,6 +134,7 @@ class InvestmentSecuritySale(InvestmentSecurityTransaction):
 
     See SecurityTransaction for parameters.
     """
+
     pass
 
 
@@ -131,6 +147,7 @@ class InvestmentDividend(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
+
     symbol: str
 
 
@@ -142,6 +159,7 @@ class InvestmentInterestExpense(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
+
     pass
 
 
@@ -153,6 +171,7 @@ class InvestmentInterestIncome(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
+
     pass
 
 
@@ -165,6 +184,7 @@ class InvestmentMiscExpense(Transaction):
     :param memo: The memo of the expense, if any.
     :param category: The category of the dividend, if any.
     """
+
     symbol: str | None = None
 
 
@@ -177,6 +197,7 @@ class InvestmentMiscIncome(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
+
     symbol: str | None = None
 
 

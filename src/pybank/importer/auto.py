@@ -12,7 +12,8 @@ IMPORTERS = (
     dkb.DkbCheckingImporter,
     dkb.DkbCreditCardImporter,
     postfinance.PostFinanceCheckingImporter,
-    postfinance.PostFinanceCreditCardImporter)
+    postfinance.PostFinanceCreditCardImporter,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -23,11 +24,13 @@ class AutoImporter(importer.Importer):
 
     Note that not all importers support auto detection yet.
     """
+
     def can_import(self, file: TextIO) -> bool:
         return self._detect(file) is not None
 
-    def import_transactions(self, file: TextIO, currency: str | None = None) \
-            -> list[model.Transaction]:
+    def import_transactions(
+        self, file: TextIO, currency: str | None = None
+    ) -> list[model.Transaction]:
         importer = self._detect(file)
         if importer is None:
             raise ValueError('No importer found for input')
@@ -38,5 +41,6 @@ class AutoImporter(importer.Importer):
             importer = importer_class(self._debug)
             if importer.can_import(file):
                 logger.info(
-                        f'Auto-detected importer: {importer_class.__name__}.')
+                    f'Auto-detected importer: {importer_class.__name__}.'
+                )
                 return importer

@@ -17,14 +17,17 @@ logger = logging.getLogger(__name__)
 
 class PostFinance(download.bank.Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
+
     _BASE_URL = 'https://www.postfinance.ch/ap/ba/fp/html/e-finance/'
     _LOGIN_URL = _BASE_URL + 'home?login&p_spr_cd=4'
     _ASSETS_URL = _BASE_URL + 'assets'
     _DATE_FORMAT = '%d.%m.%Y'
     _CREDIT_CARD_JS_LINK_PATTERN = re.compile(
-            r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)')
+        r'.*detailbew\(\'(\d+)\',\'(\d+)\'\)'
+    )
     _CREDIT_CARD_DATE_RANGE_PATTERN = re.compile(
-            r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)')
+        r'(\d\d\.\d\d\.\d\d\d\d) - (\d\d\.\d\d\.\d\d\d\d)'
+    )
     _CREDIT_CARD_TAB_PATTERN = re.compile(r'(.*Card) (\d\d\d\d)')
     _SPACE_PATTERN = re.compile('&nbsp;| ')
     _MINUS_PATTERN = re.compile('\u2212|-')
@@ -33,16 +36,18 @@ class PostFinance(download.bank.Bank):
     _SESSION_TIMEOUT_S = 60 * 60
 
     def login(
-            self,
-            username: str | None = None,
-            password: str | None = None,
-            statements: list[str] | None = None) -> None:
+        self,
+        username: str | None = None,
+        password: str | None = None,
+        statements: list[str] | None = None,
+    ) -> None:
         if self._debug:
             self._browser = webdriver.Chrome()
         else:
             import selenium.webdriver.chrome.options
+
             chrome_options = selenium.webdriver.chrome.options.Options()
-            chrome_options.add_argument("--headless")
+            chrome_options.add_argument('--headless')
             self._browser = webdriver.Chrome(chrome_options=chrome_options)
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
@@ -58,7 +63,8 @@ class PostFinance(download.bank.Bank):
             username = input('E-Finance number: ')
 
         if self.ask_and_restore_cookies(
-                browser, username, self._SESSION_TIMEOUT_S):
+            browser, username, self._SESSION_TIMEOUT_S
+        ):
             browser.refresh()
 
         if not self._is_logged_in():
@@ -85,27 +91,31 @@ class PostFinance(download.bank.Bank):
                 except exceptions.NoSuchElementException:
                     try:
                         error_element = browser.find_element_by_class_name(
-                                'error')
+                            'error'
+                        )
                         logger.error('Login failed:\n%s' % error_element.text)
                         raise download.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
                         raise download.FetchError('Mobile ID login error.')
                 print('Please confirm the login on your phone…')
                 download.wait_for_element_to_appear_and_disappear(
-                        lambda: browser.find_element_by_class_name(
-                                'pf-spinner'),
-                        timeout_s=60)
+                    lambda: browser.find_element_by_class_name('pf-spinner'),
+                    timeout_s=60,
+                )
             else:
                 try:
                     challenge_element = browser.find_element_by_id('challenge')
                 except exceptions.NoSuchElementException:
                     try:
                         error_element = browser.find_element_by_class_name(
-                                'error')
+                            'error'
+                        )
                         logger.error('Login failed:\n%s' % error_element.text)
                         raise download.FetchError('Login failed.')
                     except exceptions.NoSuchElementException:
-                        raise download.FetchError('Security challenge not found.')
+                        raise download.FetchError(
+                            'Security challenge not found.'
+                        )
                 print('Challenge:', challenge_element.text)
                 token = input('Login token: ')
                 try:
@@ -134,7 +144,8 @@ class PostFinance(download.bank.Bank):
 
     def _is_logged_in(self):
         return download.is_element_present(
-                lambda: self._browser.find_element_by_css_selector('a.logout'))
+            lambda: self._browser.find_element_by_css_selector('a.logout')
+        )
 
     def logout(self) -> None:
         self._browser.find_element_by_css_selector('a.logout').click()
@@ -169,7 +180,10 @@ class PostFinance(download.bank.Bank):
 
         account_tables = []
         for table_id in (
-                'paymentAccounts', 'savingsAccounts', 'investmentAccounts'):
+            'paymentAccounts',
+            'savingsAccounts',
+            'investmentAccounts',
+        ):
             try:
                 account_tables.append(content.find_element_by_id(table_id))
             except exceptions.NoSuchElementException:
@@ -179,15 +193,17 @@ class PostFinance(download.bank.Bank):
         for account_table in account_tables:
             try:
                 account_rows = account_table.find_elements_by_css_selector(
-                        'tbody tr')
+                    'tbody tr'
+                )
                 col_by_text = self._get_column_indizes_by_header_text(
-                        account_table)
+                    account_table
+                )
                 for account_row in account_rows:
                     tds = account_row.find_elements_by_tag_name('td')
                     account_name_cell = tds[col_by_text['Account']]
-                    acc_number = account_name_cell \
-                            .find_element_by_tag_name('div') \
-                            .text.replace(' ', '')
+                    acc_number = account_name_cell.find_element_by_tag_name(
+                        'div'
+                    ).text.replace(' ', '')
                     account_type_cell = tds[col_by_text['Type']]
                     acc_type = account_type_cell.text
                     # TODO: Extract actual currency.
@@ -197,26 +213,38 @@ class PostFinance(download.bank.Bank):
                     balance_date = datetime.datetime.now()
                     if acc_type == 'Private account':
                         account = model.CheckingAccount(
-                                name=acc_number, currency=currency,
-                                balance=balance, balance_date=balance_date)
+                            name=acc_number,
+                            currency=currency,
+                            balance=balance,
+                            balance_date=balance_date,
+                        )
                     elif acc_type == 'E-savings account':
                         account = model.SavingsAccount(
-                                name=acc_number, currency=currency,
-                                balance=balance, balance_date=balance_date)
+                            name=acc_number,
+                            currency=currency,
+                            balance=balance,
+                            balance_date=balance_date,
+                        )
                     elif acc_type in ('E-trading', 'Safe custody deposit'):
                         account = model.InvestmentsAccount(
-                                name=acc_number, currency=currency,
-                                balance=balance, balance_date=balance_date)
+                            name=acc_number,
+                            currency=currency,
+                            balance=balance,
+                            balance_date=balance_date,
+                        )
                     else:
                         logger.warning(
-                                'Skipping account %s with unknown type %s.' %
-                                (acc_number, acc_type))
+                            'Skipping account %s with unknown type %s.'
+                            % (acc_number, acc_type)
+                        )
                         continue
                     accounts.append(account)
             except (
-                    exceptions.NoSuchElementException, AttributeError,
-                    IndexError):
-                raise download.FetchError('Couldn\'t load accounts.')
+                exceptions.NoSuchElementException,
+                AttributeError,
+                IndexError,
+            ):
+                raise download.FetchError("Couldn't load accounts.")
         self._close_tile()
         return accounts
 
@@ -228,9 +256,9 @@ class PostFinance(download.bank.Bank):
         logger.info('Opening credit cards overview…')
         self._go_to_assets()
         cc_tile = self._get_tile_by_title('Credit card')
-        download.find_element_by_title(cc_tile, 'Detailed overview') \
-                .find_element_by_xpath('..') \
-                .click()
+        download.find_element_by_title(
+            cc_tile, 'Detailed overview'
+        ).find_element_by_xpath('..').click()
         self._wait_to_finish_loading()
         content = browser.find_element_by_class_name('detail_page')
 
@@ -245,26 +273,33 @@ class PostFinance(download.bank.Bank):
                 balance_date = datetime.datetime.now()
                 currency = 'CHF'
                 account = model.CreditCard(
-                        name=name, currency=currency, balance=balance,
-                        balance_date=balance_date)
+                    name=name,
+                    currency=currency,
+                    balance=balance,
+                    balance_date=balance_date,
+                )
                 accounts.append(account)
         self._close_tile()
         return accounts
 
     def get_transactions(
-            self,
-            account: model.Account,
-            start: datetime.datetime,
-            end: datetime.datetime) -> list[model.Transaction]:
+        self,
+        account: model.Account,
+        start: datetime.datetime,
+        end: datetime.datetime,
+    ) -> list[model.Transaction]:
         self._check_logged_in()
 
-        if (isinstance(account, model.CheckingAccount) or
-            isinstance(account, model.SavingsAccount)):
+        if isinstance(account, model.CheckingAccount) or isinstance(
+            account, model.SavingsAccount
+        ):
             return self._get_account_transactions(account, start, end)
         elif isinstance(account, model.CreditCard):
             return self._get_credit_card_transactions(account, start, end)
         else:
-            raise download.FetchError('Unsupported account type: %s.', type(account))
+            raise download.FetchError(
+                'Unsupported account type: %s.', type(account)
+            )
 
     def _get_account_transactions(self, account, start, end):
         browser = self._browser
@@ -278,32 +313,34 @@ class PostFinance(download.bank.Bank):
 
         logger.info('Performing transactions search…')
         form = browser.find_element_by_css_selector(
-                '.detail_content form[name="EfmovementsOverviewForm"]')
+            '.detail_content form[name="EfmovementsOverviewForm"]'
+        )
 
         # If there are multiple accounts, select the requested one.
         # The search form is not using a standard <select>, but some custom
         # HTML.
         try:
             account_drop_down_container = form.find_element_by_css_selector(
-                    '*[name="pf-detail-efmovements-overview-dropdown-account"]')
+                '*[name="pf-detail-efmovements-overview-dropdown-account"]'
+            )
             account_drop_down_container.find_element_by_class_name(
-                    'ef_select--trigger').click()
+                'ef_select--trigger'
+            ).click()
             download.find_element_by_text(
-                    account_drop_down_container,
-                    download.format_iban(account.name)) \
-                    .find_element_by_xpath('../../../..') \
-                    .click()
+                account_drop_down_container, download.format_iban(account.name)
+            ).find_element_by_xpath('../../../..').click()
         except exceptions.NoSuchElementException:
             # Probably only one account present.
             pass
 
         # Check that we're looking at the right account.
         current_account = browser.find_element_by_id(
-                'pf-detail-efmovements-overview-account-iban').text
+            'pf-detail-efmovements-overview-account-iban'
+        ).text
         if current_account != download.format_iban(account.name):
             raise download.FetchError(
-                    'Transactions search failed: Wrong account: ' +
-                    current_account)
+                'Transactions search failed: Wrong account: ' + current_account
+            )
 
         download.find_button_by_text(form, 'Search options').click()
         formatted_start = start.strftime(self._DATE_FORMAT)
@@ -321,7 +358,8 @@ class PostFinance(download.bank.Bank):
         while True:
             self._wait_to_finish_loading()
             transactions += self._extract_transactions_from_result_page(
-                    account.name)
+                account.name
+            )
             # More transactions?
             try:
                 logger.info('Loading more transactions…')
@@ -338,12 +376,13 @@ class PostFinance(download.bank.Bank):
         browser = self._browser
 
         content = browser.find_element_by_css_selector(
-                '.detail_page '
-                '.content-pane:not(.is-hidden-print):not(.ng-hide)')
+            '.detail_page .content-pane:not(.is-hidden-print):not(.ng-hide)'
+        )
         try:
             if download.format_iban(account_name) not in content.text:
                 raise download.FetchError(
-                        'Transactions search failed: Wrong account.')
+                    'Transactions search failed: Wrong account.'
+                )
         except exceptions.NoSuchElementException:
             try:
                 error_element = browser.find_element_by_id('ef-error-message')
@@ -355,7 +394,8 @@ class PostFinance(download.bank.Bank):
         try:
             no_transactions = download.find_element_by_text(
                 content,
-                'No transactions were found that match your search options')
+                'No transactions were found that match your search options',
+            )
             if no_transactions.is_displayed():
                 logging.info('No transactions found.')
                 return []
@@ -365,7 +405,7 @@ class PostFinance(download.bank.Bank):
         try:
             table_rows = content.find_elements_by_css_selector('table tbody tr')
         except exceptions.NoSuchElementException:
-            raise download.FetchError('Couldn\'t find transactions table.')
+            raise download.FetchError("Couldn't find transactions table.")
         transactions = []
         for table_row in table_rows:
             th_cells = table_row.find_elements_by_tag_name('th')
@@ -399,10 +439,11 @@ class PostFinance(download.bank.Bank):
                 break
         # Verify that the correct card is displayed.
         active_pane = content.find_element_by_css_selector(
-                'section.js-tabs--pane.is-active')
+            'section.js-tabs--pane.is-active'
+        )
         formatted_account_name = download.format_cc_account_name(account.name)
         if formatted_account_name not in active_pane.text:
-            raise download.FetchError('Couldn\'t find account %s.' % account)
+            raise download.FetchError("Couldn't find account %s." % account)
 
         # You can see the transactions for one month/period at a time.
         transactions = []
@@ -411,7 +452,8 @@ class PostFinance(download.bank.Bank):
 
             # Get the period of the current page.
             date_select_el = content.find_element_by_css_selector(
-                    '.buttons select')
+                '.buttons select'
+            )
             date_select = ui.Select(date_select_el)
             period = date_select.first_selected_option.text
             if period == 'Current accounting period':
@@ -424,20 +466,23 @@ class PostFinance(download.bank.Bank):
                     start_date_str = match.group(1)
                     end_date_str = match.group(2)
                     start_date = datetime.datetime.strptime(
-                            start_date_str, self._DATE_FORMAT)
+                        start_date_str, self._DATE_FORMAT
+                    )
                     end_date = datetime.datetime.strptime(
-                            end_date_str, self._DATE_FORMAT)
+                        end_date_str, self._DATE_FORMAT
+                    )
                 else:
                     raise download.FetchError(
-                            'Not a credit card transactions page %s.' %
-                            account.name)
+                        'Not a credit card transactions page %s.' % account.name
+                    )
             logger.debug('Current period: ' + period)
 
             transactions_on_page = self._extract_cc_transactions()
             transactions += transactions_on_page
             logger.debug(
-                    'Found %i transactions on the current page.' %
-                    len(transactions_on_page))
+                'Found %i transactions on the current page.'
+                % len(transactions_on_page)
+            )
 
             # Are we done yet?
             if start_date <= start:
@@ -446,13 +491,18 @@ class PostFinance(download.bank.Bank):
             else:
                 logger.debug('Adding marker transaction for page break.')
                 if transactions:
-                    transactions.append(model.Payment(
-                            date=transactions[-1].date, amount=0,
-                            memo='[Next billing cycle]'))
+                    transactions.append(
+                        model.Payment(
+                            date=transactions[-1].date,
+                            amount=0,
+                            memo='[Next billing cycle]',
+                        )
+                    )
 
             # Load earlier transactions.
             next_option = date_select_el.find_element_by_xpath(
-                    "option[text() = '%s']/following-sibling::option" % period)
+                "option[text() = '%s']/following-sibling::option" % period
+            )
             if not next_option:
                 logger.info('No more earlier transactions.')
                 break
@@ -462,8 +512,9 @@ class PostFinance(download.bank.Bank):
 
         # Filter the transactions for the requested date range.
         logger.debug(
-                'Found %i transactions before filtering for date range.' %
-                len(transactions))
+            'Found %i transactions before filtering for date range.'
+            % len(transactions)
+        )
         transactions = [t for t in transactions if start <= t.date < end]
 
         # They should be sorted in reverse chronological order already, but
@@ -479,14 +530,16 @@ class PostFinance(download.bank.Bank):
         browser = self._browser
         content = browser.find_element_by_class_name('detail_page')
         active_pane = content.find_element_by_css_selector(
-                'section.js-tabs--pane.is-active')
+            'section.js-tabs--pane.is-active'
+        )
 
         # Check if there are any transactions in the current period.
         try:
             no_transactions = download.find_element_by_text(
                 active_pane,
                 'There are no transactions in the selected invoicing period '
-                'for this card.')
+                'for this card.',
+            )
             if no_transactions.is_displayed():
                 logging.info('No transactions found.')
                 return []
@@ -497,11 +550,12 @@ class PostFinance(download.bank.Bank):
         try:
             # Find the "Entries" section, skip the "Reservations" section.
             entries_heading = download.find_element_by_tag_name_and_text(
-                    active_pane, 'h3', 'Entries')
+                active_pane, 'h3', 'Entries'
+            )
             # The transactions are in the next table after that heading.
             table = entries_heading.find_element_by_xpath('following::table')
         except exceptions.NoSuchElementException:
-            raise download.FetchError('Couldn\'t find transactions.')
+            raise download.FetchError("Couldn't find transactions.")
         try:
             tbody = table.find_element_by_tag_name('tbody')
         except exceptions.NoSuchElementException:
@@ -534,8 +588,7 @@ class PostFinance(download.bank.Bank):
         try:
             date = datetime.datetime.strptime(date, self._DATE_FORMAT)
         except ValueError:
-            logger.warning(
-                    'Skipping transaction with invalid date %s.', date)
+            logger.warning('Skipping transaction with invalid date %s.', date)
             return
 
         memo = download.normalize_text(memo)
@@ -543,7 +596,8 @@ class PostFinance(download.bank.Bank):
             amount = download.parse_decimal_number(amount, 'de_CH')
         except ValueError:
             logger.warning(
-                    'Skipping transaction with invalid amount %s.', amount)
+                'Skipping transaction with invalid amount %s.', amount
+            )
             return
 
         return model.Payment(date=date, amount=amount, memo=memo)
@@ -586,7 +640,8 @@ class PostFinance(download.bank.Bank):
 
     def _get_tile_by_title(self, title):
         return self._browser.find_element_by_xpath(
-                "//*[normalize-space(text()) = '%s']/ancestor::li" % title)
+            "//*[normalize-space(text()) = '%s']/ancestor::li" % title
+        )
 
     def _get_column_indizes_by_header_text(self, table):
         ths = table.find_elements_by_css_selector('thead th')
