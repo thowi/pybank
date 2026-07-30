@@ -21,16 +21,16 @@ dependencies = [
 pybank-fetch = "pybank.fetch:main"
 pybank-convert = "pybank.convert:main"
 
-# Optional dependencies
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-]
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
 [dependency-groups]
 dev = [
     "pytest>=8.4.1",
+    "ruff>=0.16.0",
 ]
+
+[tool.ruff]
+line-length = 80
+# Ruff reformats Python blocks inside Markdown.
+extend-exclude = ["docs"]
+
+[tool.ruff.format]
+quote-style = "single"
