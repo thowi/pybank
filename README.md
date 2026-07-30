@@ -18,15 +18,25 @@ $ direnv allow
 
 # Run
 
-See `convert.py` and `fetch.py` for details on how to use it.
+Two entry points, `pybank-convert` and `pybank-fetch`. Run either with
+`--help` for details.
 
 ```bash
-$ ./convert.py -i dkb-checking "$file" > "$outfile"
+$ uv run pybank-convert -i dkb-checking "$file" > "$outfile"
 ```
 
-# Installation of web scrapers on macOS
+# Development
 
-Optional, if using the web scrapers:
+```bash
+$ uv run pytest
+$ uv run ruff check
+$ uv run ruff format
+```
+
+# Web scrapers
+
+The selenium scrapers under `src/pybank/download` are unmaintained. They are
+kept for reference until replaced, see `docs/plans`. They need:
 ```bash
 $ brew install geckodriver chromedriver
 ```
