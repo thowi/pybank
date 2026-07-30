@@ -15,9 +15,11 @@ research docs (`../research/`).
 
 ## Cleanup
 
-- Delete `download/` (selenium scrapers) and drop `selenium` once each bank's
-  replacement reaches parity. Review the old code for login-flow and URL
-  knowledge before deleting.
+The `download/` package stays, its implementations get replaced one by one.
+`__init__.py` holds selenium-free helpers, `bank.py` holds the base-class
+concept, both carry over. Delete each legacy scraper module once its
+replacement reaches parity, mining it first for login-flow and URL knowledge.
+Drop `selenium` when the last one goes.
 
 ## Acceptance
 
