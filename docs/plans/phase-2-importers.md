@@ -9,8 +9,8 @@ sub-phase ships independently.
 - `beangulp` importer interface: `identify()`, `account()`, `extract()`.
 - Each transaction gets the bank leg plus a contra account
   (`Expenses:Uncategorized` with `!` flag until categorized).
-- Dedup key in `meta` (`import-hash`), dedup against the existing ledger via
-  beangulp.
+- Dedup key in `meta` (`import-id`), dedup against the existing ledger via
+  beangulp. See [importing.md](../importing.md).
 - `Balance` assertion from the statement balance.
 - Writes to the ledger are plain file writes, no special atomicity needed
   (Drive self-heals once a write completes, version history covers crashes).
