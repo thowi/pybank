@@ -20,6 +20,10 @@ Order-flexible backlog, pick items as needed.
   semantics via `Expenses:Uncategorized` + `!`. Adds API dependency and cost,
   hence deferred.
 - Or evaluate `smart_importer` (ML on ledger history) as an alternative.
+  Viable from day one rather than after years of accumulation, because the
+  Phase 3 QIF backfill lands hand-curated labels in the ledger. Train on
+  `category-source: "qif"` and manually confirmed transactions only, never
+  on rule output, which would just relearn the rules.
 
 ## Maybe, if a need appears
 

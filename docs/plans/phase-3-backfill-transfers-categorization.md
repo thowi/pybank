@@ -10,6 +10,21 @@ Turn the working importers into a complete, categorized history.
   `Equity:Opening-Balances`, do not chase every format variant.
 - Balance assertions per statement validate the whole chain.
 
+### Pre-2018, from the SEE Finance QIF export
+
+A one-shot importer, not part of the recurring set. It is the only source
+for the oldest years, and the only source anywhere carrying hand-curated
+categories. Those labels seed every later categorization approach, the rules
+below and anything smarter in Phase 5, so they are worth more than the years
+they cover.
+
+- The deliverable is the old-to-new category mapping, not just a parser. The
+  export carries the old taxonomy.
+- The export has no balances and no currency, so no `balance` assertion is
+  derivable for this range and CHF is assumed. The first trustworthy
+  assertion sits at the handover date, anchored by `Equity:Opening-Balances`.
+  Whatever the old era gets wrong stops there.
+
 ## Transfers
 
 - Route both legs through an `Assets:Transfers:InTransit` clearing account.
@@ -22,9 +37,15 @@ Turn the working importers into a complete, categorized history.
 - Rules-based only, modeled on the flofi cascade stages 1 to 3: Exclusions
   are structural (both transfer legs under `Assets:*`), then a rules file
   (contains / startswith / exact / regex on a normalized description).
-- Provenance in `meta` (`category-source: "rule"`), manual confirmations
-  flagged `*`, never overwritten by re-runs. Unmatched stays
-  `Expenses:Uncategorized` with `!`.
+- The rules file lives with the ledger, never in this repo. It maps real
+  merchants and payees to categories, which [CLAUDE.md](../../CLAUDE.md)
+  forbids committing. Doubly so once it is derived from QIF history instead
+  of hand-written.
+- Provenance in `meta` (`category-source`): `"rule"` for a rules-file match,
+  `"qif"` for a hand-curated label carried in from the old export. Manual
+  confirmations flagged `*`, never overwritten by re-runs. Unmatched stays
+  `Expenses:Uncategorized` with `!`. Keeping `qif` distinct is what lets a
+  query separate what was actually labelled from what was guessed.
 - No fuzzy matching, no AI fallback yet (Phase 5).
 
 ## Acceptance
