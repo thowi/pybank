@@ -215,3 +215,7 @@ ledger/
 statements/
 *.qif
 *.ofx
+
+# Raw research dumps, which carry real payees and institutions. The
+# write-ups in docs/research are .md and are tracked.
+docs/research/*.txt
