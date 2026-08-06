@@ -43,6 +43,12 @@ Overrides the global auto-commit convention for code changes in this repo.
 - When a unit of work is ready, stop and prompt for review. Summarize what
   changed and list the files.
 - Wait. Review happens hunk by hunk, staging selectively.
+- Wait means stop building, not just stop committing. Do not start work that
+  touches a file with unreviewed changes.
+- When told to work ahead unattended, keep each task's changes in a disjoint
+  file set, and report the batches and a review order at the end. A pile of
+  unreviewed work spanning shared files cannot be reviewed hunk by hunk,
+  which defeats the point.
 - Commit only when asked, and commit only what is already staged. Never run
   `git commit -a` or stage extra files at commit time.
 
