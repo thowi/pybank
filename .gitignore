@@ -211,12 +211,17 @@ __marimo__/
 # macOS
 .DS_Store
 
-# Ledger and statement data. Never belongs in this public repo.
+# Ledger and statement data.
+# Never belongs in this public repo.
+# The extension rules are the load-bearing ones and stay unanchored, so
+# they catch a stray file at any depth.
 *.beancount
-ledger/
-statements/
 *.qif
 *.ofx
+# The directory rules are anchored to the repo root, else they also swallow
+# src/pybank/ledger/, which is code.
+/ledger/
+/statements/
 
 # Raw research dumps, which carry real payees and institutions. The
 # write-ups in docs/research are .md and are tracked.
