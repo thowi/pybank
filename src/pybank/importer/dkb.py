@@ -2,8 +2,10 @@ import datetime
 import logging
 from typing import TextIO
 
+from .. import csvfile
 from .. import importer
 from .. import model
+from .. import text
 
 
 DATE_FORMAT_LONG = '%d.%m.%Y'
@@ -40,9 +42,9 @@ def _parse_date(date_str: str) -> datetime.datetime:
 
 def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
     return (
-        importer.get_value(rows[0], DATE_COLS) is not None
-        and importer.get_value(rows[0], AMOUNT_COLS) is not None
-        and importer.get_value(rows[0], MEMO_COLS) is not None
+        csvfile.get_value(rows[0], DATE_COLS) is not None
+        and csvfile.get_value(rows[0], AMOUNT_COLS) is not None
+        and csvfile.get_value(rows[0], MEMO_COLS) is not None
     )
 
 
@@ -52,32 +54,32 @@ class _DkbImporter(importer.Importer):
         self, file: TextIO, currency: str | None = None
     ) -> list[model.Payment]:
         """Import transactions from DKB CSV file"""
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
         transactions = []
         for row in rows:
-            date_str = importer.get_value(row, DATE_COLS)
+            date_str = csvfile.get_value(row, DATE_COLS)
             date = _parse_date(date_str)
 
-            amount_str = importer.get_value(row, AMOUNT_COLS)
+            amount_str = csvfile.get_value(row, AMOUNT_COLS)
             amount = importer.parse_decimal_number(amount_str, 'de_DE')
 
             # Older DKB CSVs have a single column for payee and payer.
             payer_payee_str = row.get(PAYEE_PAYER_COL)
             if payer_payee_str:
-                payer_payee = importer.normalize_text(payer_payee_str)
+                payer_payee = text.normalize_text(payer_payee_str)
                 if amount < 0:
                     payee = payer_payee
                 else:
                     payer = payer_payee
             else:
-                payer = importer.normalize_text(row.get(PAYER_COL))
-                payee = importer.normalize_text(row.get(PAYEE_COL))
+                payer = text.normalize_text(row.get(PAYER_COL))
+                payee = text.normalize_text(row.get(PAYEE_COL))
 
-            memo_str = importer.get_value(row, MEMO_COLS)
-            memo = importer.normalize_text(memo_str)
+            memo_str = csvfile.get_value(row, MEMO_COLS)
+            memo = text.normalize_text(memo_str)
 
             acc = 'Account: ' + row[ACC_COL] if row.get(ACC_COL) else None
             routing = (
@@ -107,7 +109,7 @@ class _DkbImporter(importer.Importer):
 
 class DkbCheckingImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         return (
             'Girokonto' in metadata
             and metadata['Girokonto'].startswith('DE6412030000')
@@ -117,7 +119,7 @@ class DkbCheckingImporter(_DkbImporter):
 
 class DkbCreditCardImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         return (
             'Kreditkarte:' in metadata
             and any(metadata['Kreditkarte:'].startswith(p) for p in CC_PREFIXES)

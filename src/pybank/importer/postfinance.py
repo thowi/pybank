@@ -3,8 +3,10 @@ import io
 import logging
 from typing import TextIO
 
+from .. import csvfile
 from .. import importer
 from .. import model
+from .. import text
 
 
 DATE_FORMAT_ISO = '%Y-%m-%d'
@@ -34,9 +36,9 @@ def _parse_float(string: str) -> float:
 
 def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
     return (
-        importer.get_value(rows[0], DATE_COLS) is not None
-        and importer.get_value(rows[0], AMOUNT_COLS) is not None
-        and importer.get_value(rows[0], MEMO_COLS) is not None
+        csvfile.get_value(rows[0], DATE_COLS) is not None
+        and csvfile.get_value(rows[0], AMOUNT_COLS) is not None
+        and csvfile.get_value(rows[0], MEMO_COLS) is not None
     )
 
 
@@ -45,13 +47,13 @@ class _PostFinanceImporter(importer.Importer):
     def import_transactions(
         self, file: TextIO, currency: str | None = None
     ) -> list[model.Payment]:
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
         transactions = []
         for row in rows:
-            date_str = importer.get_value(row, DATE_COLS)
+            date_str = csvfile.get_value(row, DATE_COLS)
             date = _parse_date(date_str)
 
             credit = (
@@ -64,8 +66,8 @@ class _PostFinanceImporter(importer.Importer):
             )
             amount = credit if credit else debit
 
-            memo_str = importer.get_value(row, MEMO_COLS)
-            memo = importer.normalize_text(memo_str)
+            memo_str = csvfile.get_value(row, MEMO_COLS)
+            memo = text.normalize_text(memo_str)
 
             category = row.get(CATEGORY_COL)
 
@@ -86,7 +88,7 @@ class PostFinanceCheckingImporter(_PostFinanceImporter):
     """Importer for PostFinance checking accounts (http://www.postfincance.ch/)."""
 
     def can_import(self, file: TextIO) -> bool:
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         return (
             'Konto:' in metadata
             and metadata['Konto:'].startswith('CH')
@@ -98,7 +100,7 @@ class PostFinanceCreditCardImporter(_PostFinanceImporter):
     """Importer for PostFinance credit cards (http://www.postfincance.ch/)."""
 
     def can_import(self, file: TextIO) -> bool:
-        metadata, rows = importer.read_csv_with_header(file)
+        metadata, rows = csvfile.read_csv_with_header(file)
         return (
             'Kartenkonto:' in metadata
             and 'Karte:' in metadata

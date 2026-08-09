@@ -5,6 +5,7 @@ from typing import TextIO
 
 from .. import importer
 from .. import model
+from .. import text
 
 
 DATE_FORMAT = '%m/%d/%Y'
@@ -32,7 +33,7 @@ class SchwabBrokerageImporter(importer.Importer):
             date = datetime.datetime.strptime(row[0], DATE_FORMAT)
             action = row[1]
             symbol = row[2]
-            description = importer.normalize_text(row[3])
+            description = text.normalize_text(row[3])
             quantity = row[4]
             price = row[5]
             fees = row[6]

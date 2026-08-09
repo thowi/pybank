@@ -1,40 +1,17 @@
 import datetime
 import locale
 import logging
-import re
-import string
 import time
-from typing import Callable
+from collections.abc import Callable
 
 from selenium.common import exceptions
 from selenium.webdriver.remote.webelement import WebElement
-
-
-WHITESPACE_PATTERN = re.compile(r' +')
 
 logger = logging.getLogger(__name__)
 
 
 class FetchError(Exception):
     """An error while fetching the account data."""
-
-
-def normalize_text(text: str) -> str:
-    """Returns a normalized version of the input text.
-
-    Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
-
-    :param text: The input text
-    :return: A normalized version of the input text
-    """
-    text = WHITESPACE_PATTERN.sub(' ', text)
-    lines = []
-    for line in text.splitlines():
-        line = line.strip()
-        if line.isupper():
-            line = string.capwords(line)
-        lines.append(line)
-    return '\n'.join(lines)
 
 
 def parse_decimal_number(number_string: str, lang: str) -> float:
@@ -215,7 +192,6 @@ def wait_until(
                 raise e
             else:
                 logger.info('Suppressing exception: ' + str(e))
-                pass
         time.sleep(sleep_s)
 
     raise OperationTimeoutError('Operation timed out.')
@@ -223,5 +199,3 @@ def wait_until(
 
 class OperationTimeoutError(Exception):
     """Thrown when a wait function times out."""
-
-    pass

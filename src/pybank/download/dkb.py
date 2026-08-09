@@ -13,6 +13,7 @@ from selenium.webdriver.support import ui
 
 from .. import download
 from .. import model
+from .. import text
 
 
 logger = logging.getLogger(__name__)
@@ -276,9 +277,7 @@ class DeutscheKreditBank(download.bank.Bank):
                 date = self._parse_date(date_text)
 
                 # Payee and memo.
-                details_lines = download.normalize_text(cells[1].text).split(
-                    '\n'
-                )
+                details_lines = text.normalize_text(cells[1].text).split('\n')
                 unused_transaction_type = details_lines[0]
                 payee = '\n'.join(
                     details_lines[1:2]
@@ -321,7 +320,7 @@ class DeutscheKreditBank(download.bank.Bank):
                 date = self._parse_date(date_text)
 
                 # Memo.
-                memo = download.normalize_text(cells[2].text)
+                memo = text.normalize_text(cells[2].text)
 
                 # Amount.
                 amounts = cells[3].text.split('\n')

@@ -10,6 +10,7 @@ from selenium.webdriver.support import ui
 
 from .. import download
 from .. import model
+from .. import text
 
 
 logger = logging.getLogger(__name__)
@@ -31,7 +32,7 @@ class PostFinance(download.bank.Bank):
     _CREDIT_CARD_TAB_PATTERN = re.compile(r'(.*Card) (\d\d\d\d)')
     _SPACE_PATTERN = re.compile('&nbsp;| ')
     _MINUS_PATTERN = re.compile('\u2212|-')
-    _PLUS_PATTERN = re.compile('\+')
+    _PLUS_PATTERN = re.compile(r'\+')
     _WEBDRIVER_TIMEOUT = 10
     _SESSION_TIMEOUT_S = 60 * 60
 
@@ -591,7 +592,7 @@ class PostFinance(download.bank.Bank):
             logger.warning('Skipping transaction with invalid date %s.', date)
             return
 
-        memo = download.normalize_text(memo)
+        memo = text.normalize_text(memo)
         try:
             amount = download.parse_decimal_number(amount, 'de_CH')
         except ValueError:
