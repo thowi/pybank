@@ -6,28 +6,37 @@ sub-phase ships independently.
 
 ## Libraries
 
-All three sources already have a maintained, MIT-licensed, beangulp-native
-importer. Prefer a real dependency. Vendor only where one is not viable.
+Prefer a real dependency. Write our own only where the format demands it.
 
 - **DKB:** Depend on `beancount-dkb` (`ECImporter` and `CreditImporter`,
   documented for beancount 3.x). Read its dependency list when adding it.
 - **IBKR:** Depend on `ibflex` from PyPI. A parser library, not an importer,
   so it overlaps nothing we write.
-- **PostFinance:** Vendor the importer from `tariochbctools` (~100 lines,
-  MIT, keep the license header). It handles the semicolon CSV,
-  `windows_1252`, and reads the balance column, so `balance` assertions come
-  for free.
+- **PostFinance:** Ours. See below.
 
-PostFinance is the exception for one reason: `tariochbctools` declares
-`ibflex @ git+...`, a direct URL reference. That kind of reference wins over
-any registry constraint for the same package, so depending on it would drag
-our IBKR path onto an unpinned git branch, and a direct URL reference in our
-own metadata rules out publishing. It also has no extras, so all fifteen
-dependencies (`camelot-py`, `opencv-python-headless`, `imap-tools` and the
-rest) are mandatory to get one CSV parser.
+Two independent reasons rule out `tariochbctools`, which was the candidate
+for PostFinance.
 
-Vendoring buys a starting point and the freedom to patch a format variant.
-It does not buy maintenance: Nothing flows back in after the copy.
+The packaging one: It declares `ibflex @ git+...`, a direct URL reference.
+That kind of reference wins over any registry constraint for the same
+package, so depending on it would drag our IBKR path onto an unpinned git
+branch, and a direct URL reference in our own metadata rules out publishing.
+It has no extras, so all fifteen dependencies (`camelot-py`,
+`opencv-python-headless`, `imap-tools` and the rest) are mandatory to get
+one CSV parser. Vendoring the file sidesteps that, but not the second
+reason.
+
+The fit one, which is decisive: Its importer reads six fixed columns in
+`windows_1252` and matches one shape. The archive holds six header
+variants across two encodings, so columns get matched by name and the
+encoding gets sniffed. Ours does that in about the same number of lines.
+
+Correcting an earlier claim: `balance` assertions do not come for free. Only
+the two `Saldo` variants carry a running balance, 6 files of 65. Everything
+since, checking and card alike, ships without one. The monthly PDF
+Kontoauszüge have the closing balances and are the eventual source. Until
+then PostFinance has assertions for one stretch of 2019 to 2022 and none
+after, which is a gap in the chain, not a solved problem.
 
 What stays ours regardless: The `import-id` scheme, year-file routing,
 categorization rules, and `Assets:Transfers:InTransit` matching.
@@ -38,17 +47,41 @@ categorization rules, and `Assets:Transfers:InTransit` matching.
 - Each transaction gets the bank leg plus a contra account
   (`Expenses:Uncategorized` with `!` flag until categorized).
 - Dedup key in `meta` (`import-id`), dedup against the existing ledger via
-  beangulp. See [importing.md](../importing.md). Read beangulp's own
-  duplicate detection first: If its comparator covers the similarity
-  warning, ours is a hashing function, not a subsystem.
+  beangulp. See [importing.md](../importing.md).
+  Beangulp's own detection is a heuristic comparator: Same accounts, amounts
+  within 5 percent, dates within a window. It marks `__duplicate__`, which
+  the writer comments out, so it gates. That is the wrong end for us. The
+  `import-id` match is the gate and beangulp's comparator supplies the
+  warning, which is why `deduplicate()` is overridden rather than extended.
+- Hash a canonical amount, not the source string. Exports disagree about
+  trailing zeros, and `42.5` and `42.50` hashing differently would reimport
+  the same transaction twice.
 - `Balance` assertion from the statement balance.
 - Writes to the ledger are plain file writes, no special atomicity needed
   (Drive self-heals once a write completes, version history covers crashes).
 
 ## 2a: PostFinance
 
-- Checking and credit card CSV importers, ported from
-  `importer/postfinance.py`.
+Done. `pybank/importer/beancount/postfinance.py`, with `identity.py`
+alongside it for the `import-id` scheme. Verified against all 63 archive
+files: Every file is claimed by exactly one importer, 6620 transactions
+extract, and the whole set loads with the only errors being the balance
+assertions, which fail because the archive itself has holes. See Backfill
+in [phase 3](phase-3-backfill-transfers-categorization.md).
+
+Parsing is checked against the bank, not just against itself. In the six
+files carrying a running `Saldo` it appears once per day, on that day's
+last row, and all 364 day-over-day deltas match the parsed amounts
+exactly. That covers signs, the apostrophe thousands separator and row
+order at once.
+
+- Checking and credit card CSV importers. Columns matched by name, encoding
+  sniffed, since neither is stable across the archive.
+- `Kategorie` and `Label`, which only the recent exports carry, are kept as
+  `bank-category` and `bank-label` metadata. They are the bank's guess, so
+  they stay out of the `import-id`: The bank may revise a label, and that
+  must not reimport the transaction. See categorization in
+  [phase 3](phase-3-backfill-transfers-categorization.md).
 - Establishes the common pattern above.
 
 ## 2b: DKB

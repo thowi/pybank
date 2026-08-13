@@ -510,7 +510,7 @@ QIF is the legacy output to retire. camt.053 and MT940 are bank *source* formats
 | **Beancount** | **5.8k** | **Plaintext DE (Python)** | **Proposed canonical store** |
 | hledger | 4.6k | Plaintext DE (Haskell) | Alt format, not Python-native |
 | GnuCash | 4.3k | Desktop app | Runner-up (DB + GUI) |
-| Fava | 2.5k | Beancount web UI | Proposed viewer |
+| Fava | 2.5k | Beancount web UI | Possible viewer |
 | piecash | 347 | GnuCash SQLite lib | With GnuCash option |
 | ofxtools | 343 | OFX lib | Proposed interchange export |
 | ofxparse | 218 | OFX lib | Alt OFX reader |
@@ -555,8 +555,8 @@ technical fit, and its ecosystem (fava, beangulp) adds thousands more stars.
    ledger is built into the framework.
 4. **Interchange export: OFX via `ofxtools`** to replace the QIF writer. Optional
    `beancount2ledger` if Ledger output is ever needed.
-5. **Viewing/reporting: `fava`** (read-only) + BQL for ad-hoc queries. No custom
-   UI needed.
+5. **Viewing/reporting: BQL** for ad-hoc queries. A viewer is undecided: `fava`
+   is the ready-made option, a custom frontend is not ruled out.
 6. **Defer the DB.** Start with files. Revisit GnuCash/SQLite or a custom DB only
    if a concrete need appears (e.g. heavy programmatic querying that BQL cannot
    serve).

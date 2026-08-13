@@ -3,12 +3,17 @@
 Hand-written skeleton ledger before any importer exists. Forces the naming and
 layout decisions on a tiny surface.
 
+Done, except the two open questions at the end. The skeleton passes
+`bean-check`.
+
 ## Scope
 
 1. Add `beancount` dependency.
-2. Ledger home: A private Google Drive folder. Path is local config (env var or
-   config file), never hardcoded or committed. Add .gitignore guards
-   (`*.beancount`, `ledger/`) so ledger files cannot land in this public repo.
+2. Ledger home: A private Google Drive folder, `Ledger/` next to the existing
+   `Statements/`. The path stays local config, never hardcoded or committed.
+   It becomes a `--ledger` flag with an environment variable fallback when
+   the ingest CLI lands in phase 2. .gitignore guards (`*.beancount`,
+   `/ledger/`) keep ledger files out of this public repo.
 3. File layout, decided: `main.beancount` includes `accounts.beancount`
    (`open`, `close`, `commodity`), `prices.beancount`, `budgets.beancount`,
    and one file per year. Directives that span years stay out of the year
@@ -34,7 +39,7 @@ layout decisions on a tiny surface.
 ## Acceptance
 
 - `bean-check` passes on the skeleton ledger.
-- Fava browses it: Balance sheet and income statement render sensibly in CHF.
+- Balance sheet and income statement render sensibly in CHF.
 
 ## Open within this phase
 

@@ -10,20 +10,52 @@ Turn the working importers into a complete, categorized history.
   `Equity:Opening-Balances`, do not chase every format variant.
 - Balance assertions per statement validate the whole chain.
 
-### Pre-2018, from the SEE Finance QIF export
+### The PostFinance archive has holes
+
+Measured, not assumed. All 63 CSVs parse and 6620 transactions come out, but
+loading them fails all six balance assertions. The exports are row-capped,
+see [phase 4](phase-4-fetching.md), so several cover a range they do not
+fill, and there are outright gaps between consecutive files. Card exports
+carry no balance at all, so nothing detects a hole there.
+
+The archive alone therefore cannot produce a continuous checking history.
+Options in the order worth trying: The QIF export below, which covers the
+same years; re-fetching the missing windows from e-finance, which only works
+as far back as the bank retains; the monthly PDF Kontoauszüge for balances,
+which turns each gap into a padded stretch with a known endpoint.
+
+### The SEE Finance QIF export
 
 A one-shot importer, not part of the recurring set. It is the only source
-for the oldest years, and the only source anywhere carrying hand-curated
-categories. Those labels seed every later categorization approach, the rules
+for the oldest years, and the only source anywhere carrying categories that
+were assigned by hand. Those labels seed every later categorization approach, the rules
 below and anything smarter in Phase 5, so they are worth more than the years
 they cover.
 
+It also covers far more than the oldest years. The file in the archive spans
+2008 to 2026, all accounts, because pybank has been feeding SEE Finance the
+whole time. So it is not a pre-2018 stopgap: It is a second, independent,
+already-categorized copy of the entire history, and it is the natural first
+answer to the archive holes above. Import it first and let the per-statement
+imports reconcile against it, rather than the other way round.
+
 - The deliverable is the old-to-new category mapping, not just a parser. The
   export carries the old taxonomy.
+- Only this export is ground truth for categories. It holds the labels
+  assigned inside SEE Finance. Per-bank files converted straight from bank
+  CSV carry at most a bank-assigned category, which is a hint and not a
+  decision, so the two must not be treated as one source.
+- The labels are reliable but not clean: The converter left many entries
+  with an empty top level, and a handful carry an amount where a category
+  name belongs. Validate rather than trust.
 - The export has no balances and no currency, so no `balance` assertion is
-  derivable for this range and CHF is assumed. The first trustworthy
-  assertion sits at the handover date, anchored by `Equity:Opening-Balances`.
-  Whatever the old era gets wrong stops there.
+  derivable from it anywhere and CHF is assumed. Assertions have to come
+  from the statement sources, which is what makes the PostFinance balance
+  gap above worth closing rather than shrugging at.
+- Multi-account and multi-currency. It was written for an app that tracked
+  everything, so it also covers accounts with no importer yet. Decide per
+  account whether to take it or wait for the real source, and anchor
+  whatever is taken with `Equity:Opening-Balances`.
 
 ## Transfers
 
@@ -52,4 +84,4 @@ they cover.
 
 - Full history loads with `bean-check` green.
 - Clearing account balances to zero across the backfilled range.
-- Income statement by category renders in Fava and looks plausible.
+- Income statement by category looks plausible.

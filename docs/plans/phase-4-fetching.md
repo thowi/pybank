@@ -10,6 +10,11 @@ research docs (`../research/`).
 2. PostFinance: Deterministic Playwright scraper. `storageState` auth JSON is
    a live session, gitignored. Repair skill drives local Playwright when the
    scraper breaks, operates on page structure, never echoes balances.
+   The CSV export is row-capped, not date-capped. Files in the archive stop
+   at exactly 100 rows and a fresh export stops at exactly 200, whatever
+   range was asked for, and nothing in the file says it was truncated. So
+   fetch in windows small enough to stay under the cap, and treat a
+   row count that lands exactly on it as a truncated file, not a full one.
 3. DKB: API if viable, else Playwright.
 4. Scheduling: launchd or cron, downloads land next to the statement archive.
 
