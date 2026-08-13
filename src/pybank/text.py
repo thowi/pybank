@@ -9,8 +9,8 @@ def normalize_text(text: str | None) -> str | None:
 
     Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
 
-    Part of the import-id contract, see docs/importing.md: changing this
-    changes every hash, which is what the version prefix exists for.
+    Part of the import-id contract, see docs/importing.md: Changing this
+    changes every hash and needs a version bump.
 
     :param text: The input text.
     :return: A normalized version of the input text.

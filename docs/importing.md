@@ -11,22 +11,34 @@ has this source line been seen before.
 
 ```
 2026-05-04 * "Supermarket" "Groceries"
-  import-id: "v1:8f3a2c9d:0"
+  import-id: "v1:2026-05-04:-85:8f3a2c9d1e2b:0"
   Assets:PostFinance:Checking       -85.00 CHF
   Expenses:Living:Groceries          85.00 CHF
 ```
 
-Three parts: a version, a hash of a fixed set of normalized source fields,
-and an occurrence index.
+Five parts: a version, the date, the amount, a hash of the remaining
+normalized source fields, and an occurrence index.
+
+Date and amount are in the clear so a key can be read without re-running
+the import, and so a collision needs all three parts to match rather than
+the hash alone. Both are already visible in the postings, so nothing new is
+exposed. The account or card number is not, and stays hashed. The amount is
+canonicalized before use, which is why `-85.00` appears as `-85`.
 
 The key describes the **source row**, never the booked transaction. So
 recategorizing, splitting a posting or renaming an account leaves it
 untouched. This is what lets history stay editable while importers keep
 running against it.
 
-The version exists because the normalization will improve. New imports
-write the current version, matching checks every version. Without it, one
-change to `normalize_text()` strands every key already written.
+The version marks which normalization wrote the key. It is a label, not a
+matching rule. Matching is an exact compare, and changing `normalize_text()`
+changes every digest, so keys already written stop matching either way.
+
+The label is what makes that survivable. Old keys stay `v1`, new ones are
+`v2`, the generations cannot collide, and either can be selected. Usually
+the migration is to leave history alone and not re-import files already
+imported under `v1`. To re-import history instead, run both normalizations
+over the source archive to build a `v1` to `v2` map, then rewrite the keys.
 
 The occurrence index exists because two identical rows on one day are
 legitimate. Two coffees, same shop, same price. Without it the second is

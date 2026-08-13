@@ -3,6 +3,7 @@
 import hashlib
 import logging
 from collections.abc import Sequence
+from typing import NamedTuple
 
 from beancount.core import data
 from beangulp import extract, similar
@@ -12,29 +13,45 @@ META_KEY = "import-id"
 VERSION = "v1"
 
 FIELD_SEP = "\x1f"
-DIGEST_LEN = 8
+DIGEST_LEN = 12
 SIMILAR_WINDOW_DAYS = 2
 
 logger = logging.getLogger(__name__)
 
 
-def import_ids(rows: Sequence[Sequence[str]]) -> list[str]:
+class IdFields(NamedTuple):
+    """The identifying fields of one source row.
+
+    Date and amount are carried in the clear, so an ID can be read without
+    re-running the import, and so a collision needs all three parts to
+    match. Both are already visible in the postings below. Account and card
+    numbers are not, and belong in `hashed`.
+    """
+
+    date: str
+    amount: str
+    hashed: Sequence[str]
+
+
+def import_ids(rows: Sequence[IdFields]) -> list[str]:
     """Returns one import-id per source row, in the order given.
 
-    Rows hashing the same get increasing occurrence indices. Two identical
-    rows on one day are legitimate, two coffees at the same shop, and
-    without the index the second would be silently dropped.
+    Rows yielding the same ID get increasing occurrence indices. Two
+    identical rows on one day are legitimate, two coffees at the same shop,
+    and without the index the second would be silently dropped.
 
     :param rows: The normalized identifying fields of each source row.
     :return: The import-ids.
     """
     counts: dict[str, int] = {}
     ids = []
-    for fields in rows:
-        digest = hashlib.sha256(FIELD_SEP.join(fields).encode("utf-8")).hexdigest()[:DIGEST_LEN]
-        occurrence = counts.get(digest, 0)
-        counts[digest] = occurrence + 1
-        ids.append(f"{VERSION}:{digest}:{occurrence}")
+    for row in rows:
+        raw = FIELD_SEP.join(row.hashed).encode("utf-8")
+        digest = hashlib.sha256(raw).hexdigest()[:DIGEST_LEN]
+        key = f"{VERSION}:{row.date}:{row.amount}:{digest}"
+        occurrence = counts.get(key, 0)
+        counts[key] = occurrence + 1
+        ids.append(f"{key}:{occurrence}")
     return ids
 
 

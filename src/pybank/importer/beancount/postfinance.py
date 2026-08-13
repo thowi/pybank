@@ -91,10 +91,10 @@ def _parse_number(number_str: str) -> decimal.Decimal:
 
 
 def _canonical_number(number: decimal.Decimal) -> str:
-    """Returns an amount in one shape, for hashing into an import-id.
+    """Returns an amount in one shape, for use in an import-id.
 
     Exports are inconsistent about trailing zeros, and `24` and `24.00` must
-    not hash differently or a re-download imports twice.
+    not yield different IDs or a re-download imports twice.
     """
     return format(number.normalize(), "f")
 
@@ -172,11 +172,10 @@ class _PostFinanceImporter(beangulp.Importer):
         parsed = [row for row in map(_parse_row, rows) if row is not None]
         ids = identity.import_ids(
             [
-                (
-                    source_id,
+                identity.IdFields(
                     str(row.date),
-                    row.memo,
                     _canonical_number(row.units.number),
+                    (source_id, row.memo),
                 )
                 for row in parsed
             ]
