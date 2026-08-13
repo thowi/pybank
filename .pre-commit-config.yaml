@@ -1,0 +1,9 @@
+# Enable once per clone: uv run pre-commit install
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.16.0
+    hooks:
+      # Formats in place, so a commit picks up the reformatted files.
+      - id: ruff-format
+      # Reports only. Fixing is a deliberate act, not a commit side effect.
+      - id: ruff-check
