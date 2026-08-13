@@ -1,11 +1,8 @@
 import logging
 from typing import TextIO
 
-from .. import importer
-from .. import model
-from . import dkb
-from . import postfinance
-
+from .. import importer, model
+from . import dkb, postfinance
 
 # TODO: Add more importers.
 IMPORTERS = (
@@ -33,14 +30,12 @@ class AutoImporter(importer.Importer):
     ) -> list[model.Transaction]:
         importer = self._detect(file)
         if importer is None:
-            raise ValueError('No importer found for input')
+            raise ValueError("No importer found for input")
         return importer.import_transactions(file=file, currency=currency)
 
     def _detect(self, file: TextIO) -> importer.Importer:
         for importer_class in IMPORTERS:
             importer = importer_class(self._debug)
             if importer.can_import(file):
-                logger.info(
-                    f'Auto-detected importer: {importer_class.__name__}.'
-                )
+                logger.info(f"Auto-detected importer: {importer_class.__name__}.")
                 return importer

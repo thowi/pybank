@@ -11,8 +11,8 @@ Supported financial institutions:
 For more information see http://github.com/thowi/pybank.
 """
 
-import logging
 import getopt
+import logging
 import sys
 
 import charset_normalizer
@@ -26,20 +26,19 @@ import pybank.importer.schwab
 import pybank.importer.wise
 from pybank import qif
 
-
 IMPORTER_BY_NAME = {
-    'auto': pybank.importer.auto.AutoImporter,
-    'dkb-checking': pybank.importer.dkb.DkbCheckingImporter,
-    'dkb-credit-card': pybank.importer.dkb.DkbCreditCardImporter,
-    'interactive-brokers': pybank.importer.ib.InteractiveBrokersImporter,
-    'postfinance-checking': pybank.importer.postfinance.PostFinanceCheckingImporter,
-    'postfinance-credit-card': pybank.importer.postfinance.PostFinanceCreditCardImporter,
-    'revolut': pybank.importer.revolut.RevolutImporter,
-    'schwab-brokerage': pybank.importer.schwab.SchwabBrokerageImporter,
-    'wise': pybank.importer.wise.WiseImporter,
+    "auto": pybank.importer.auto.AutoImporter,
+    "dkb-checking": pybank.importer.dkb.DkbCheckingImporter,
+    "dkb-credit-card": pybank.importer.dkb.DkbCreditCardImporter,
+    "interactive-brokers": pybank.importer.ib.InteractiveBrokersImporter,
+    "postfinance-checking": pybank.importer.postfinance.PostFinanceCheckingImporter,
+    "postfinance-credit-card": pybank.importer.postfinance.PostFinanceCreditCardImporter,
+    "revolut": pybank.importer.revolut.RevolutImporter,
+    "schwab-brokerage": pybank.importer.schwab.SchwabBrokerageImporter,
+    "wise": pybank.importer.wise.WiseImporter,
 }
-LOG_FORMAT = '%(message)s'
-LOG_FORMAT_DEBUG = '%(levelname)s %(name)s: %(message)s'
+LOG_FORMAT = "%(message)s"
+LOG_FORMAT_DEBUG = "%(levelname)s %(name)s: %(message)s"
 
 
 logger = logging.getLogger(__name__)
@@ -58,14 +57,12 @@ class Usage(Exception):
     [-d|--debug]
     """
 
-    def __init__(self, msg=''):
+    def __init__(self, msg=""):
         self.msg = msg
 
     def __str__(self):
-        importers = ', '.join(sorted(IMPORTER_BY_NAME.keys()))
-        return '\n'.join(
-            (self.__doc__, self.msg, 'Available importers: %s.' % importers)
-        )
+        importers = ", ".join(sorted(IMPORTER_BY_NAME.keys()))
+        return "\n".join((self.__doc__, self.msg, f"Available importers: {importers}."))
 
 
 def _parse_args(argv):
@@ -73,30 +70,30 @@ def _parse_args(argv):
     currency = None
     debug = False
 
-    options = 'hi:c:d'
-    options_long = ['help', 'importer=', 'currency=', 'debug']
+    options = "hi:c:d"
+    options_long = ["help", "importer=", "currency=", "debug"]
     try:
         opts, other_args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error as msg:
         raise Usage(msg)
     for opt, arg in opts:
-        if opt in ('-h', '--help'):
+        if opt in ("-h", "--help"):
             print(Usage())
             return 0
-        if opt in ('-i', '--importer'):
+        if opt in ("-i", "--importer"):
             importer_name = arg
-        if opt in ('-c', '--currency'):
+        if opt in ("-c", "--currency"):
             currency = arg
-        if opt in ('-d', '--debug'):
+        if opt in ("-d", "--debug"):
             debug = True
 
     if not importer_name:
-        raise Usage('Must specify an importer name.')
+        raise Usage("Must specify an importer name.")
     if importer_name not in IMPORTER_BY_NAME:
-        raise Usage('Unknown importer: %s.' % importer_name)
+        raise Usage(f"Unknown importer: {importer_name}.")
 
     if len(other_args) > 1:
-        raise Usage('Too many non-option arguments: %s.' % other_args)
+        raise Usage(f"Too many non-option arguments: {other_args}.")
 
     return (
         importer_name,
@@ -112,35 +109,31 @@ def _convert_file(importer_name, currency, debug, filename):
 
     if filename:
         with _open_file(filename) as file:
-            transactions = importer.import_transactions(
-                file=file, currency=currency
-            )
+            transactions = importer.import_transactions(file=file, currency=currency)
     else:
-        transactions = importer.import_transactions(
-            file=sys.stdin, currency=currency
-        )
+        transactions = importer.import_transactions(file=sys.stdin, currency=currency)
 
     try:
         txns_qif = (qif.serialize_transaction(t) for t in transactions)
-        print('\n'.join(txns_qif))
+        print("\n".join(txns_qif))
     except qif.SerializationError as e:
-        logger.error('Serialization error: %s.', e)
+        logger.error("Serialization error: %s.", e)
         return
 
 
 def _open_file(filename):
     encoding_guess = charset_normalizer.from_path(filename).best()
     if encoding_guess:
-        logger.debug('Detected encoding: %s.' % encoding_guess.encoding)
+        logger.debug(f"Detected encoding: {encoding_guess.encoding}.")
         encoding = encoding_guess.encoding
         # Strip the BOM from UTF-8 files.
-        if encoding.lower() == 'utf_8':
-            encoding = 'utf-8-sig'
+        if encoding.lower() == "utf_8":
+            encoding = "utf-8-sig"
     else:
-        logger.warning('Failed to detect encoding. Falling back to utf-8.')
-        encoding = 'utf-8-sig'
+        logger.warning("Failed to detect encoding. Falling back to utf-8.")
+        encoding = "utf-8-sig"
     # Use newline='' as suggested by the csv.readerdocs.
-    return open(filename, 'r', encoding=encoding, newline='')
+    return open(filename, "r", encoding=encoding, newline="")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -161,10 +154,10 @@ def main(argv: list[str] | None = None) -> int:
         _convert_file(importer_name, currency, debug, input_filename)
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception as e:
-        logger.error('Error while converting file: %s' % e)
+    except Exception as e:  # noqa: BLE001  Top level CLI guard.
+        logger.error(f"Error while converting file: {e}")
         if debug:
-            import pdb
+            import pdb  # noqa: T100  Opt in post mortem, behind --debug.
 
             pdb.post_mortem()
         return 2
@@ -172,5 +165,5 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

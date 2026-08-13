@@ -5,12 +5,10 @@ import logging
 import re
 from typing import Any, TextIO
 
-from .. import importer
-from .. import model
+from .. import importer, model
 
-
-DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
-DATE_FORMAT = '%Y-%m-%d'
+DATE_TIME_FORMAT = "%Y-%m-%d, %H:%M:%S"
+DATE_FORMAT = "%Y-%m-%d"
 
 logger = logging.getLogger(__name__)
 
@@ -47,38 +45,36 @@ class InteractiveBrokersImporter(importer.Importer):
         transactions = []
         if currency in transactions_by_currency:
             transactions = transactions_by_currency[currency]
-        logger.info(
-            'Found %i transactions for currency %s.'
-            % (len(transactions), currency)
-        )
+        logger.info("Found %i transactions for currency %s.", len(transactions), currency)
         return transactions
 
     def _parse_csv_into_dict(self, csvfile: TextIO) -> dict[str, Any]:
         """Parse CSV file into nested dictionary structure"""
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-        nested_default_dict = lambda: collections.defaultdict(
-            nested_default_dict
-        )
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"')
+
+        def nested_default_dict():
+            return collections.defaultdict(nested_default_dict)
+
         csv_dict = nested_default_dict()
         for row in reader:
             cur = csv_dict
             for i, cell in enumerate(row):
                 cur = cur[cell]
-                if '__rows' not in cur:
-                    cur['__rows'] = []
-                cur['__rows'].append(row[i + 1 :])
+                if "__rows" not in cur:
+                    cur["__rows"] = []
+                cur["__rows"].append(row[i + 1 :])
         return csv_dict
 
     def _get_transfers(self, csv_dict):
-        logger.debug('Extracting transfers…')
+        logger.debug("Extracting transfers…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Deposits & Withdrawals']['Data']['__rows']:
+        for row in csv_dict["Deposits & Withdrawals"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
-            kind = row[2]
+            _kind = row[2]
             amount = _parse_float(row[3])
             transaction = model.Payment(date=date, amount=amount)
             transactions_by_currency[currency].append(transaction)
@@ -86,15 +82,13 @@ class InteractiveBrokersImporter(importer.Importer):
         return transactions_by_currency
 
     def _get_trades(self, csv_dict):
-        logger.debug('Extracting trades…')
+        logger.debug("Extracting trades…")
 
         transactions_by_currency = collections.defaultdict(list)
 
         # Stock and options transactions:
-        st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
-        ot = csv_dict['Trades']['Data']['Order'][
-            'Equity and Index Options'
-        ].get('__rows', [])
+        st = csv_dict["Trades"]["Data"]["Order"]["Stocks"].get("__rows", [])
+        ot = csv_dict["Trades"]["Data"]["Order"]["Equity and Index Options"].get("__rows", [])
         for row in st + ot:
             currency = row[0]
             symbol = row[1]
@@ -126,11 +120,11 @@ class InteractiveBrokersImporter(importer.Importer):
             transactions_by_currency[currency].append(transaction)
 
         # Forex transactions. Treated slightly differently from stocks.
-        ft = csv_dict['Trades']['Data']['Order']['Forex'].get('__rows', [])
+        ft = csv_dict["Trades"]["Data"]["Order"]["Forex"].get("__rows", [])
         for row in ft:
             currency = row[0]
             symbol = row[1]
-            to_currency, from_currency = symbol.split('.')
+            to_currency, from_currency = symbol.split(".")
             assert currency == from_currency
             date = datetime.datetime.strptime(row[2], DATE_TIME_FORMAT)
             quantity = _parse_float(row[3])
@@ -145,12 +139,7 @@ class InteractiveBrokersImporter(importer.Importer):
             else:
                 buy_currency, sell_currency = from_currency, to_currency
                 buy_amount, sell_amount = proceeds, -quantity
-            memo = 'Buy %.2f %s, sell %.2f %s' % (
-                buy_amount,
-                buy_currency,
-                sell_amount,
-                sell_currency,
-            )
+            memo = f"Buy {buy_amount:.2f} {buy_currency}, sell {sell_amount:.2f} {sell_currency}"
             quantity = abs(quantity)
             transactions_by_currency[buy_currency].append(
                 model.InvestmentSecuritySale(
@@ -178,29 +167,29 @@ class InteractiveBrokersImporter(importer.Importer):
             # Forex commissions are all billed to the main (CHF) account.
             # TODO: Find out the main currency/account. Don't just hardcode
             # CHF.
-            transactions_by_currency['CHF'].append(
+            transactions_by_currency["CHF"].append(
                 model.InvestmentMiscExpense(
                     date=date,
                     amount=commissions,
                     symbol=symbol,
-                    memo='Forex commissions',
+                    memo="Forex commissions",
                 )
             )
 
         return transactions_by_currency
 
     def _get_withholding_tax(self, csv_dict):
-        logger.debug('Extracting withholding tax…')
+        logger.debug("Extracting withholding tax…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Withholding Tax']['Data']['__rows']:
+        for row in csv_dict["Withholding Tax"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
             description = row[2]
             amount = _parse_float(row[3])
-            symbol = re.split('[ (]', description)[0]
+            symbol = re.split("[ (]", description)[0]
             memo = description
             if amount < 0:
                 transaction = model.InvestmentMiscExpense(
@@ -216,17 +205,17 @@ class InteractiveBrokersImporter(importer.Importer):
         return transactions_by_currency
 
     def _get_dividends(self, csv_dict):
-        logger.debug('Extracting dividends…')
+        logger.debug("Extracting dividends…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Dividends']['Data']['__rows']:
+        for row in csv_dict["Dividends"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
             description = row[2]
             amount = _parse_float(row[3])
-            symbol = re.split('[ (]', description)[0]
+            symbol = re.split("[ (]", description)[0]
             memo = description
             transaction = model.InvestmentDividend(
                 date=date, symbol=symbol, amount=amount, memo=memo
@@ -236,40 +225,36 @@ class InteractiveBrokersImporter(importer.Importer):
         return transactions_by_currency
 
     def _get_interest(self, csv_dict):
-        logger.debug('Extracting interest…')
+        logger.debug("Extracting interest…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Interest']['Data']['__rows']:
+        for row in csv_dict["Interest"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
             description = row[2]
             amount = _parse_float(row[3])
             memo = description
             if amount < 0:
-                transaction = model.InvestmentInterestExpense(
-                    date=date, amount=amount, memo=memo
-                )
+                transaction = model.InvestmentInterestExpense(date=date, amount=amount, memo=memo)
             else:
-                transaction = model.InvestmentInterestIncome(
-                    date=date, amount=amount, memo=memo
-                )
+                transaction = model.InvestmentInterestIncome(date=date, amount=amount, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
     def _get_other_fees(self, csv_dict):
-        logger.debug('Extracting other fees…')
+        logger.debug("Extracting other fees…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Fees']['Data']['Other Fees']['__rows']:
+        for row in csv_dict["Fees"]["Data"]["Other Fees"]["__rows"]:
             currency = row[0]
             date = datetime.datetime.strptime(row[1], DATE_FORMAT)
             description = row[2]
             amount = _parse_float(row[3])
             memo = description
-            symbol = ''
+            symbol = ""
             transaction = model.InvestmentMiscExpense(
                 date=date, amount=amount, symbol=symbol, memo=memo
             )
@@ -280,4 +265,4 @@ class InteractiveBrokersImporter(importer.Importer):
 
 def _parse_float(string: str) -> float:
     """Parse float value from string"""
-    return importer.parse_decimal_number(string, 'en_US')
+    return importer.parse_decimal_number(string, "en_US")

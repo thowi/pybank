@@ -2,31 +2,27 @@ import datetime
 import logging
 from typing import TextIO
 
-from .. import csvfile
-from .. import importer
-from .. import model
-from .. import text
+from .. import csvfile, importer, model, text
 
+DATE_FORMAT_LONG = "%d.%m.%Y"
+DATE_FORMAT_SHORT = "%d.%m.%y"
 
-DATE_FORMAT_LONG = '%d.%m.%Y'
-DATE_FORMAT_SHORT = '%d.%m.%y'
-
-DATE_COLS = 'Buchungstag', 'Buchungsdatum', 'Belegdatum'
-PAYEE_PAYER_COL = 'Auftraggeber / Begünstigter'
-PAYER_COL = 'Zahlungspflichtige*r'
-PAYEE_COL = 'Zahlungsempfänger*in'
-ACC_COL = 'Kontonummer'
-ROUTING_COL = 'BLZ'
-AMOUNT_COLS = 'Betrag (EUR)', 'Betrag (€)'
-ORIG_AMOUNT_COL = 'Ursprünglicher Betrag'
+DATE_COLS = "Buchungstag", "Buchungsdatum", "Belegdatum"
+PAYEE_PAYER_COL = "Auftraggeber / Begünstigter"
+PAYER_COL = "Zahlungspflichtige*r"
+PAYEE_COL = "Zahlungsempfänger*in"
+ACC_COL = "Kontonummer"
+ROUTING_COL = "BLZ"
+AMOUNT_COLS = "Betrag (EUR)", "Betrag (€)"
+ORIG_AMOUNT_COL = "Ursprünglicher Betrag"
 MEMO_COLS = (
-    'Verwendungszweck',
-    'Bezeichnung',
-    'Avisierungstext',
-    'Beschreibung',
+    "Verwendungszweck",
+    "Bezeichnung",
+    "Avisierungstext",
+    "Beschreibung",
 )
 
-CC_PREFIXES = '4748', '4917', '499811'
+CC_PREFIXES = "4748", "4917", "499811"
 
 
 logger = logging.getLogger(__name__)
@@ -50,11 +46,9 @@ def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
 
 class _DkbImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(
-        self, file: TextIO, currency: str | None = None
-    ) -> list[model.Payment]:
+    def import_transactions(self, file: TextIO, currency: str | None = None) -> list[model.Payment]:
         """Import transactions from DKB CSV file"""
-        metadata, rows = csvfile.read_csv_with_header(file)
+        _metadata, rows = csvfile.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
@@ -64,7 +58,7 @@ class _DkbImporter(importer.Importer):
             date = _parse_date(date_str)
 
             amount_str = csvfile.get_value(row, AMOUNT_COLS)
-            amount = importer.parse_decimal_number(amount_str, 'de_DE')
+            amount = importer.parse_decimal_number(amount_str, "de_DE")
 
             # Older DKB CSVs have a single column for payee and payer.
             payer_payee_str = row.get(PAYEE_PAYER_COL)
@@ -81,18 +75,14 @@ class _DkbImporter(importer.Importer):
             memo_str = csvfile.get_value(row, MEMO_COLS)
             memo = text.normalize_text(memo_str)
 
-            acc = 'Account: ' + row[ACC_COL] if row.get(ACC_COL) else None
-            routing = (
-                'Routing: ' + row[ROUTING_COL] if row.get(ROUTING_COL) else None
-            )
+            acc = "Account: " + row[ACC_COL] if row.get(ACC_COL) else None
+            routing = "Routing: " + row[ROUTING_COL] if row.get(ROUTING_COL) else None
             orig_amount = (
-                'Original amount: ' + row[ORIG_AMOUNT_COL]
-                if row.get(ORIG_AMOUNT_COL)
-                else None
+                "Original amount: " + row[ORIG_AMOUNT_COL] if row.get(ORIG_AMOUNT_COL) else None
             )
 
             memo_parts = memo, orig_amount, acc, routing
-            memo = '. '.join(filter(bool, memo_parts))
+            memo = ". ".join(filter(bool, memo_parts))
 
             transactions.append(
                 model.Payment(
@@ -103,7 +93,7 @@ class _DkbImporter(importer.Importer):
                     memo=memo,
                 )
             )
-        logger.info('Imported %d transactions.' % len(transactions))
+        logger.info("Imported %d transactions.", len(transactions))
         return transactions
 
 
@@ -111,8 +101,8 @@ class DkbCheckingImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = csvfile.read_csv_with_header(file)
         return (
-            'Girokonto' in metadata
-            and metadata['Girokonto'].startswith('DE6412030000')
+            "Girokonto" in metadata
+            and metadata["Girokonto"].startswith("DE6412030000")
             and _has_minimal_columns(rows)
         )
 
@@ -121,7 +111,7 @@ class DkbCreditCardImporter(_DkbImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = csvfile.read_csv_with_header(file)
         return (
-            'Kreditkarte:' in metadata
-            and any(metadata['Kreditkarte:'].startswith(p) for p in CC_PREFIXES)
+            "Kreditkarte:" in metadata
+            and any(metadata["Kreditkarte:"].startswith(p) for p in CC_PREFIXES)
             and _has_minimal_columns(rows)
         )

@@ -19,7 +19,7 @@ def read_csv_with_header(
     """
     # In case the file was read before, e.g. in the can_import pass.
     file.seek(0)
-    reader = csv.reader(file, delimiter=';', quotechar='"')
+    reader = csv.reader(file, delimiter=";", quotechar='"')
     # Read metadata.
     metadata = {}
     col_names = None

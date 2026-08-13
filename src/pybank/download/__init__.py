@@ -26,12 +26,12 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
     locale.setlocale(locale.LC_ALL, lang)
-    thousands_sep = locale.localeconv()['mon_thousands_sep']
-    if lang == 'de_CH':  # Buggy Swiss locale.
-        locale.setlocale(locale.LC_ALL, 'en_US')
+    thousands_sep = locale.localeconv()["mon_thousands_sep"]
+    if lang == "de_CH":  # Buggy Swiss locale.
+        locale.setlocale(locale.LC_ALL, "en_US")
         thousands_sep = "'"
     try:
-        return locale.atof(number_string.replace(thousands_sep, ''))
+        return locale.atof(number_string.replace(thousands_sep, ""))
     finally:
         locale.setlocale(locale.LC_ALL, orig_locale)
 
@@ -44,9 +44,7 @@ def format_cc_account_name(account_name: str) -> str:
     return format_string_into_blocks(account_name, 4)
 
 
-def format_string_into_blocks(
-    string: str, block_length: int, separator: str = ' '
-) -> str:
+def format_string_into_blocks(string: str, block_length: int, separator: str = " ") -> str:
     parts = []
     index = 0
     while index < len(string):
@@ -56,33 +54,25 @@ def format_string_into_blocks(
 
 
 def find_element_by_title(parent: WebElement, title: str) -> WebElement:
-    return parent.find_element_by_xpath(
-        ".//*[normalize-space(@title) = '%s']" % title
-    )
+    return parent.find_element_by_xpath(f".//*[normalize-space(@title) = '{title}']")
 
 
-def find_element_by_tag_name_and_text(
-    parent: WebElement, tag_name: str, text: str
-) -> WebElement:
-    return parent.find_element_by_xpath(
-        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
-    )
+def find_element_by_tag_name_and_text(parent: WebElement, tag_name: str, text: str) -> WebElement:
+    return parent.find_element_by_xpath(f".//{tag_name}[normalize-space(text()) = '{text}']")
 
 
 def find_elements_by_tag_name_and_text(
     parent: WebElement, tag_name: str, text: str
 ) -> list[WebElement]:
-    return parent.find_elements_by_xpath(
-        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
-    )
+    return parent.find_elements_by_xpath(f".//{tag_name}[normalize-space(text()) = '{text}']")
 
 
 def find_element_by_text(parent: WebElement, text: str) -> WebElement:
-    return find_element_by_tag_name_and_text(parent, '*', text)
+    return find_element_by_tag_name_and_text(parent, "*", text)
 
 
 def find_elements_by_text(parent: WebElement, text: str) -> list[WebElement]:
-    return find_elements_by_tag_name_and_text(parent, '*', text)
+    return find_elements_by_tag_name_and_text(parent, "*", text)
 
 
 def get_first_displayed(elements: list[WebElement]) -> WebElement | None:
@@ -91,21 +81,13 @@ def get_first_displayed(elements: list[WebElement]) -> WebElement | None:
             return e
 
 
-def find_element_by_tag_name_and_text(
-    parent: WebElement, tag_name: str, text: str
-) -> WebElement:
-    return parent.find_element_by_xpath(
-        ".//%s[normalize-space(text()) = '%s']" % (tag_name, text)
-    )
-
-
 def find_button_by_text(parent: WebElement, text: str) -> WebElement:
-    return find_element_by_tag_name_and_text(parent, 'button', text)
+    return find_element_by_tag_name_and_text(parent, "button", text)
 
 
 def find_input_button_by_text(parent: WebElement, text: str) -> WebElement:
     return parent.find_element_by_xpath(
-        ".//input[@type = 'button' and normalize-space(@value) = '%s']" % text
+        f".//input[@type = 'button' and normalize-space(@value) = '{text}']"
     )
 
 
@@ -154,13 +136,19 @@ def wait_for_element_to_appear_and_disappear(
     :param lookup_callable: The lookup to find the element.
     :param timeout_s: The timeout to wait for the element to disappear.
     """
-    element_displayed = lambda: is_element_displayed(lookup_callable)
+
+    def element_displayed():
+        return is_element_displayed(lookup_callable)
+
     try:
         wait_until(element_displayed, timeout_s=2)
     except OperationTimeoutError:
         # The element probably never showed up or disappeared already.
         pass
-    element_disappeared = lambda: not element_displayed()
+
+    def element_disappeared():
+        return not element_displayed()
+
     try:
         wait_until(element_disappeared, timeout_s=timeout_s)
     except OperationTimeoutError:
@@ -189,12 +177,12 @@ def wait_until(
                 return
         except Exception as e:
             if raise_exceptions:
-                raise e
+                raise
             else:
-                logger.info('Suppressing exception: ' + str(e))
+                logger.info("Suppressing exception: " + str(e))
         time.sleep(sleep_s)
 
-    raise OperationTimeoutError('Operation timed out.')
+    raise OperationTimeoutError("Operation timed out.")
 
 
 class OperationTimeoutError(Exception):

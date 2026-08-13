@@ -50,11 +50,11 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
     locale.setlocale(locale.LC_ALL, lang)
-    thousands_sep = locale.localeconv()['mon_thousands_sep']
-    if lang == 'de_CH':  # Buggy Swiss locale.
-        locale.setlocale(locale.LC_ALL, 'en_US')
+    thousands_sep = locale.localeconv()["mon_thousands_sep"]
+    if lang == "de_CH":  # Buggy Swiss locale.
+        locale.setlocale(locale.LC_ALL, "en_US")
         thousands_sep = "'"
     try:
-        return locale.atof(number_string.replace(thousands_sep, ''))
+        return locale.atof(number_string.replace(thousands_sep, ""))
     finally:
         locale.setlocale(locale.LC_ALL, orig_locale)

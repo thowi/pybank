@@ -1,10 +1,9 @@
-import logging
 import datetime
+import logging
 import os
 import os.path
 import pickle
 import time
-
 
 import selenium.webdriver
 
@@ -64,7 +63,7 @@ class Bank:
         raise NotImplementedError()
 
     def _get_cookies_filename(self, username):
-        return self.__class__.__name__ + '_' + username + '.cookies'
+        return self.__class__.__name__ + "_" + username + ".cookies"
 
     def save_cookies(self, browser: selenium.webdriver, username: str) -> None:
         """Saves the seesion cookies into a file.
@@ -73,8 +72,9 @@ class Bank:
         :param str: The username that owns the session.
         """
         cookies_filename = self._get_cookies_filename(username)
-        logger.info('Saving cookies to %s...' % cookies_filename)
-        pickle.dump(browser.get_cookies(), open(cookies_filename, 'wb'))
+        logger.info(f"Saving cookies to {cookies_filename}...")
+        with open(cookies_filename, "wb") as f:
+            pickle.dump(browser.get_cookies(), f)
 
     def ask_and_restore_cookies(
         self,
@@ -91,32 +91,29 @@ class Bank:
         """
         cookies_filename = self._get_cookies_filename(username)
         if not os.path.exists(cookies_filename):
-            logger.info('No cookies found.')
+            logger.info("No cookies found.")
             return False
         if timeout_secs is not None:
             mtime = os.path.getmtime(cookies_filename)
             if mtime + timeout_secs < time.time():
-                logger.info(
-                    'Cookies from %s expired. Deleting.' % cookies_filename
-                )
+                logger.info(f"Cookies from {cookies_filename} expired. Deleting.")
                 os.remove(cookies_filename)
                 return False
-        logger.info('Reading cookies from %s...' % cookies_filename)
+        logger.info(f"Reading cookies from {cookies_filename}...")
         try:
-            cookies = pickle.load(open(cookies_filename, 'rb'))
-        except IOError:
-            logger.info('Invalid cookies file. Deleting.')
+            with open(cookies_filename, "rb") as f:
+                cookies = pickle.load(f)
+        except OSError:
+            logger.info("Invalid cookies file. Deleting.")
             os.remove(cookies_filename)
             return False
-        restore = input(
-            'A previous session was found for this user. Restore? [Yn] '
-        )
-        if restore.lower() in ('y', ''):
-            logger.info('Restoring cookies...')
+        restore = input("A previous session was found for this user. Restore? [Yn] ")
+        if restore.lower() in ("y", ""):
+            logger.info("Restoring cookies...")
             for cookie in cookies:
-                if 'expiry' in cookie:
+                if "expiry" in cookie:
                     # Float values throw an error in ChromeDriver.
-                    cookie['expiry'] = int(cookie['expiry'])
+                    cookie["expiry"] = int(cookie["expiry"])
                 browser.add_cookie(cookie)
             return True
         return False
@@ -127,8 +124,8 @@ class Bank:
         :param str: The username that owned the session.
         """
         cookies_filename = self._get_cookies_filename(username)
-        logger.info('Deleting cookies in %s...' % cookies_filename)
+        logger.info(f"Deleting cookies in {cookies_filename}...")
         try:
             os.remove(cookies_filename)
-        except IOError:
-            logger.info('No cookies found.')
+        except OSError:
+            logger.info("No cookies found.")

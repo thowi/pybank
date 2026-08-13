@@ -13,8 +13,8 @@ For more information see http://github.com/thowi/pybank.
 """
 
 import datetime
-import logging
 import getopt
+import logging
 import re
 import sys
 
@@ -25,15 +25,15 @@ import pybank.download.revolut
 from pybank import qif
 
 BANK_BY_NAME = {
-    'dkb': pybank.download.dkb.DeutscheKreditBank,
-    'interactivebrokers': pybank.download.ib.InteractiveBrokers,
-    'postfinance': pybank.download.postfinance.PostFinance,
-    'revolut': pybank.download.revolut.Revolut,
+    "dkb": pybank.download.dkb.DeutscheKreditBank,
+    "interactivebrokers": pybank.download.ib.InteractiveBrokers,
+    "postfinance": pybank.download.postfinance.PostFinance,
+    "revolut": pybank.download.revolut.Revolut,
 }
-DATE_FORMAT = '%Y-%m-%d'
-INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r'[^a-zA-Z0-9-_.]')
-LOG_FORMAT = '%(message)s'
-LOG_FORMAT_DEBUG = '%(levelname)s %(name)s: %(message)s'
+DATE_FORMAT = "%Y-%m-%d"
+INVALID_FILENAME_CHARACTERS_PATTERN = re.compile(r"[^a-zA-Z0-9-_.]")
+LOG_FORMAT = "%(message)s"
+LOG_FORMAT_DEBUG = "%(levelname)s %(name)s: %(message)s"
 
 logger = logging.getLogger(__name__)
 
@@ -52,12 +52,12 @@ class Usage(Exception):
     [-d|--debug]
     """
 
-    def __init__(self, msg=''):
+    def __init__(self, msg=""):
         self.msg = msg
 
     def __str__(self):
-        banks = 'Available banks: %s.' % ', '.join(sorted(BANK_BY_NAME.keys()))
-        return '\n'.join((self.__doc__, self.msg, banks))
+        banks = "Available banks: {}.".format(", ".join(sorted(BANK_BY_NAME.keys())))
+        return f"{self.__doc__}\n{self.msg}\n{banks}"
 
 
 def _parse_args(argv):
@@ -71,56 +71,56 @@ def _parse_args(argv):
     output_filename = None
     debug = False
 
-    options = 'hb:u:a:p:s:f:t:o:d'
+    options = "hb:u:a:p:s:f:t:o:d"
     options_long = [
-        'help',
-        'bank=',
-        'username=',
-        'password=',
-        'account=',
-        'statements=',
-        'from=',
-        'till=',
-        'outfile=',
-        'debug',
+        "help",
+        "bank=",
+        "username=",
+        "password=",
+        "account=",
+        "statements=",
+        "from=",
+        "till=",
+        "outfile=",
+        "debug",
     ]
     try:
-        opts, unused_args = getopt.getopt(argv[1:], options, options_long)
+        opts, _args = getopt.getopt(argv[1:], options, options_long)
     except getopt.error as msg:
         raise Usage(msg)
     for opt, arg in opts:
-        if opt in ('-h', '--help'):
+        if opt in ("-h", "--help"):
             print(Usage())
             return 0
-        if opt in ('-b', '--bank'):
+        if opt in ("-b", "--bank"):
             bank_name = arg
-        if opt in ('-u', '--username'):
+        if opt in ("-u", "--username"):
             username = arg
-        if opt in ('-p', '--password'):
+        if opt in ("-p", "--password"):
             password = arg
-        if opt in ('-a', '--account'):
+        if opt in ("-a", "--account"):
             accounts.append(arg)
-        if opt in ('-s', '--statements'):
+        if opt in ("-s", "--statements"):
             statements.append(arg)
-        if opt in ('-f', '--from'):
+        if opt in ("-f", "--from"):
             from_date = arg
-        if opt in ('-t', '--till'):
+        if opt in ("-t", "--till"):
             till_date = arg
-        if opt in ('-o', '--outfile'):
+        if opt in ("-o", "--outfile"):
             output_filename = arg
-        if opt in ('-d', '--debug'):
+        if opt in ("-d", "--debug"):
             debug = True
 
     if not bank_name:
-        raise Usage('Must specify a bank.')
+        raise Usage("Must specify a bank.")
     if bank_name not in BANK_BY_NAME:
-        raise Usage('Unknown bank: %s.', bank_name)
+        raise Usage("Unknown bank: %s.", bank_name)
 
     if from_date:
         try:
             from_date = datetime.datetime.strptime(from_date, DATE_FORMAT)
         except ValueError:
-            raise Usage('Invalid from date: %s.', from_date)
+            raise Usage("Invalid from date: %s.", from_date)
     else:
         # Beginning of last month.
         now = datetime.datetime.now()
@@ -134,7 +134,7 @@ def _parse_args(argv):
         try:
             till_date = datetime.datetime.strptime(till_date, DATE_FORMAT)
         except ValueError:
-            raise Usage('Invalid until date: %s.', till_date)
+            raise Usage("Invalid until date: %s.", till_date)
     else:
         # Beginning of this month.
         now = datetime.datetime.now()
@@ -171,12 +171,10 @@ def _fetch_accounts(
 
     available_accounts = bank.get_accounts()
     if not available_accounts:
-        logger.warning('No accounts found.')
+        logger.warning("No accounts found.")
         return
 
-    logger.info(
-        'Available accounts: %s.', ', '.join(str(a) for a in available_accounts)
-    )
+    logger.info("Available accounts: %s.", ", ".join(str(a) for a in available_accounts))
 
     if not account_names:
         # Download all accounts by default.
@@ -190,23 +188,19 @@ def _fetch_accounts(
             try:
                 accounts.append(accounts_by_name[account_name])
             except KeyError:
-                logger.error('Account not found: %s.', account_name)
+                logger.error("Account not found: %s.", account_name)
 
     for account in accounts:
-        logger.info('Fetching account: %s.', account.name)
-        account.transactions = bank.get_transactions(
-            account, from_date, till_date
-        )
-        output = _open_file(
-            output_filename, bank_name, account.name, from_date, till_date
-        )
+        logger.info("Fetching account: %s.", account.name)
+        account.transactions = bank.get_transactions(account, from_date, till_date)
+        output = _open_file(output_filename, bank_name, account.name, from_date, till_date)
         try:
             print(qif.serialize_account(account), file=output)
         except qif.SerializationError as e:
-            logger.error('Serialization error: %s.', e)
+            logger.error("Serialization error: %s.", e)
 
-    logout = input('Logout? [yN] ')
-    if logout == 'y':
+    logout = input("Logout? [yN] ")
+    if logout == "y":
         bank.logout()
 
 
@@ -214,19 +208,17 @@ def _open_file(output_filename, bank_name, account_name, from_date, till_date):
     if not output_filename:
         return sys.stdout
     filename_vars = {
-        'bank': bank_name,
-        'account': account_name,
-        'from': from_date.strftime(DATE_FORMAT),
-        'till': till_date.strftime(DATE_FORMAT),
+        "bank": bank_name,
+        "account": account_name,
+        "from": from_date.strftime(DATE_FORMAT),
+        "till": till_date.strftime(DATE_FORMAT),
     }
     formatted_filename = output_filename % filename_vars
-    escaped_filename = INVALID_FILENAME_CHARACTERS_PATTERN.sub(
-        '_', formatted_filename
-    )
+    escaped_filename = INVALID_FILENAME_CHARACTERS_PATTERN.sub("_", formatted_filename)
     try:
-        logger.info('Writing to file: %s.', escaped_filename)
-        return open(escaped_filename, 'w')
-    except IOError as err:
+        logger.info("Writing to file: %s.", escaped_filename)
+        return open(escaped_filename, "w")
+    except OSError as err:
         print(err.msg, file=sys.stderr)
 
 
@@ -268,10 +260,10 @@ def main(argv=None) -> int:
         )
     except (KeyboardInterrupt, SystemExit):
         raise
-    except Exception as e:
-        logger.error('Error while fetching transactions: %s' % e)
+    except Exception as e:  # noqa: BLE001  Top level CLI guard.
+        logger.error(f"Error while fetching transactions: {e}")
         if debug:
-            import pdb
+            import pdb  # noqa: T100  Opt in post mortem, behind --debug.
 
             pdb.post_mortem()
         return 2
@@ -279,5 +271,5 @@ def main(argv=None) -> int:
     return 0
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     sys.exit(main())

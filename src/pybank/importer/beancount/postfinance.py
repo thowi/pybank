@@ -15,42 +15,38 @@ import os
 from typing import NamedTuple
 
 import beangulp
-from beancount.core import amount
-from beancount.core import data
-from beancount.core import flags
+from beancount.core import amount, data, flags
 
-from ... import csvfile
-from ... import text
+from ... import csvfile, text
 from . import identity
 
+UNCATEGORIZED = "Expenses:Uncategorized"
 
-UNCATEGORIZED = 'Expenses:Uncategorized'
-
-DATE_COLS = ['Buchungsdatum', 'Datum']
+DATE_COLS = ["Buchungsdatum", "Datum"]
 MEMO_COLS = [
-    'Buchungsdetails',
-    'Bezeichnung',
-    'Avisierungstext',
-    'Buchungstext',
+    "Buchungsdetails",
+    "Bezeichnung",
+    "Avisierungstext",
+    "Buchungstext",
 ]
 
-CATEGORY_COL = 'Kategorie'
-LABEL_COL = 'Label'
+CATEGORY_COL = "Kategorie"
+LABEL_COL = "Label"
 
-CREDIT_PREFIX = 'Gutschrift in '
-DEBIT_PREFIX = 'Lastschrift in '
-BALANCE_PREFIX = 'Saldo in '
+CREDIT_PREFIX = "Gutschrift in "
+DEBIT_PREFIX = "Lastschrift in "
+BALANCE_PREFIX = "Saldo in "
 
-DATE_FORMAT_ISO = '%Y-%m-%d'
-DATE_FORMAT_DE = '%d.%m.%Y'
+DATE_FORMAT_ISO = "%Y-%m-%d"
+DATE_FORMAT_DE = "%d.%m.%Y"
 
-TOTAL_MEMO = 'Total'
+TOTAL_MEMO = "Total"
 
 # Only the recent exports carry these, and they are the bank's guess, not a
 # decision. Kept as a hint for categorization, never as the answer, and out
 # of the import-id so that ids do not depend on the export format.
-META_CATEGORY = 'bank-category'
-META_LABEL = 'bank-label'
+META_CATEGORY = "bank-category"
+META_LABEL = "bank-label"
 
 logger = logging.getLogger(__name__)
 
@@ -66,14 +62,14 @@ class _Row(NamedTuple):
 
 def _read_text(filepath: str) -> str:
     """Decodes a statement. PostFinance ships either cp1252 or UTF-8 BOM."""
-    with open(filepath, 'rb') as f:
+    with open(filepath, "rb") as f:
         raw = f.read()
     if raw.startswith(codecs.BOM_UTF8):
-        return raw.decode('utf-8-sig')
+        return raw.decode("utf-8-sig")
     try:
-        return raw.decode('utf-8')
+        return raw.decode("utf-8")
     except UnicodeDecodeError:
-        return raw.decode('cp1252')
+        return raw.decode("cp1252")
 
 
 def _read(filepath: str) -> tuple[dict[str, str], list[dict[str, str]]]:
@@ -86,12 +82,12 @@ def _parse_date(date_str: str) -> datetime.date:
             return datetime.datetime.strptime(date_str, fmt).date()
         except ValueError:
             continue
-    raise ValueError(f'Unrecognized date format: {date_str!r}')
+    raise ValueError(f"Unrecognized date format: {date_str!r}")
 
 
 def _parse_number(number_str: str) -> decimal.Decimal:
     """Swiss format: apostrophe thousands separator, dot decimal point."""
-    return decimal.Decimal(number_str.replace("'", '').replace(' ', ''))
+    return decimal.Decimal(number_str.replace("'", "").replace(" ", ""))
 
 
 def _canonical_number(number: decimal.Decimal) -> str:
@@ -100,12 +96,10 @@ def _canonical_number(number: decimal.Decimal) -> str:
     Exports are inconsistent about trailing zeros, and `24` and `24.00` must
     not hash differently or a re-download imports twice.
     """
-    return format(number.normalize(), 'f')
+    return format(number.normalize(), "f")
 
 
-def _amount_with_prefix(
-    row: dict[str, str], prefix: str
-) -> amount.Amount | None:
+def _amount_with_prefix(row: dict[str, str], prefix: str) -> amount.Amount | None:
     """Returns the amount in the `<prefix><currency>` column, if filled."""
     for name, value in row.items():
         if name.startswith(prefix) and value:
@@ -122,7 +116,7 @@ def _parse_row(row: dict[str, str]) -> _Row | None:
 
     if not date_str or (credit is None and debit is None):
         if memo != TOTAL_MEMO:
-            logger.debug('Skipping row without a date or an amount.')
+            logger.debug("Skipping row without a date or an amount.")
         return None
 
     if credit is not None:
@@ -145,13 +139,13 @@ class _PostFinanceImporter(beangulp.Importer):
     # Metadata keys that must all be present for a file to be ours.
     _metadata_keys: tuple[str, ...] = ()
     # Metadata key naming the finest-grained source, hashed into import-ids.
-    _source_key: str = ''
+    _source_key: str = ""
 
     def __init__(self, account: data.Account):
         self._account = account
 
     def identify(self, filepath: str) -> bool:
-        if not filepath.lower().endswith('.csv'):
+        if not filepath.lower().endswith(".csv"):
             return False
         try:
             metadata, rows = _read(filepath)
@@ -173,7 +167,7 @@ class _PostFinanceImporter(beangulp.Importer):
 
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:
         metadata, rows = _read(filepath)
-        source_id = metadata.get(self._source_key, '')
+        source_id = metadata.get(self._source_key, "")
 
         parsed = [row for row in map(_parse_row, rows) if row is not None]
         ids = identity.import_ids(
@@ -203,12 +197,10 @@ class _PostFinanceImporter(beangulp.Importer):
         if balance is not None:
             entries.append(data.Balance(meta.copy(), *balance, None, None))
         else:
-            logger.info('No balance column in %s.', os.path.basename(filepath))
+            logger.info("No balance column in %s.", os.path.basename(filepath))
         return entries
 
-    def deduplicate(
-        self, entries: data.Entries, existing: data.Entries
-    ) -> None:
+    def deduplicate(self, entries: data.Entries, existing: data.Entries) -> None:
         identity.mark_duplicates(entries, existing)
 
     def _transaction(self, row: _Row, meta: data.Meta) -> data.Transaction:
@@ -253,8 +245,8 @@ class _PostFinanceImporter(beangulp.Importer):
 class CheckingImporter(_PostFinanceImporter):
     """PostFinance checking account statements."""
 
-    _metadata_keys = ('Konto:',)
-    _source_key = 'Konto:'
+    _metadata_keys = ("Konto:",)
+    _source_key = "Konto:"
 
 
 class CreditCardImporter(_PostFinanceImporter):
@@ -264,5 +256,5 @@ class CreditCardImporter(_PostFinanceImporter):
     identifies the source, not the account.
     """
 
-    _metadata_keys = ('Kartenkonto:', 'Karte:')
-    _source_key = 'Karte:'
+    _metadata_keys = ("Kartenkonto:", "Karte:")
+    _source_key = "Karte:"

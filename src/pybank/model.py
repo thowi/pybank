@@ -1,8 +1,7 @@
-#!/usr/bin/python
-
 """Bank account model."""
 
 import datetime
+
 from pydantic import BaseModel, Field
 
 
@@ -20,15 +19,15 @@ class Account(BaseModel):
     currency: str | None = None
     balance: float | None = None
     balance_date: datetime.datetime | None = None
-    transactions: tuple['Transaction', ...] = Field(default_factory=tuple)
+    transactions: tuple["Transaction", ...] = Field(default_factory=tuple)
 
     def __str__(self) -> str:
         repr = [self.name]
         if self.transactions:
-            repr.append('%i transactions' % len(self.transactions))
+            repr.append(f"{len(self.transactions)} transactions")
         if self.balance is not None:
-            repr.append('Balance: %.2f' % self.balance)
-        return '. '.join(repr) + '.'
+            repr.append(f"Balance: {self.balance:.2f}")
+        return ". ".join(repr) + "."
 
 
 class CheckingAccount(Account):
@@ -62,12 +61,7 @@ class Transaction(BaseModel):
     category: str | None = None
 
     def __str__(self) -> str:
-        return 'Date: %s. Amount: %.2f. Memo: %s. Category: %s.' % (
-            self.date,
-            self.amount,
-            self.memo,
-            self.category,
-        )
+        return f"Date: {self.date}. Amount: {self.amount:.2f}. Memo: {self.memo}. Category: {self.category}."
 
 
 class Payment(Transaction):
@@ -85,18 +79,7 @@ class Payment(Transaction):
     payee: str | None = None
 
     def __str__(self) -> str:
-        return (
-            'Date: %s. Amount: %.2f. Payer: %s. Payee: %s. Memo: %s. '
-            'Category: %s.'
-            % (
-                self.date,
-                self.amount,
-                self.payer,
-                self.payee,
-                self.memo,
-                self.category,
-            )
-        )
+        return f"Date: {self.date}. Amount: {self.amount:.2f}. Payer: {self.payer}. Payee: {self.payee}. Memo: {self.memo}. Category: {self.category}."
 
 
 class InvestmentSecurityTransaction(Transaction):
@@ -126,16 +109,12 @@ class InvestmentSecurityPurchase(InvestmentSecurityTransaction):
     See SecurityTransaction for parameters.
     """
 
-    pass
-
 
 class InvestmentSecuritySale(InvestmentSecurityTransaction):
     """A security sale.
 
     See SecurityTransaction for parameters.
     """
-
-    pass
 
 
 class InvestmentDividend(Transaction):
@@ -160,8 +139,6 @@ class InvestmentInterestExpense(Transaction):
     :param category: The category of the dividend, if any.
     """
 
-    pass
-
 
 class InvestmentInterestIncome(Transaction):
     """An interest income.
@@ -171,8 +148,6 @@ class InvestmentInterestIncome(Transaction):
     :param memo: The memo of the dividend, if any.
     :param category: The category of the dividend, if any.
     """
-
-    pass
 
 
 class InvestmentMiscExpense(Transaction):

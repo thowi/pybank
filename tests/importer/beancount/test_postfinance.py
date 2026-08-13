@@ -10,9 +10,8 @@ from beancount.parser import printer
 
 from pybank.importer.beancount import postfinance
 
-
-CHECKING = 'Assets:PostFinance:Checking'
-CARD = 'Liabilities:PostFinance:Visa:Person'
+CHECKING = "Assets:PostFinance:Checking"
+CARD = "Liabilities:PostFinance:Visa:Person"
 
 # Current export: UTF-8 BOM, German dates, no balance column.
 CHECKING_CSV = """\
@@ -94,7 +93,7 @@ Datum;Buchungsdetails;Gutschrift in CHF;Lastschrift in CHF
 """
 
 
-def _write(tmp_path, name, content, encoding='utf-8-sig'):
+def _write(tmp_path, name, content, encoding="utf-8-sig"):
     path = tmp_path / name
     path.write_bytes(content.encode(encoding))
     return str(path)
@@ -112,17 +111,17 @@ def card():
 
 @pytest.fixture
 def checking_path(tmp_path):
-    return _write(tmp_path, 'checking.csv', CHECKING_CSV)
+    return _write(tmp_path, "checking.csv", CHECKING_CSV)
 
 
 @pytest.fixture
 def balance_path(tmp_path):
-    return _write(tmp_path, 'balance.csv', CHECKING_WITH_BALANCE_CSV, 'cp1252')
+    return _write(tmp_path, "balance.csv", CHECKING_WITH_BALANCE_CSV, "cp1252")
 
 
 @pytest.fixture
 def card_path(tmp_path):
-    return _write(tmp_path, 'card.csv', CARD_CSV)
+    return _write(tmp_path, "card.csv", CARD_CSV)
 
 
 def _txns(entries):
@@ -144,8 +143,8 @@ def test_identify_card(checking, card, card_path):
 
 
 def test_identify_rejects_other_files(tmp_path, checking):
-    assert not checking.identify(_write(tmp_path, 'notes.txt', 'hello'))
-    assert not checking.identify(_write(tmp_path, 'empty.csv', 'a;b\n'))
+    assert not checking.identify(_write(tmp_path, "notes.txt", "hello"))
+    assert not checking.identify(_write(tmp_path, "empty.csv", "a;b\n"))
 
 
 def test_identify_reads_cp1252(checking, balance_path):
@@ -163,27 +162,27 @@ def test_extract_signs_and_amounts(checking, checking_path):
     ]
     numbers = [t.postings[0].units.number for t in txns]
     assert numbers == [
-        decimal.Decimal('-42.50'),
-        decimal.Decimal('5000.00'),
-        decimal.Decimal('-4.50'),
-        decimal.Decimal('-4.50'),
+        decimal.Decimal("-42.50"),
+        decimal.Decimal("5000.00"),
+        decimal.Decimal("-4.50"),
+        decimal.Decimal("-4.50"),
     ]
-    assert {t.postings[0].units.currency for t in txns} == {'CHF'}
+    assert {t.postings[0].units.currency for t in txns} == {"CHF"}
 
 
 def test_extract_posting_shape(checking, checking_path):
     txn = _txns(checking.extract(checking_path, []))[0]
 
-    assert txn.flag == '!'
+    assert txn.flag == "!"
     assert txn.postings[0].account == CHECKING
     assert txn.postings[1].account == postfinance.UNCATEGORIZED
-    assert txn.postings[1].units is None, 'contra leg auto-balances'
+    assert txn.postings[1].units is None, "contra leg auto-balances"
 
 
 def test_extract_normalizes_the_memo(checking, checking_path):
     txn = _txns(checking.extract(checking_path, []))[0]
-    assert txn.narration == 'Grocer Ltd'
-    assert txn.payee is None, 'PostFinance gives one free-text field only'
+    assert txn.narration == "Grocer Ltd"
+    assert txn.payee is None, "PostFinance gives one free-text field only"
 
 
 def test_extract_skips_the_total_row(checking, balance_path):
@@ -194,15 +193,13 @@ def test_balance_assertion_is_dated_the_following_day(checking, balance_path):
     (balance,) = _balances(checking.extract(balance_path, []))
 
     assert balance.date == datetime.date(2025, 11, 11), (
-        'assertions evaluate at the start of their date'
+        "assertions evaluate at the start of their date"
     )
     assert balance.account == CHECKING
-    assert balance.amount.number == decimal.Decimal('1010.00')
+    assert balance.amount.number == decimal.Decimal("1010.00")
 
 
-def test_no_balance_column_yields_no_assertion(
-    checking, card, checking_path, card_path
-):
+def test_no_balance_column_yields_no_assertion(checking, card, checking_path, card_path):
     assert _balances(checking.extract(checking_path, [])) == []
     assert _balances(card.extract(card_path, [])) == []
 
@@ -217,46 +214,40 @@ def test_card_uses_the_booking_date(card, card_path):
 
 def test_identical_rows_stay_distinct(checking, checking_path):
     txns = _txns(checking.extract(checking_path, []))
-    coffees = [t for t in txns if t.narration == 'Coffee Bar']
+    coffees = [t for t in txns if t.narration == "Coffee Bar"]
 
-    assert len(coffees) == 2, 'two coffees on one day are legitimate'
-    ids = {t.meta['import-id'] for t in coffees}
+    assert len(coffees) == 2, "two coffees on one day are legitimate"
+    ids = {t.meta["import-id"] for t in coffees}
     assert len(ids) == 2
 
 
 def test_import_ids_are_stable_across_runs(checking, checking_path):
     first = _txns(checking.extract(checking_path, []))
     second = _txns(checking.extract(checking_path, []))
-    assert [t.meta['import-id'] for t in first] == [
-        t.meta['import-id'] for t in second
-    ]
+    assert [t.meta["import-id"] for t in first] == [t.meta["import-id"] for t in second]
 
 
-def test_import_ids_survive_a_reformatted_amount(
-    tmp_path, checking, checking_path
-):
+def test_import_ids_survive_a_reformatted_amount(tmp_path, checking, checking_path):
     """`42.5` and `42.50` are the same transaction, so the same id."""
-    reformatted = _write(
-        tmp_path, 'reformatted.csv', CHECKING_CSV.replace(';42.50', ';42.5')
-    )
+    reformatted = _write(tmp_path, "reformatted.csv", CHECKING_CSV.replace(";42.50", ";42.5"))
 
     first = _txns(checking.extract(checking_path, []))[0]
     second = _txns(checking.extract(reformatted, []))[0]
-    assert first.meta['import-id'] == second.meta['import-id']
+    assert first.meta["import-id"] == second.meta["import-id"]
 
 
 def test_extracted_directives_load(tmp_path, checking, balance_path):
     """The real acceptance test: what comes out has to parse and balance."""
     entries = checking.extract(balance_path, [])
 
-    ledger = tmp_path / 'ledger.beancount'
-    with ledger.open('w') as out:
-        out.write('2025-01-01 open Assets:PostFinance:Checking CHF\n')
-        out.write('2025-01-01 open Expenses:Uncategorized\n')
+    ledger = tmp_path / "ledger.beancount"
+    with ledger.open("w") as out:
+        out.write("2025-01-01 open Assets:PostFinance:Checking CHF\n")
+        out.write("2025-01-01 open Expenses:Uncategorized\n")
         out.write('2025-11-01 * "Opening"\n')
-        out.write('  Assets:PostFinance:Checking   1000.00 CHF\n')
-        out.write('  Equity:Opening-Balances\n')
-        out.write('2025-01-01 open Equity:Opening-Balances\n')
+        out.write("  Assets:PostFinance:Checking   1000.00 CHF\n")
+        out.write("  Equity:Opening-Balances\n")
+        out.write("2025-01-01 open Equity:Opening-Balances\n")
         printer.print_entries(entries, file=out)
 
     _loaded, errors, _options = loader.load_file(str(ledger))
@@ -265,14 +256,14 @@ def test_extracted_directives_load(tmp_path, checking, balance_path):
 
 def test_terse_card_variant(tmp_path, card):
     """The 46-file majority: ISO dates, cp1252, a Total row wider than the rest."""
-    path = _write(tmp_path, 'terse.csv', CARD_TERSE_CSV, 'cp1252')
+    path = _write(tmp_path, "terse.csv", CARD_TERSE_CSV, "cp1252")
     assert card.identify(path)
 
     txns = _txns(card.extract(path, []))
-    assert [t.narration for t in txns] == ['Bookshop', 'Return Bookshop']
+    assert [t.narration for t in txns] == ["Bookshop", "Return Bookshop"]
     assert [t.postings[0].units.number for t in txns] == [
-        decimal.Decimal('-18.00'),
-        decimal.Decimal('18.00'),
+        decimal.Decimal("-18.00"),
+        decimal.Decimal("18.00"),
     ]
     assert [t.date for t in txns] == [
         datetime.date(2019, 2, 14),
@@ -281,59 +272,55 @@ def test_terse_card_variant(tmp_path, card):
 
 
 def test_card_details_variant(tmp_path, card):
-    path = _write(tmp_path, 'details.csv', CARD_DETAILS_CSV)
+    path = _write(tmp_path, "details.csv", CARD_DETAILS_CSV)
     assert card.identify(path)
 
     txns = _txns(card.extract(path, []))
-    assert [t.narration for t in txns] == ['Bookshop', 'Return Bookshop']
+    assert [t.narration for t in txns] == ["Bookshop", "Return Bookshop"]
     assert [t.postings[0].units.number for t in txns] == [
-        decimal.Decimal('-18.00'),
-        decimal.Decimal('18.00'),
+        decimal.Decimal("-18.00"),
+        decimal.Decimal("18.00"),
     ]
 
 
 def test_labelled_checking_variant(tmp_path, checking):
-    path = _write(tmp_path, 'labelled.csv', CHECKING_LABELLED_CSV)
+    path = _write(tmp_path, "labelled.csv", CHECKING_LABELLED_CSV)
     assert checking.identify(path)
 
     (txn,) = _txns(checking.extract(path, []))
     assert txn.date == datetime.date(2026, 3, 4)
-    assert txn.postings[0].units.number == decimal.Decimal('-12.00')
+    assert txn.postings[0].units.number == decimal.Decimal("-12.00")
 
 
-def test_bank_category_and_label_are_kept_as_metadata(
-    tmp_path, card, checking, card_path
-):
+def test_bank_category_and_label_are_kept_as_metadata(tmp_path, card, checking, card_path):
     card_txn = _txns(card.extract(card_path, []))[0]
-    assert card_txn.meta['bank-category'] == 'Shopping'
-    assert card_txn.meta['bank-label'] == 'Gift'
+    assert card_txn.meta["bank-category"] == "Shopping"
+    assert card_txn.meta["bank-label"] == "Gift"
 
-    path = _write(tmp_path, 'labelled.csv', CHECKING_LABELLED_CSV)
+    path = _write(tmp_path, "labelled.csv", CHECKING_LABELLED_CSV)
     (checking_txn,) = _txns(checking.extract(path, []))
-    assert checking_txn.meta['bank-category'] == 'Groceries'
-    assert checking_txn.meta['bank-label'] == 'Weekly'
+    assert checking_txn.meta["bank-category"] == "Groceries"
+    assert checking_txn.meta["bank-label"] == "Weekly"
 
 
-def test_bank_category_is_absent_when_the_export_has_none(
-    checking, checking_path
-):
+def test_bank_category_is_absent_when_the_export_has_none(checking, checking_path):
     txn = _txns(checking.extract(checking_path, []))[0]
-    assert 'bank-category' not in txn.meta
-    assert 'bank-label' not in txn.meta
+    assert "bank-category" not in txn.meta
+    assert "bank-label" not in txn.meta
 
 
 def test_bank_category_does_not_affect_the_import_id(tmp_path, checking):
     """The bank may relabel a transaction. That must not re-import it."""
-    path = _write(tmp_path, 'labelled.csv', CHECKING_LABELLED_CSV)
+    path = _write(tmp_path, "labelled.csv", CHECKING_LABELLED_CSV)
     relabelled = _write(
         tmp_path,
-        'relabelled.csv',
-        CHECKING_LABELLED_CSV.replace(';Weekly;Groceries', ';Other;Shopping'),
+        "relabelled.csv",
+        CHECKING_LABELLED_CSV.replace(";Weekly;Groceries", ";Other;Shopping"),
     )
 
     first = _txns(checking.extract(path, []))[0]
     second = _txns(checking.extract(relabelled, []))[0]
-    assert first.meta['import-id'] == second.meta['import-id']
+    assert first.meta["import-id"] == second.meta["import-id"]
 
 
 def test_reimport_is_idempotent(checking, checking_path):
@@ -341,4 +328,4 @@ def test_reimport_is_idempotent(checking, checking_path):
     again = checking.extract(checking_path, existing)
 
     checking.deduplicate(again, existing)
-    assert all('__duplicate__' in t.meta for t in _txns(again))
+    assert all("__duplicate__" in t.meta for t in _txns(again))

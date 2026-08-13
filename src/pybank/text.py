@@ -1,7 +1,7 @@
 import re
 import string
 
-WHITESPACE_PATTERN = re.compile(r' +')
+WHITESPACE_PATTERN = re.compile(r" +")
 
 
 def normalize_text(text: str | None) -> str | None:
@@ -17,11 +17,11 @@ def normalize_text(text: str | None) -> str | None:
     """
     if text is None:
         return None
-    text = WHITESPACE_PATTERN.sub(' ', text)
+    text = WHITESPACE_PATTERN.sub(" ", text)
     lines = []
     for line in text.splitlines():
         line = line.strip()
         if line.isupper():
             line = string.capwords(line)
         lines.append(line)
-    return '\n'.join(lines)
+    return "\n".join(lines)

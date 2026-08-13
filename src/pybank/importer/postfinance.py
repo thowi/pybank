@@ -1,24 +1,19 @@
 import datetime
-import io
 import logging
 from typing import TextIO
 
-from .. import csvfile
-from .. import importer
-from .. import model
-from .. import text
+from .. import csvfile, importer, model, text
 
+DATE_FORMAT_ISO = "%Y-%m-%d"
+DATE_FORMAT_DE = "%d.%m.%Y"
 
-DATE_FORMAT_ISO = '%Y-%m-%d'
-DATE_FORMAT_DE = '%d.%m.%Y'
-
-CURRENCY = 'CHF'
-DATE_COLS = 'Buchungsdatum', 'Datum'
-CREDIT_COL = 'Gutschrift in ' + CURRENCY
-DEBIT_COL = 'Lastschrift in ' + CURRENCY
-MEMO_COLS = 'Buchungsdetails', 'Bezeichnung', 'Avisierungstext', 'Buchungstext'
+CURRENCY = "CHF"
+DATE_COLS = "Buchungsdatum", "Datum"
+CREDIT_COL = "Gutschrift in " + CURRENCY
+DEBIT_COL = "Lastschrift in " + CURRENCY
+MEMO_COLS = "Buchungsdetails", "Bezeichnung", "Avisierungstext", "Buchungstext"
 AMOUNT_COLS = CREDIT_COL, DEBIT_COL
-CATEGORY_COL = 'Kategorie'
+CATEGORY_COL = "Kategorie"
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +26,7 @@ def _parse_date(date_str: str) -> datetime.datetime:
 
 
 def _parse_float(string: str) -> float:
-    return importer.parse_decimal_number(string, 'de_CH')
+    return importer.parse_decimal_number(string, "de_CH")
 
 
 def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
@@ -44,10 +39,8 @@ def _has_minimal_columns(rows: list[dict[str, str]]) -> bool:
 
 class _PostFinanceImporter(importer.Importer):
     # This base method is generic enough for both checking and credit card.
-    def import_transactions(
-        self, file: TextIO, currency: str | None = None
-    ) -> list[model.Payment]:
-        metadata, rows = csvfile.read_csv_with_header(file)
+    def import_transactions(self, file: TextIO, currency: str | None = None) -> list[model.Payment]:
+        _metadata, rows = csvfile.read_csv_with_header(file)
         # TODO: Support different currencies.
 
         # Get transactions.
@@ -56,14 +49,8 @@ class _PostFinanceImporter(importer.Importer):
             date_str = csvfile.get_value(row, DATE_COLS)
             date = _parse_date(date_str)
 
-            credit = (
-                _parse_float(row[CREDIT_COL]) if row.get(CREDIT_COL) else None
-            )
-            debit = (
-                -abs(_parse_float(row[DEBIT_COL]))
-                if row.get(DEBIT_COL)
-                else None
-            )
+            credit = _parse_float(row[CREDIT_COL]) if row.get(CREDIT_COL) else None
+            debit = -abs(_parse_float(row[DEBIT_COL])) if row.get(DEBIT_COL) else None
             amount = credit if credit else debit
 
             memo_str = csvfile.get_value(row, MEMO_COLS)
@@ -72,15 +59,13 @@ class _PostFinanceImporter(importer.Importer):
             category = row.get(CATEGORY_COL)
 
             # Skip "Total" row.
-            if memo == 'Total' and not amount:
+            if memo == "Total" and not amount:
                 continue
 
             transactions.append(
-                model.Payment(
-                    date=date, amount=amount, memo=memo, category=category
-                )
+                model.Payment(date=date, amount=amount, memo=memo, category=category)
             )
-        logger.info('Imported %d transactions.' % len(transactions))
+        logger.info("Imported %d transactions.", len(transactions))
         return transactions
 
 
@@ -90,8 +75,8 @@ class PostFinanceCheckingImporter(_PostFinanceImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = csvfile.read_csv_with_header(file)
         return (
-            'Konto:' in metadata
-            and metadata['Konto:'].startswith('CH')
+            "Konto:" in metadata
+            and metadata["Konto:"].startswith("CH")
             and _has_minimal_columns(rows)
         )
 
@@ -102,8 +87,8 @@ class PostFinanceCreditCardImporter(_PostFinanceImporter):
     def can_import(self, file: TextIO) -> bool:
         metadata, rows = csvfile.read_csv_with_header(file)
         return (
-            'Kartenkonto:' in metadata
-            and 'Karte:' in metadata
-            and metadata['Karte:'].startswith('XXXX')
+            "Kartenkonto:" in metadata
+            and "Karte:" in metadata
+            and metadata["Karte:"].startswith("XXXX")
             and _has_minimal_columns(rows)
         )

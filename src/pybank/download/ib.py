@@ -11,11 +11,10 @@ import time
 
 from selenium import webdriver
 from selenium.common import exceptions
-from selenium.webdriver.support import ui
 from selenium.webdriver import chrome
-from .. import download
-from .. import model
+from selenium.webdriver.support import ui
 
+from .. import download, model
 
 logger = logging.getLogger(__name__)
 
@@ -23,11 +22,11 @@ logger = logging.getLogger(__name__)
 class InteractiveBrokers(download.bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
 
-    _LOGIN_URL = 'https://www.interactivebrokers.co.uk/sso/Login'
-    _MAIN_URL = 'https://www.interactivebrokers.co.uk/portal/'
-    _ACTIVITY_FORM_DATE_FORMAT = '%Y-%m-%d'
-    _DATE_TIME_FORMAT = '%Y-%m-%d, %H:%M:%S'
-    _DATE_FORMAT = '%Y-%m-%d'
+    _LOGIN_URL = "https://www.interactivebrokers.co.uk/sso/Login"
+    _MAIN_URL = "https://www.interactivebrokers.co.uk/portal/"
+    _ACTIVITY_FORM_DATE_FORMAT = "%Y-%m-%d"
+    _DATE_TIME_FORMAT = "%Y-%m-%d, %H:%M:%S"
+    _DATE_FORMAT = "%Y-%m-%d"
     _WEBDRIVER_TIMEOUT = 30
     _SESSION_TIMEOUT_S = 30 * 60
 
@@ -40,17 +39,17 @@ class InteractiveBrokers(download.bank.Bank):
         chrome_options = chrome.options.Options()
         # Download to a custom location. Don't show dialog.
         self._download_dir = tempfile.mkdtemp()
-        logger.debug('Downloading files to: ' + self._download_dir)
+        logger.debug("Downloading files to: " + self._download_dir)
         chrome_options.add_experimental_option(
-            'prefs',
+            "prefs",
             {
-                'download.default_directory': self._download_dir,
-                'download.prompt_for_download': False,
-                'download.directory_upgrade': True,
+                "download.default_directory": self._download_dir,
+                "download.prompt_for_download": False,
+                "download.directory_upgrade": True,
             },
         )
         if not self._debug:
-            chrome_options.add_argument('--headless')
+            chrome_options.add_argument("--headless")
         self._browser = webdriver.Chrome(chrome_options=chrome_options)
 
         self._browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
@@ -65,32 +64,30 @@ class InteractiveBrokers(download.bank.Bank):
         browser.get(self._LOGIN_URL)
 
         if not username:
-            username = input('User name: ')
+            username = input("User name: ")
 
-        if self.ask_and_restore_cookies(
-            browser, username, self._SESSION_TIMEOUT_S
-        ):
+        if self.ask_and_restore_cookies(browser, username, self._SESSION_TIMEOUT_S):
             browser.get(self._MAIN_URL)
 
         if not self._is_logged_in():
             if not password:
-                password = getpass.getpass('Password: ')
+                password = getpass.getpass("Password: ")
 
             # First login phase: User and password.
             try:
-                login_form = browser.find_element_by_name('loginform')
+                login_form = browser.find_element_by_name("loginform")
             except exceptions.NoSuchElementException:
-                raise download.FetchError('Login form not found.')
-            login_form.find_element_by_name('user_name').send_keys(username)
-            login_form.find_element_by_name('password').send_keys(password)
+                raise download.FetchError("Login form not found.")
+            login_form.find_element_by_name("user_name").send_keys(username)
+            login_form.find_element_by_name("password").send_keys(password)
             # Weirldy, the login button has to be clicked twice.
-            login_form.find_element_by_id('submitForm').click()
-            login_form.find_element_by_id('submitForm').click()
+            login_form.find_element_by_id("submitForm").click()
+            login_form.find_element_by_id("submitForm").click()
 
-            input('Please follow the log-in instructions and press enter.')
+            input("Please follow the log-in instructions and press enter.")
 
             if not self._is_logged_in():
-                raise download.FetchError('Login failed.')
+                raise download.FetchError("Login failed.")
 
         # It is a bit silly to just sleep here, but other approaches failed, so
         # this is a simple fix.
@@ -99,22 +96,20 @@ class InteractiveBrokers(download.bank.Bank):
         self.save_cookies(browser, username)
         self._logged_in = True
         self._username = username
-        logger.info('Log-in sucessful.')
+        logger.info("Log-in sucessful.")
 
     def _is_logged_in(self):
         browser = self._browser
         browser.implicitly_wait(10)
 
         try:
-            browser.find_element_by_id('ib-bar-user-icon').click()
-            download.find_element_by_text(browser, 'Log Out')
+            browser.find_element_by_id("ib-bar-user-icon").click()
+            download.find_element_by_text(browser, "Log Out")
             # Often the portal isn't properly connected to the backend even if
             # the login was successful. Perform an additional check.
-            fetch.find_element_by_text(
-                browser, 'Manage Your Account'
-            ).find_element_by_xpath('../..').find_element_by_link_text(
-                'Transaction Status & History'
-            )
+            download.find_element_by_text(browser, "Manage Your Account").find_element_by_xpath(
+                "../.."
+            ).find_element_by_link_text("Transaction Status & History")
             browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
             return True
         except exceptions.NoSuchElementException:
@@ -125,8 +120,8 @@ class InteractiveBrokers(download.bank.Bank):
 
     def logout(self):
         browser = self._browser
-        browser.find_element_by_id('ib-bar-user-icon').click()
-        download.find_element_by_text(browser, 'Log out').click()
+        browser.find_element_by_id("ib-bar-user-icon").click()
+        download.find_element_by_text(browser, "Log out").click()
         browser.quit()
         self._logged_in = False
         self._accounts_cache = None
@@ -139,33 +134,31 @@ class InteractiveBrokers(download.bank.Bank):
             return self._accounts_cache
 
         self._accounts_cache = self._fetch_accounts()
-        logger.info('Found %i accounts.' % len(self._accounts_cache))
+        logger.info("Found %i accounts.", len(self._accounts_cache))
         return self._accounts_cache
 
     def _fetch_accounts(self):
         self._check_logged_in()
         browser = self._browser
 
-        logger.debug('Getting account name…')
-        self._navigate_to('Settings', 'Account Settings')
+        logger.debug("Getting account name…")
+        self._navigate_to("Settings", "Account Settings")
         account_name = browser.find_element_by_css_selector(
-            '.page-head .account-numbers'
+            ".page-head .account-numbers"
         ).text.strip()
 
-        logger.debug('Getting balances from activity statement…')
+        logger.debug("Getting balances from activity statement…")
         yesterday = datetime.datetime.today() - datetime.timedelta(1)
         accounts = []
-        csv_dict = self._download_activity_statement(
-            account_name, yesterday, yesterday
-        )
-        account_data = csv_dict['Account Information']['Data']['Account']
-        account_name = account_data['__rows'][0][0]
-        ending_cash = csv_dict['Cash Report']['Data']['Ending Cash']
+        csv_dict = self._download_activity_statement(account_name, yesterday, yesterday)
+        account_data = csv_dict["Account Information"]["Data"]["Account"]
+        account_name = account_data["__rows"][0][0]
+        ending_cash = csv_dict["Cash Report"]["Data"]["Ending Cash"]
         currencies = [k for k in list(ending_cash.keys()) if len(k) == 3]
         accounts = []
         for currency in currencies:
-            name = '%s.%s' % (account_name, currency)
-            balance = self._parse_float(ending_cash[currency]['__rows'][0][0])
+            name = f"{account_name}.{currency}"
+            balance = self._parse_float(ending_cash[currency]["__rows"][0][0])
             accounts.append(
                 model.InvestmentsAccount(
                     name=name,
@@ -182,18 +175,13 @@ class InteractiveBrokers(download.bank.Bank):
         cached_transactions = self._transactions_cache.get(cache_key)
         if cached_transactions:
             transactions = cached_transactions[currency]
-            logger.info(
-                'Found %i cached transactions for account %s.'
-                % (len(transactions), account)
-            )
+            logger.info("Found %i cached transactions for account %s.", len(transactions), account)
             return transactions
 
         self._check_logged_in()
 
         end_inclusive = end - datetime.timedelta(1)
-        csv_dict = self._download_activity_statement(
-            account_name, start, end_inclusive
-        )
+        csv_dict = self._download_activity_statement(account_name, start, end_inclusive)
 
         transfers = self._get_transfers(csv_dict, account_name)
         trades = self._get_trades(csv_dict, account_name)
@@ -218,40 +206,33 @@ class InteractiveBrokers(download.bank.Bank):
         self._transactions_cache[cache_key] = transactions_by_currency
 
         transactions = transactions_by_currency[currency]
-        logger.info(
-            'Found %i transactions for account %s.'
-            % (len(transactions), account)
-        )
+        logger.info("Found %i transactions for account %s.", len(transactions), account)
         return transactions
 
     def _get_transfers(self, csv_dict, account_name):
-        logger.debug('Extracting transfers…')
+        logger.debug("Extracting transfers…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Deposits & Withdrawals']['Data']['__rows']:
+        for row in csv_dict["Deposits & Withdrawals"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
-            kind = row[2]
+            _kind = row[2]
             amount = self._parse_float(row[3])
-            transaction = model.Payment(
-                date=date, amount=amount, payee=account_name
-            )
+            transaction = model.Payment(date=date, amount=amount, payee=account_name)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
     def _get_trades(self, csv_dict, account_name):
-        logger.debug('Extracting trades…')
+        logger.debug("Extracting trades…")
 
         transactions_by_currency = collections.defaultdict(list)
 
         # Stock and options transactions:
-        st = csv_dict['Trades']['Data']['Order']['Stocks'].get('__rows', [])
-        ot = csv_dict['Trades']['Data']['Order'][
-            'Equity and Index Options'
-        ].get('__rows', [])
+        st = csv_dict["Trades"]["Data"]["Order"]["Stocks"].get("__rows", [])
+        ot = csv_dict["Trades"]["Data"]["Order"]["Equity and Index Options"].get("__rows", [])
         for row in st + ot:
             currency = row[0]
             symbol = row[1]
@@ -283,11 +264,11 @@ class InteractiveBrokers(download.bank.Bank):
             transactions_by_currency[currency].append(transaction)
 
         # Forex transactions. Treated slightly differently from stocks.
-        ft = csv_dict['Trades']['Data']['Order']['Forex'].get('__rows', [])
+        ft = csv_dict["Trades"]["Data"]["Order"]["Forex"].get("__rows", [])
         for row in ft:
             currency = row[0]
             symbol = row[1]
-            to_currency, from_currency = symbol.split('.')
+            to_currency, from_currency = symbol.split(".")
             assert currency == from_currency
             date = datetime.datetime.strptime(row[2], self._DATE_TIME_FORMAT)
             quantity = self._parse_float(row[3])
@@ -302,12 +283,7 @@ class InteractiveBrokers(download.bank.Bank):
             else:
                 buy_currency, sell_currency = from_currency, to_currency
                 buy_amount, sell_amount = proceeds, -quantity
-            memo = 'Buy %.2f %s, sell %.2f %s' % (
-                buy_amount,
-                buy_currency,
-                sell_amount,
-                sell_currency,
-            )
+            memo = f"Buy {buy_amount:.2f} {buy_currency}, sell {sell_amount:.2f} {sell_currency}"
             quantity = abs(quantity)
             transactions_by_currency[buy_currency].append(
                 model.InvestmentSecuritySale(
@@ -335,29 +311,29 @@ class InteractiveBrokers(download.bank.Bank):
             # Forex commissions are all billed to the main (CHF) account.
             # TODO: Find out the main currency/account. Don't just hardcode
             # CHF.
-            transactions_by_currency['CHF'].append(
+            transactions_by_currency["CHF"].append(
                 model.InvestmentMiscExpense(
                     date=date,
                     amount=commissions,
                     symbol=symbol,
-                    memo='Forex commissions',
+                    memo="Forex commissions",
                 )
             )
 
         return transactions_by_currency
 
     def _get_withholding_tax(self, csv_dict, account_name):
-        logger.debug('Extracting withholding tax…')
+        logger.debug("Extracting withholding tax…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Withholding Tax']['Data']['__rows']:
+        for row in csv_dict["Withholding Tax"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             description = row[2]
             amount = self._parse_float(row[3])
-            symbol = re.split('[ (]', description)[0]
+            symbol = re.split("[ (]", description)[0]
             memo = description
             if amount < 0:
                 transaction = model.InvestmentMiscExpense(
@@ -373,17 +349,17 @@ class InteractiveBrokers(download.bank.Bank):
         return transactions_by_currency
 
     def _get_dividends(self, csv_dict, account_name):
-        logger.debug('Extracting dividends…')
+        logger.debug("Extracting dividends…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Dividends']['Data']['__rows']:
+        for row in csv_dict["Dividends"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             description = row[2]
             amount = self._parse_float(row[3])
-            symbol = re.split('[ (]', description)[0]
+            symbol = re.split("[ (]", description)[0]
             memo = description
             transaction = model.InvestmentDividend(
                 date=date, symbol=symbol, amount=amount, memo=memo
@@ -393,40 +369,36 @@ class InteractiveBrokers(download.bank.Bank):
         return transactions_by_currency
 
     def _get_interest(self, csv_dict, account_name):
-        logger.debug('Extracting interest…')
+        logger.debug("Extracting interest…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Interest']['Data']['__rows']:
+        for row in csv_dict["Interest"]["Data"]["__rows"]:
             currency = row[0]
-            if currency.startswith('Total'):
+            if currency.startswith("Total"):
                 continue
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             description = row[2]
             amount = self._parse_float(row[3])
             memo = description
             if amount < 0:
-                transaction = model.InvestmentInterestExpense(
-                    date=date, amount=amount, memo=memo
-                )
+                transaction = model.InvestmentInterestExpense(date=date, amount=amount, memo=memo)
             else:
-                transaction = model.InvestmentInterestIncome(
-                    date=date, amount=amount, memo=memo
-                )
+                transaction = model.InvestmentInterestIncome(date=date, amount=amount, memo=memo)
             transactions_by_currency[currency].append(transaction)
 
         return transactions_by_currency
 
     def _get_other_fees(self, csv_dict, account_name):
-        logger.debug('Extracting other fees…')
+        logger.debug("Extracting other fees…")
 
         transactions_by_currency = collections.defaultdict(list)
-        for row in csv_dict['Fees']['Data']['Other Fees']['__rows']:
+        for row in csv_dict["Fees"]["Data"]["Other Fees"]["__rows"]:
             currency = row[0]
             date = datetime.datetime.strptime(row[1], self._DATE_FORMAT)
             description = row[2]
             amount = self._parse_float(row[3])
             memo = description
-            symbol = ''
+            symbol = ""
             transaction = model.InvestmentMiscExpense(
                 date=date, amount=amount, symbol=symbol, memo=memo
             )
@@ -435,42 +407,40 @@ class InteractiveBrokers(download.bank.Bank):
         return transactions_by_currency
 
     def _go_to_reports(self):
-        logger.debug('Opening reports page…')
-        self._navigate_to('Reports / Tax Docs')
+        logger.debug("Opening reports page…")
+        self._navigate_to("Reports / Tax Docs")
 
     def _navigate_to(self, section, page=None):
         browser = self._browser
-        browser.find_element_by_css_selector('.bar3-logo button').click()
-        nav = browser.find_element_by_css_selector('.bar2-content ul')
+        browser.find_element_by_css_selector(".bar3-logo button").click()
+        nav = browser.find_element_by_css_selector(".bar2-content ul")
         if not page:
             # Oddly, this needs to be scrolled into view using JS first.
             browser.execute_script(
                 'Array.from(arguments[0].querySelectorAll("li"))'
-                '.find(e => e.innerText == arguments[1])'
-                '.scrollIntoView()',
+                ".find(e => e.innerText == arguments[1])"
+                ".scrollIntoView()",
                 nav,
                 section,
             )
             nav.find_element_by_link_text(section).click()
             return
         menu_link = nav.find_element_by_partial_link_text(section)
-        menu_item = menu_link.find_element_by_xpath('..')
-        if not self._is_element_displayed_now(
-            lambda: menu_item.find_element_by_tag_name('ul')
-        ):
+        menu_item = menu_link.find_element_by_xpath("..")
+        if not self._is_element_displayed_now(lambda: menu_item.find_element_by_tag_name("ul")):
             # Open sub menu first.
             menu_link.click()
         # There's a bug in the IB menu where the navigation closes when clicking
         # the top-level menu item the first time. Should the navigation be
         # hidden now, we need to open it again.
         if not self._is_element_displayed_now(
-            lambda: browser.find_element_by_css_selector('.bar2-content ul')
+            lambda: browser.find_element_by_css_selector(".bar2-content ul")
         ):
-            logger.debug('Bug in navigation. Trying again.')
+            logger.debug("Bug in navigation. Trying again.")
             self._navigate_to(section, page)
             return
         else:
-            sub_menu = menu_item.find_element_by_tag_name('ul')
+            sub_menu = menu_item.find_element_by_tag_name("ul")
             sub_menu.find_element_by_link_text(page).click()
             self._wait_to_finish_loading()
 
@@ -481,69 +451,65 @@ class InteractiveBrokers(download.bank.Bank):
         # Open Activity statements dialog.
         browser.find_element_by_xpath(
             '//*[normalize-space(text()) = "Default Statements"]'
-            '/ancestor::section'
+            "/ancestor::section"
             '//*[normalize-space(text()) = "Activity"]'
             '/ancestor::div[@class="row"]'
-            '[1]'
-        ).find_element_by_css_selector('.btn-group-right a').click()
+            "[1]"
+        ).find_element_by_css_selector(".btn-group-right a").click()
         self._wait_to_finish_loading()
 
         # Get activity statements form.
         try:
-            dialog = browser.find_element_by_css_selector('am-modal')
+            dialog = browser.find_element_by_css_selector("am-modal")
         except exceptions.NoSuchElementException:
-            raise download.FetchError('Activity statements dialog not found.')
+            raise download.FetchError("Activity statements dialog not found.")
 
         # Check statement type.
-        if (
-            dialog.find_element_by_css_selector(
-                '.modal-header .modal-title'
-            ).text
-            != 'Activity'
-        ):
-            raise download.FetchError('Expected activity statement type.')
+        if dialog.find_element_by_css_selector(".modal-header .modal-title").text != "Activity":
+            raise download.FetchError("Expected activity statement type.")
 
         # Select date range.
-        period_select = download.find_element_by_text(
-            dialog, 'Period'
-        ).find_element_by_xpath('../..//select')
-        ui.Select(period_select).select_by_value('string:DATE_RANGE')
+        period_select = download.find_element_by_text(dialog, "Period").find_element_by_xpath(
+            "../..//select"
+        )
+        ui.Select(period_select).select_by_value("string:DATE_RANGE")
         # Switching period will refresh the form.
         self._wait_to_finish_loading()
-        dialog = browser.find_element_by_css_selector('am-modal')
-        self._select_date_in_activity_statement('fromDate', start)
-        self._select_date_in_activity_statement('toDate', end)
+        dialog = browser.find_element_by_css_selector("am-modal")
+        self._select_date_in_activity_statement("fromDate", start)
+        self._select_date_in_activity_statement("toDate", end)
 
         # Select CSV format.
-        format_select = download.find_element_by_text(
-            dialog, 'Format'
-        ).find_element_by_xpath('../..//select')
-        ui.Select(format_select).select_by_visible_text('CSV')
+        format_select = download.find_element_by_text(dialog, "Format").find_element_by_xpath(
+            "../..//select"
+        )
+        ui.Select(format_select).select_by_visible_text("CSV")
 
         # Download report.
-        logger.debug('Downloading activity statement report…')
+        logger.debug("Downloading activity statement report…")
         before_download_timestamp = time.time()
-        dialog.find_element_by_link_text('Run').click()
+        dialog.find_element_by_link_text("Run").click()
 
         # Find file on disk, load, parse CSV.
         try:
-            csv_filename = lambda: self._get_downloaded_filename_newer_than(
-                before_download_timestamp
-            )
+
+            def csv_filename():
+                return self._get_downloaded_filename_newer_than(before_download_timestamp)
+
             download.wait_until(csv_filename)
             filename = csv_filename()
-            with open(filename, 'r') as csvfile:
+            with open(filename, "r") as csvfile:
                 csv_dict = self._parse_csv_into_dict(csvfile)
                 os.remove(filename)
                 return csv_dict
         except download.OperationTimeoutError:
-            raise download.FetchError('Activity statement failed to load.')
+            raise download.FetchError("Activity statement failed to load.")
 
     def _get_downloaded_filename_newer_than(self, timestamp):
         for root, dirs, files in os.walk(self._download_dir):
             for file in files:
                 # Ignore partial files.
-                if file.endswith('.part'):
+                if file.endswith(".part"):
                     return None
                 path = os.path.join(root, file)
                 last_modified = os.path.getmtime(path)
@@ -552,22 +518,23 @@ class InteractiveBrokers(download.bank.Bank):
         return None
 
     def _parse_csv_into_dict(self, csvfile):
-        reader = csv.reader(csvfile, delimiter=',', quotechar='"')
-        nested_default_dict = lambda: collections.defaultdict(
-            nested_default_dict
-        )
+        reader = csv.reader(csvfile, delimiter=",", quotechar='"')
+
+        def nested_default_dict():
+            return collections.defaultdict(nested_default_dict)
+
         csv_dict = nested_default_dict()
         for row in reader:
             cur = csv_dict
             for i, cell in enumerate(row):
                 cur = cur[cell]
-                if '__rows' not in cur:
-                    cur['__rows'] = []
-                cur['__rows'].append(row[i + 1 :])
+                if "__rows" not in cur:
+                    cur["__rows"] = []
+                cur["__rows"].append(row[i + 1 :])
         return csv_dict
 
     def _select_date_in_activity_statement(self, input_name, date):
-        assert input_name in ('fromDate', 'toDate')
+        assert input_name in ("fromDate", "toDate")
         # The date picker is a bit tricky. It's a jQuery Bootstrap date picker
         # and it will only open when the <input> is focused while the browser
         # window is in the foreground.
@@ -577,10 +544,10 @@ class InteractiveBrokers(download.bank.Bank):
 
         # Weekends are not allowed.
         if date.weekday() > 4:
-            if input_name == 'fromDate':
+            if input_name == "fromDate":
                 # Select next week day.
                 date = date + datetime.timedelta(7 - date.weekday())
-            elif input_name == 'toDate':
+            elif input_name == "toDate":
                 # Select previous week day.
                 date = date - datetime.timedelta(date.weekday() - 4)
             # Today and dates in the future are not allowed.
@@ -597,21 +564,17 @@ class InteractiveBrokers(download.bank.Bank):
 
         # Respect the end date.
         end_date_str = self._browser.execute_script(
-            'return $("input[name=\'%s\']")'
-            '.datepicker("getEndDate")' % input_name
+            f'return $("input[name=\'{input_name}\']").datepicker("getEndDate")'
         )
-        end_date = datetime.datetime.strptime(
-            end_date_str[:10], self._DATE_FORMAT
-        )
-        if date > end_date:
-            date = end_date
+        end_date = datetime.datetime.strptime(end_date_str[:10], self._DATE_FORMAT)
+        date = min(date, end_date)
 
         formatted_date = date.strftime(self._ACTIVITY_FORM_DATE_FORMAT)
         self._browser.execute_script(
-            '$("input[name=\'%s\']")'
+            f"$(\"input[name='{input_name}']\")"
             '.datepicker("show")'
-            '.datepicker("update", "%s")'
-            '.datepicker("hide")' % (input_name, formatted_date)
+            f'.datepicker("update", "{formatted_date}")'
+            '.datepicker("hide")'
         )
 
     def _wait_to_finish_loading(self):
@@ -620,11 +583,13 @@ class InteractiveBrokers(download.bank.Bank):
         # The loading indicators should be there pretty fast.
         browser.implicitly_wait(1)
 
-        overlay = lambda: browser.find_element_by_tag_name('loading-overlay')
-        download.wait_for_element_to_appear_and_disappear(overlay)
+        download.wait_for_element_to_appear_and_disappear(
+            lambda: browser.find_element_by_tag_name("loading-overlay")
+        )
 
-        progressbar = lambda: browser.find_element_by_class_name('progress-bar')
-        download.wait_for_element_to_appear_and_disappear(progressbar)
+        download.wait_for_element_to_appear_and_disappear(
+            lambda: browser.find_element_by_class_name("progress-bar")
+        )
 
         browser.implicitly_wait(self._WEBDRIVER_TIMEOUT)
 
@@ -643,15 +608,15 @@ class InteractiveBrokers(download.bank.Bank):
         :param account_name: The combined account name in the form ACCNAME.CUR.
         :returns: The account name and currency parts as a tuple.
         """
-        last_dot = account_name.rfind('.')
+        last_dot = account_name.rfind(".")
         return account_name[:last_dot], account_name[last_dot + 1 :]
 
     def _parse_float(self, string):
-        return float(string.replace(',', ''))
+        return float(string.replace(",", ""))
 
     def _parse_int(self, string):
-        return int(string.replace(',', ''))
+        return int(string.replace(",", ""))
 
     def _check_logged_in(self):
         if not self._logged_in:
-            raise download.FetchError('Not logged in.')
+            raise download.FetchError("Not logged in.")
