@@ -303,6 +303,29 @@ def test_bank_category_and_label_are_kept_as_metadata(tmp_path, card, checking, 
     assert checking_txn.meta["bank-label"] == "Weekly"
 
 
+def test_the_card_receipt_date_is_kept(card, card_path):
+    """`Einkaufsdatum` is the purchase. The transaction is dated `Buchungsdatum`."""
+    txn = _txns(card.extract(card_path, []))[0]
+
+    assert txn.date == datetime.date(2026, 1, 12)
+    assert txn.meta["receipt-date"] == "11.01.2026"
+
+
+def test_the_receipt_date_is_absent_when_the_export_has_none(checking, checking_path):
+    """Only the card export splits the two dates. Checking has one column."""
+    txn = _txns(checking.extract(checking_path, []))[0]
+    assert "receipt-date" not in txn.meta
+
+
+def test_the_receipt_date_does_not_affect_the_import_id(tmp_path, card):
+    """It rides along as metadata, so it stays out of the hash like the rest."""
+    moved = _write(tmp_path, "moved.csv", CARD_CSV.replace(";11.01.2026;", ";10.01.2026;"))
+
+    first = _txns(card.extract(_write(tmp_path, "card.csv", CARD_CSV), []))[0]
+    second = _txns(card.extract(moved, []))[0]
+    assert first.meta["import-id"] == second.meta["import-id"]
+
+
 def test_bank_category_is_absent_when_the_export_has_none(checking, checking_path):
     txn = _txns(checking.extract(checking_path, []))[0]
     assert "bank-category" not in txn.meta

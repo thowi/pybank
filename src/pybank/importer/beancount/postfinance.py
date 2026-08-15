@@ -30,6 +30,7 @@ MEMO_COLS = [
 
 CATEGORY_COL = "Kategorie"
 LABEL_COL = "Label"
+RECEIPT_DATE_COL = "Einkaufsdatum"
 
 CREDIT_PREFIX = "Gutschrift in "
 DEBIT_PREFIX = "Lastschrift in "
@@ -46,6 +47,10 @@ TOTAL_MEMO = "Total"
 META_CATEGORY = "bank-category"
 META_LABEL = "bank-label"
 
+# Card only. The purchase date, which trails `Buchungsdatum` on almost every
+# row. Kept in the export's own notation, as the DKB importer keeps its own.
+META_RECEIPT_DATE = "receipt-date"
+
 logger = logging.getLogger(__name__)
 
 
@@ -56,6 +61,7 @@ class _Row(NamedTuple):
     balance: amount.Amount | None
     category: str | None
     label: str | None
+    receipt_date: str | None
 
 
 def _parse_date(date_str: str) -> datetime.date:
@@ -103,6 +109,7 @@ def _parse_row(row: dict[str, str]) -> _Row | None:
         _amount_with_prefix(row, BALANCE_PREFIX),
         row.get(CATEGORY_COL) or None,
         row.get(LABEL_COL) or None,
+        row.get(RECEIPT_DATE_COL) or None,
     )
 
 
@@ -163,6 +170,8 @@ class _PostFinanceImporter(beangulp.Importer):
                 entry_meta[META_CATEGORY] = row.category
             if row.label:
                 entry_meta[META_LABEL] = row.label
+            if row.receipt_date:
+                entry_meta[META_RECEIPT_DATE] = row.receipt_date
             entries.append(self._transaction(row, entry_meta))
 
         balance = self._closing_balance(parsed)
