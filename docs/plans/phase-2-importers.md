@@ -9,7 +9,9 @@ sub-phase ships independently.
 Prefer a real dependency. Write our own only where the format demands it.
 
 - **DKB:** Depend on `beancount-dkb` (`ECImporter` and `CreditImporter`,
-  documented for beancount 3.x). Read its dependency list when adding it.
+  documented for beancount 3.x). Its dependency list turned out to be
+  `babel`, `beancount` and `beangulp`, the last two of which we already
+  have. See 2b.
 - **IBKR:** Depend on `ibflex` from PyPI. A parser library, not an importer,
   so it overlaps nothing we write.
 - **PostFinance:** Ours. See below.
@@ -32,7 +34,7 @@ variants across two encodings, so columns get matched by name and the
 encoding gets sniffed. Ours does that in about the same number of lines.
 
 Correcting an earlier claim: `balance` assertions do not come for free. Only
-the two `Saldo` variants carry a running balance, 6 files of 65. Everything
+the two `Saldo` variants carry a running balance, 6 files of 63. Everything
 since, checking and card alike, ships without one. The monthly PDF
 Kontoauszüge have the closing balances and are the eventual source. Until
 then PostFinance has assertions for one stretch of 2019 to 2022 and none
@@ -86,8 +88,39 @@ order at once.
 
 ## 2b: DKB
 
-- Checking and Visa CSV importers, ported from `importer/dkb.py`. Adds EUR.
-- Proves the abstraction on a second institution.
+Done. `pybank/importer/beancount/dkb.py`, wrapping `beancount-dkb`. Adds
+EUR, and proves the abstraction on a second institution.
+
+The library covers all three formats in the archive: The pre-2023 Girokonto
+export, the current one, and the Visa export. It pulls in `babel` and
+nothing else, and it holds `beangulp` below 0.3.
+
+Two deliberate differences from how it is normally used. It matches a file
+against a configured IBAN or card number, which is exactly the data this
+repo must never hold, so the identifier is read from the file and handed
+back to it. Identification stays structural and no account number lives in
+config. And it emits one posting per transaction for a human to complete,
+so we append the contra posting and the `!` flag to match the common
+pattern above.
+
+Verified against the archive: All 22 DKB and all 63 PostFinance files route
+to exactly one importer, none claimed twice. 1803 transactions extract,
+each with two postings and a unique `import-id`, and every file yields a
+balance assertion, which PostFinance mostly cannot.
+
+Those assertions reconcile. Seeding one opening balance per account clears
+every Visa assertion and 13 of the 14 checking ones, so parsed amounts
+agree with the bank's own running balance across both format generations.
+The one left over is the newest, whose balance is dated about ten weeks
+after the last transaction in that export. That is uncovered activity, and
+the assertion is what makes the hole visible. See Backfill in
+[phase 3](phase-3-backfill-transfers-categorization.md).
+
+- The giro generations never overlap. Legacy ends 2022-12-30, the current
+  format starts 2023-01-02, so their differing columns cannot yield two
+  IDs for one transaction.
+- The library's own `payee_patterns` categorization is left unused. Rules
+  live in phase 3, in one place, not split across importers.
 
 ## 2c: IBKR
 

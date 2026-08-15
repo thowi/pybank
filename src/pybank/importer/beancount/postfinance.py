@@ -1,15 +1,15 @@
 """PostFinance CSV importers for beangulp.
 
 The archive holds six header variants in two encodings, so columns are
-matched by name and the encoding is sniffed. Only the variants carrying a
-`Saldo` column yield a balance assertion, which is a minority of files.
+matched by name and the encoding is sniffed.
+
+Only the variants carrying a `Saldo` column yield a balance assertion, which is
+a minority of files.
 """
 
-import codecs
 import csv
 import datetime
 import decimal
-import io
 import logging
 import os
 from typing import NamedTuple
@@ -18,9 +18,7 @@ import beangulp
 from beancount.core import amount, data, flags
 
 from ... import csvfile, text
-from . import identity
-
-UNCATEGORIZED = "Expenses:Uncategorized"
+from . import UNCATEGORIZED, identity
 
 DATE_COLS = ["Buchungsdatum", "Datum"]
 MEMO_COLS = [
@@ -60,22 +58,6 @@ class _Row(NamedTuple):
     label: str | None
 
 
-def _read_text(filepath: str) -> str:
-    """Decodes a statement. PostFinance ships either cp1252 or UTF-8 BOM."""
-    with open(filepath, "rb") as f:
-        raw = f.read()
-    if raw.startswith(codecs.BOM_UTF8):
-        return raw.decode("utf-8-sig")
-    try:
-        return raw.decode("utf-8")
-    except UnicodeDecodeError:
-        return raw.decode("cp1252")
-
-
-def _read(filepath: str) -> tuple[dict[str, str], list[dict[str, str]]]:
-    return csvfile.read_csv_with_header(io.StringIO(_read_text(filepath)))
-
-
 def _parse_date(date_str: str) -> datetime.date:
     for fmt in (DATE_FORMAT_ISO, DATE_FORMAT_DE):
         try:
@@ -88,15 +70,6 @@ def _parse_date(date_str: str) -> datetime.date:
 def _parse_number(number_str: str) -> decimal.Decimal:
     """Swiss format: apostrophe thousands separator, dot decimal point."""
     return decimal.Decimal(number_str.replace("'", "").replace(" ", ""))
-
-
-def _canonical_number(number: decimal.Decimal) -> str:
-    """Returns an amount in one shape, for use in an import-id.
-
-    Exports are inconsistent about trailing zeros, and `24` and `24.00` must
-    not yield different IDs or a re-download imports twice.
-    """
-    return format(number.normalize(), "f")
 
 
 def _amount_with_prefix(row: dict[str, str], prefix: str) -> amount.Amount | None:
@@ -148,7 +121,7 @@ class _PostFinanceImporter(beangulp.Importer):
         if not filepath.lower().endswith(".csv"):
             return False
         try:
-            metadata, rows = _read(filepath)
+            metadata, rows = csvfile.read_path_with_header(filepath)
         except (OSError, UnicodeDecodeError, csv.Error):
             return False
         if not rows:
@@ -166,7 +139,7 @@ class _PostFinanceImporter(beangulp.Importer):
         return self._account
 
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:
-        metadata, rows = _read(filepath)
+        metadata, rows = csvfile.read_path_with_header(filepath)
         source_id = metadata.get(self._source_key, "")
 
         parsed = [row for row in map(_parse_row, rows) if row is not None]
@@ -174,7 +147,7 @@ class _PostFinanceImporter(beangulp.Importer):
             [
                 identity.IdFields(
                     str(row.date),
-                    _canonical_number(row.units.number),
+                    identity.canonical_amount(row.units.number),
                     (source_id, row.memo),
                 )
                 for row in parsed

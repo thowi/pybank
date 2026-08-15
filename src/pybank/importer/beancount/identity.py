@@ -1,5 +1,6 @@
 """Import identity. See docs/importing.md for the reasoning."""
 
+import decimal
 import hashlib
 import logging
 from collections.abc import Sequence
@@ -31,6 +32,13 @@ class IdFields(NamedTuple):
     date: str
     amount: str
     hashed: Sequence[str]
+
+
+def canonical_amount(number: decimal.Decimal) -> str:
+    """Returns an amount in a consistent format for use in an import-id."""
+    # Exports are inconsistent about trailing zeros, and `24` and `24.00` must
+    # not yield different IDs or a re-download imports twice.
+    return format(number.normalize(), "f")
 
 
 def import_ids(rows: Sequence[IdFields]) -> list[str]:

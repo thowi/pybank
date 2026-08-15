@@ -1,5 +1,19 @@
+import codecs
 import csv
+import io
 from typing import TextIO
+
+
+def read_text(filepath: str) -> str:
+    """Decodes a statement. Exports ship cp1252 or UTF-8, with or without BOM."""
+    with open(filepath, "rb") as f:
+        raw = f.read()
+    if raw.startswith(codecs.BOM_UTF8):
+        return raw.decode("utf-8-sig")
+    try:
+        return raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return raw.decode("cp1252")
 
 
 def read_csv_with_header(
@@ -56,6 +70,10 @@ def read_csv_with_header(
         rows.append(dict(zip(col_names, row)))
 
     return metadata, rows
+
+
+def read_path_with_header(filepath: str) -> tuple[dict[str, str], list[dict[str, str]]]:
+    return read_csv_with_header(io.StringIO(read_text(filepath)))
 
 
 def get_value(row: dict[str, str], keys: list[str]) -> str | None:

@@ -21,6 +21,15 @@ wheels = [
 ]
 
 [[package]]
+name = "babel"
+version = "2.18.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/7d/b2/51899539b6ceeeb420d40ed3cd4b7a40519404f9baf3d4ac99dc413a834b/babel-2.18.0.tar.gz", hash = "sha256:b80b99a14bd085fcacfa15c9165f651fbb3406e66cc603abf11c5750937c992d", size = 9959554, upload-time = "2026-02-01T12:30:56.078Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/77/f5/21d2de20e8b8b0408f0681956ca2c69f1320a3848ac50e6e7f39c6159675/babel-2.18.0-py3-none-any.whl", hash = "sha256:e2b422b277c2b9a9630c1d7903c2a00d0830c409c59ac8cae9081c92f1aeba35", size = 10196845, upload-time = "2026-02-01T12:30:53.445Z" },
+]
+
+[[package]]
 name = "beancount"
 version = "3.2.3"
 source = { registry = "https://pypi.org/simple" }
@@ -49,6 +58,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/d8/ff/6d53df1ef58bc24f6266654995687849e89482fa4c752db3d130ce40d6d6/beancount-3.2.3-cp314-cp314t-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:14fa5043ef72eadd80ec1494f466c72e260cd8144938022c858579b969e78580", size = 439025, upload-time = "2026-05-05T23:09:16.721Z" },
     { url = "https://files.pythonhosted.org/packages/d2/ed/84ec40d916a147c473f7553eaa254d26cd0e23884bde786fe215155b7648/beancount-3.2.3-cp314-cp314t-win32.whl", hash = "sha256:f611135fb992d7fcc03cdf60954859530255a923a6deb139d63a970854975824", size = 432716, upload-time = "2026-05-05T23:09:18.363Z" },
     { url = "https://files.pythonhosted.org/packages/33/2d/f56f6f5b7a58383ba61f86eaf7b319476574f6880c7d24fe321110b1721e/beancount-3.2.3-cp314-cp314t-win_amd64.whl", hash = "sha256:a2edb08d5017952980550c8a0acd7712516df7967d607a667f18030370c1075f", size = 451041, upload-time = "2026-05-05T23:09:19.724Z" },
+]
+
+[[package]]
+name = "beancount-dkb"
+version = "1.10.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "babel" },
+    { name = "beancount" },
+    { name = "beangulp" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e4/79/9f4fb6780f4065dcd26c68dfc36afba50790aa766686f289670bb4651cb1/beancount_dkb-1.10.0.tar.gz", hash = "sha256:e1bc4fc854b3bbfe73a7849e83a6c40c93c1dd450f5b4447ce456510a70e6e35", size = 12789, upload-time = "2026-05-12T19:05:37.473Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/da/95/9beeed0860328cf6d5b2c0caa6a38b4ec65b5d408e9b4c5a21f6660117cb/beancount_dkb-1.10.0-py3-none-any.whl", hash = "sha256:76bcc0d0740194464e6395629a0130268a7907cd2e8bf08f91f15a25264d1fa4", size = 14918, upload-time = "2026-05-12T19:05:35.987Z" },
 ]
 
 [[package]]
@@ -375,6 +398,7 @@ version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "beancount" },
+    { name = "beancount-dkb" },
     { name = "beangulp" },
     { name = "charset-normalizer" },
     { name = "pydantic" },
@@ -391,6 +415,7 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "beancount", specifier = ">=3.0.0" },
+    { name = "beancount-dkb", specifier = ">=1.10.0" },
     { name = "beangulp", specifier = ">=0.2.0" },
     { name = "charset-normalizer", specifier = ">=3.4.3" },
     { name = "pydantic", specifier = ">=2.8.0" },
