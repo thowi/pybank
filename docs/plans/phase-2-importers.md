@@ -12,8 +12,11 @@ Prefer a real dependency. Write our own only where the format demands it.
   documented for beancount 3.x). Its dependency list turned out to be
   `babel`, `beancount` and `beangulp`, the last two of which we already
   have. See 2b.
-- **IBKR:** Depend on `ibflex` from PyPI. A parser library, not an importer,
-  so it overlaps nothing we write.
+- **IBKR:** Depend on `ibflex[web]` from PyPI. A parser library, not an
+  importer, so it overlaps nothing we write. The `web` extra is not optional
+  for us: The package imports its `client` module unconditionally but
+  declares `requests` only under that extra, so a bare install fails on
+  `import ibflex`.
 - **PostFinance:** Ours. See below.
 
 Two independent reasons rule out `tariochbctools`, which was the candidate
@@ -84,6 +87,9 @@ order at once.
   they stay out of the `import-id`: The bank may revise a label, and that
   must not reimport the transaction. See categorization in
   [phase 3](phase-3-backfill-transfers-categorization.md).
+- The card export's `Einkaufsdatum` trails the booking date on almost every
+  row and is kept as `receipt-date`, matching the DKB importer's key for the
+  same idea.
 - Establishes the common pattern above.
 
 ## 2b: DKB
@@ -126,8 +132,19 @@ the assertion is what makes the hole visible. See Backfill in
 
 - The hard one: Multi-currency cash, trades with `{cost}` and `@ price`,
   dividends, withholding tax, fees, FX conversions.
+- Source: An Activity Flex Query in XML, not the Activity Statement CSVs the
+  archive already holds. Flex is the only export carrying `Lot` and
+  `TransferLot`, so it is the only one that can produce explicit cost-basis
+  lots instead of inferred ones.
+- The saved query is configured in the IBKR UI, named `pybank`, and selects
+  every section the ledger needs. Account Information is deliberately left
+  out: Its fields are the holder's name and mailing address, which the
+  importer never needs since the account ID appears in every other section.
+  The saved Period maxes at 365 days, but the run dialog offers a custom
+  date range, so the whole backfill runs through the same query.
 - Retires the investment-event class hierarchy: Events become posting shapes.
-- Rounding legs from FX may need tolerance or an `Equity:Rounding` account.
+- FX rounding follows phase 1: Default tolerance, `Equity:Rounding` only if
+  real residuals show up.
 
 ## End of phase
 

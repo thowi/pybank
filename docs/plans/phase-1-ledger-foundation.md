@@ -3,8 +3,7 @@
 Hand-written skeleton ledger before any importer exists. Forces the naming and
 layout decisions on a tiny surface.
 
-Done, except the two open questions at the end. The skeleton passes
-`bean-check`.
+Done. The skeleton passes `bean-check`.
 
 ## Scope
 
@@ -41,11 +40,18 @@ Done, except the two open questions at the end. The skeleton passes
 - `bean-check` passes on the skeleton ledger.
 - Balance sheet and income statement render sensibly in CHF.
 
-## Open within this phase
+## Decided
 
-- Booking method per brokerage `Open` (FIFO vs AVERAGE vs STRICT). Default
-  FIFO unless a reason emerges. Swiss private capital gains are generally
-  tax-free, so lots matter for performance reporting, not tax.
-- Price source and cadence. `beanprice` is the likely answer. Year-end
-  prices are needed for wealth tax regardless, so the question is whether
-  anything more frequent earns its keep.
+- Booking method: FIFO everywhere, written on each brokerage `Open` rather
+  than left to a file-level default, so the choice is visible where the
+  account is. Swiss private capital gains are generally tax-free, so lots
+  serve performance reporting, not tax. Equity compensation books the same
+  way, which keeps vested and open-market lots of one ticker comparable.
+- Prices: `beanprice`, monthly. Year-end prices are needed for wealth tax
+  regardless. Monthly is enough to make a performance chart readable without
+  turning `prices.beancount` into a data feed.
+- Commodities: The ticker is the commodity name. ISIN and the IBKR `conid`
+  ride along as `commodity` metadata, so a ticker rename or a dual listing
+  stays resolvable.
+- FX rounding: Beancount's default tolerance first. Add `Equity:Rounding`
+  only if real imports show residuals it does not absorb.
