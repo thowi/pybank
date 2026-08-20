@@ -132,9 +132,9 @@ class Revolut(download.bank.Bank):
         exchange_in_str = row[self._EXCHANGE_IN_HEADER]
         exchange_out_str = row[self._EXCHANGE_OUT_HEADER]
         notes = row[self._NOTES_HEADER]
-        credit = self._parse_float(credit_str) if credit_str else None
-        debit = self._parse_float(debit_str) if debit_str else None
-        amount = credit if credit else -debit
+        credit = self._parse_float(credit_str) if credit_str else 0.0
+        debit = self._parse_float(debit_str) if debit_str else 0.0
+        amount = credit - debit
         memo = ". ".join(v for v in (description, exchange_in_str, exchange_out_str, notes) if v)
         return model.Payment(date=date, amount=amount, memo=memo)
 
