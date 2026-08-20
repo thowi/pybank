@@ -218,6 +218,9 @@ __marimo__/
 *.beancount
 *.qif
 *.ofx
+# Exports.
+*.csv
+*.xml
 # The directory rules are anchored to the repo root, else they also swallow
 # src/pybank/ledger/, which is code.
 /ledger/
