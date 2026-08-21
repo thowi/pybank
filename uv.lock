@@ -240,6 +240,20 @@ wheels = [
 ]
 
 [[package]]
+name = "ibflex"
+version = "1.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/4c/1a/86e095141d8a808f396c6f9303b785dd461e218f12149bf5a612f6e1d696/ibflex-1.1.tar.gz", hash = "sha256:3e5cac02cadcbd22ea46ae4ca306d67c274b7166f40119f5d7d7103a130d032a", size = 50257, upload-time = "2026-05-23T15:06:40.922Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/99/21/21d3ad7fce8a54c7468ea64729da019f2d93d631468e2412848373bd5d41/ibflex-1.1-py3-none-any.whl", hash = "sha256:c84e02dafcd17f70587777c2e2f00e3cc1e949e045790bf4fe562fb03dbef434", size = 30987, upload-time = "2026-05-23T15:06:39.352Z" },
+]
+
+[package.optional-dependencies]
+web = [
+    { name = "requests" },
+]
+
+[[package]]
 name = "identify"
 version = "2.6.19"
 source = { registry = "https://pypi.org/simple" }
@@ -401,6 +415,7 @@ dependencies = [
     { name = "beancount-dkb" },
     { name = "beangulp" },
     { name = "charset-normalizer" },
+    { name = "ibflex", extra = ["web"] },
     { name = "pydantic" },
     { name = "selenium" },
 ]
@@ -418,6 +433,7 @@ requires-dist = [
     { name = "beancount-dkb", specifier = ">=1.10.0" },
     { name = "beangulp", specifier = ">=0.2.0" },
     { name = "charset-normalizer", specifier = ">=3.4.3" },
+    { name = "ibflex", extras = ["web"], specifier = ">=1.1" },
     { name = "pydantic", specifier = ">=2.8.0" },
     { name = "selenium", specifier = ">=4.35.0" },
 ]
@@ -654,6 +670,21 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/2b/d7/01d31d5bdb09bc026fab77f59a371fdf8f9b292e4810546c56182ca70498/regex-2026.7.19-cp314-cp314t-win32.whl", hash = "sha256:2c4e61e2e1be56f63ec3cc618aa9e0de81ef6f43d177205451840022e24f5b78", size = 274526, upload-time = "2026-07-19T00:19:42.398Z" },
     { url = "https://files.pythonhosted.org/packages/52/0e/cea4ce73bc0a8247a0748228ae6669984c7e1f8134b6fa66e59c0572e0ea/regex-2026.7.19-cp314-cp314t-win_amd64.whl", hash = "sha256:c639ea314df70a7b2811e8020448c75af8c9445f5a60f8a4ced81c306a9380c2", size = 283763, upload-time = "2026-07-19T00:19:44.644Z" },
     { url = "https://files.pythonhosted.org/packages/6f/b6/26e41975febae63b7a6e3e02f32cff6cff2e4f10d19c929082f56aebf7c6/regex-2026.7.19-cp314-cp314t-win_arm64.whl", hash = "sha256:9a15e785f244f3e07847b984ce8773fc3da10a9f3c131cc49a4c5b4d672b4547", size = 283451, upload-time = "2026-07-19T00:19:46.639Z" },
+]
+
+[[package]]
+name = "requests"
+version = "2.34.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "certifi" },
+    { name = "charset-normalizer" },
+    { name = "idna" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/c3/e2a2b89f2d3e2179abd6d00ebd70bff6273f37fb3e0cc209f48b39d00cbf/requests-2.34.2.tar.gz", hash = "sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed", size = 142856, upload-time = "2026-05-14T19:25:27.735Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/f4/c67b0b3f1b9245e8d266f0f112c500d50e5b4e83cb6f3b71b6528104182a/requests-2.34.2-py3-none-any.whl", hash = "sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0", size = 73075, upload-time = "2026-05-14T19:25:26.443Z" },
 ]
 
 [[package]]

@@ -135,7 +135,21 @@ the assertion is what makes the hole visible. See Backfill in
 - Source: An Activity Flex Query in XML, not the Activity Statement CSVs the
   archive already holds. Flex is the only export carrying `Lot` and
   `TransferLot`, so it is the only one that can produce explicit cost-basis
-  lots instead of inferred ones.
+  lots instead of inferred ones. `ibflex` declares neither `cost` nor
+  `openDateTime` on its `TransferLot`, and drops any attribute it has not
+  declared without raising, so the importer reads those two straight from the
+  XML.
+- Instrument identity is the `conid`, not the symbol. IBKR renames a ticker in
+  place and reuses one ticker across contracts, and no row anywhere says which
+  happened. The map lives in the ledger, on `commodity` directives carrying an
+  `ibkr-conid` list, because an incremental import sees one file at a time and
+  that file only knows the name current when it was generated. An undeclared
+  conid is named after its symbol and reported, so a new one is declared once
+  by hand. One commodity may list several conids: IBKR reissues a contract for
+  the same listing after a reorg, and those positions never coexist.
+- A corporate action is one transaction, however many rows it reports. The
+  rows of one action share an `actionID`. Booked apart, each side needs a gain
+  of its own to balance and a split reads as a sale.
 - The saved query is configured in the IBKR UI, named `pybank`, and selects
   every section the ledger needs. Account Information is deliberately left
   out: Its fields are the holder's name and mailing address, which the
@@ -144,7 +158,9 @@ the assertion is what makes the hole visible. See Backfill in
   date range, so the whole backfill runs through the same query.
 - Retires the investment-event class hierarchy: Events become posting shapes.
 - FX rounding follows phase 1: Default tolerance, `Equity:Rounding` only if
-  real residuals show up.
+  real residuals show up. They did, so a residual under a hundredth of a cent
+  books there. Anything larger stays an imbalance, since a catch-all posting
+  would hide a real gap.
 
 ## End of phase
 
