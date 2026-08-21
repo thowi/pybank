@@ -255,7 +255,7 @@ def test_extracted_directives_load(tmp_path, checking, balance_path):
 
 
 def test_terse_card_variant(tmp_path, card):
-    """The 46-file majority: ISO dates, cp1252, a Total row wider than the rest."""
+    """The 46-file majority: ISO dates, cp1252, a wide Total row."""
     path = _write(tmp_path, "terse.csv", CARD_TERSE_CSV, "cp1252")
     assert card.identify(path)
 
@@ -304,7 +304,7 @@ def test_bank_category_and_label_are_kept_as_metadata(tmp_path, card, checking, 
 
 
 def test_the_card_receipt_date_is_kept(card, card_path):
-    """`Einkaufsdatum` is the purchase. The transaction is dated `Buchungsdatum`."""
+    """`Einkaufsdatum` is the purchase, `Buchungsdatum` dates the entry."""
     txn = _txns(card.extract(card_path, []))[0]
 
     assert txn.date == datetime.date(2026, 1, 12)

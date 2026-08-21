@@ -45,8 +45,8 @@ class Usage(Exception):
     [-u username|--username=username]
     [-p password|--password=password]
     [-a account|--account=account]     Can be repeated. Default: All accounts.
-    [-f YYYY-MM-DD|--from=YYYY-MM-DD]  From (inclusive). Default: First day of last month.
-    [-t YYYY-MM-DD|--till=YYYY-MM-DD]  Until (exclusive). Default: First day of this month..
+    [-f YYYY-MM-DD|--from=YYYY-MM-DD]  Inclusive. Default: 1st of last month.
+    [-t YYYY-MM-DD|--till=YYYY-MM-DD]  Exclusive. Default: 1st of this month.
     [-o outfile|--outfile=outfile]     Default: STDOUT.
         Variables will be replaced: %(bank)s %(account)s %(from)s %(till)s
     [-d|--debug]

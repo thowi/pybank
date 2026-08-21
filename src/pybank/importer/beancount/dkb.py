@@ -134,7 +134,7 @@ class _DkbImporter(beangulp.Importer):
     def _complete(
         self, txn: data.Transaction, row: dict[str, str], import_id: str
     ) -> data.Transaction:
-        """Adds the import-id, the dropped columns, the contra posting and flag."""
+        """Adds the import-id, dropped columns, contra posting and flag."""
         meta = dict(txn.meta)
         meta[identity.META_KEY] = import_id
         for key, columns in _META_COLS.items():

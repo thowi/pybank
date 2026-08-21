@@ -5,7 +5,7 @@ from typing import TextIO
 
 
 def read_text(filepath: str) -> str:
-    """Decodes a statement. Exports ship cp1252 or UTF-8, with or without BOM."""
+    """Decodes a statement. Exports are cp1252 or UTF-8, with or without BOM."""
     with open(filepath, "rb") as f:
         raw = f.read()
     if raw.startswith(codecs.BOM_UTF8):

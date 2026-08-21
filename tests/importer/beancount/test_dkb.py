@@ -226,7 +226,7 @@ def test_a_foreign_currency_purchase_books_the_settled_amount(card, card_path):
 
 
 def test_an_interest_statement_row_is_imported(checking, abschluss_path):
-    """Zero amount, `<br />` markup, and a narration far longer than the rest."""
+    """Zero amount, `<br />` markup, and a narration longer than the rest."""
     (txn,) = _txns(checking.extract(abschluss_path, []))
 
     assert txn.postings[0].units.number == decimal.Decimal("0.00")
@@ -242,7 +242,7 @@ def test_padding_and_shouting_are_normalized(checking, legacy_path):
 
 
 def test_import_ids_survive_repadded_text(checking, legacy_path, tmp_path):
-    """The same statement re-exported with tidier spacing is not a new import."""
+    """The same statement re-exported with tidier spacing is not new."""
     repadded = GIRO_LEGACY_CSV.replace("A BOOKSHOP  GMBH", "A Bookshop Gmbh")
     repadded = repadded.replace("Invoice    1", "Invoice 1")
 
@@ -252,7 +252,7 @@ def test_import_ids_survive_repadded_text(checking, legacy_path, tmp_path):
 
 
 def test_the_foreign_amount_is_kept(card, card_path):
-    """`beancount-dkb` drops `Ursprünglicher Betrag`, so we carry it ourselves."""
+    """`beancount-dkb` drops `Ursprünglicher Betrag`, so we carry it."""
     plain, _coffee, foreign = _txns(card.extract(card_path, []))
 
     assert foreign.meta["original-amount"] == "-10,00 USD"
@@ -275,7 +275,7 @@ def test_the_counterparty_account_is_kept(checking, fixture, request):
 
 
 def test_the_card_carries_no_counterparty_account(card, card_path):
-    """Card exports have no such column, and an absent key beats an empty one."""
+    """Card exports lack the column, and an absent key beats an empty one."""
     assert all("counterparty-account" not in t.meta for t in _txns(card.extract(card_path, [])))
 
 

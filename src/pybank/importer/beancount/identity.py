@@ -67,7 +67,7 @@ def import_ids(rows: Sequence[IdFields]) -> list[str]:
 
 
 def mark_duplicates(entries: data.Entries, existing: data.Entries) -> None:
-    """Marks the entries already in the ledger, in place, and warns on near misses.
+    """Marks entries already in the ledger, in place, and warns on near misses.
 
     An entry whose `import-id` is already present is marked a duplicate. A
     near miss only warns, since it may well be a separate transaction.
