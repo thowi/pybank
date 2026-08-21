@@ -1,8 +1,9 @@
 """DKB CSV importers for beangulp.
 
-Covers different versions, for checking and credit card accounts.
+Covers the pre-2023 Girokonto export, the current one, and the Visa export.
 
-Matches a file against a configured IBAN or card number.
+The account or card number is read from the file itself, never configured, so
+no account identifier has to live in config.
 
 Parsing is delegated to the `beancount-dkb` package, which builds transactions
 from date, amount, payee and purpose alone. The columns it drops ride along as
@@ -23,7 +24,7 @@ from . import UNCATEGORIZED, identity
 
 # Source columns `beancount-dkb` drops, and the metadata key each lands under.
 # Values keep the export's own notation, German decimals included.
-META_COLS = {
+_META_COLS = {
     # On foreign-currency purchases. The transaction itself books EUR amount.
     "original-amount": ["Ursprünglicher Betrag"],
     # More stable than a payee name, which the bank rewrites.
@@ -32,8 +33,8 @@ META_COLS = {
     "receipt-date": ["Belegdatum"],
 }
 
-PURPOSE_COL = "Verwendungszweck"
-DAILY_BALANCE = "Tagessaldo"
+_PURPOSE_COL = "Verwendungszweck"
+_DAILY_BALANCE = "Tagessaldo"
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +55,13 @@ def _source_id(filepath: str, patterns: tuple[str, ...]) -> str | None:
 
 
 def _aligned_rows(filepath: str, count: int) -> list[dict[str, str]]:
-    """Returns one source row per transaction, empty ones if they disagree.
-
-    Both readers walk the same rows in the same order, so they line up. A
-    disagreement means an export shape neither of us has seen, where no
-    metadata beats metadata taken from the wrong row.
-    """
+    """Returns one source row per transaction, empty ones if they disagree."""
+    # Both readers walk the same rows in the same order, so they line up. A
+    # disagreement means an export shape neither of us has seen, where no
+    # metadata beats metadata taken from the wrong row.
     _metadata, rows = csvfile.read_path_with_header(filepath)
     # `beancount-dkb` turns `Tagessaldo` rows into `Balance` directives.
-    rows = [row for row in rows if row.get(PURPOSE_COL) != DAILY_BALANCE]
+    rows = [row for row in rows if row.get(_PURPOSE_COL) != _DAILY_BALANCE]
     if len(rows) == count:
         return rows
     logger.warning(
@@ -138,7 +137,7 @@ class _DkbImporter(beangulp.Importer):
         """Adds the import-id, the dropped columns, the contra posting and flag."""
         meta = dict(txn.meta)
         meta[identity.META_KEY] = import_id
-        for key, columns in META_COLS.items():
+        for key, columns in _META_COLS.items():
             value = (csvfile.get_value(row, columns) or "").strip()
             if value:
                 meta[key] = value

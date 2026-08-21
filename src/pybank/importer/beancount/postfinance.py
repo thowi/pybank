@@ -20,26 +20,26 @@ from beancount.core import amount, data, flags
 from ... import csvfile, text
 from . import UNCATEGORIZED, identity
 
-DATE_COLS = ["Buchungsdatum", "Datum"]
-MEMO_COLS = [
+_DATE_COLS = ["Buchungsdatum", "Datum"]
+_MEMO_COLS = [
     "Buchungsdetails",
     "Bezeichnung",
     "Avisierungstext",
     "Buchungstext",
 ]
 
-CATEGORY_COL = "Kategorie"
-LABEL_COL = "Label"
-RECEIPT_DATE_COL = "Einkaufsdatum"
+_CATEGORY_COL = "Kategorie"
+_LABEL_COL = "Label"
+_RECEIPT_DATE_COL = "Einkaufsdatum"
 
-CREDIT_PREFIX = "Gutschrift in "
-DEBIT_PREFIX = "Lastschrift in "
-BALANCE_PREFIX = "Saldo in "
+_CREDIT_PREFIX = "Gutschrift in "
+_DEBIT_PREFIX = "Lastschrift in "
+_BALANCE_PREFIX = "Saldo in "
 
-DATE_FORMAT_ISO = "%Y-%m-%d"
-DATE_FORMAT_DE = "%d.%m.%Y"
+_DATE_FORMAT_ISO = "%Y-%m-%d"
+_DATE_FORMAT_DE = "%d.%m.%Y"
 
-TOTAL_MEMO = "Total"
+_TOTAL_MEMO = "Total"
 
 # Only the recent exports carry these, and they are the bank's guess, not a
 # decision. Kept as a hint for categorization, never as the answer, and out
@@ -65,7 +65,7 @@ class _Row(NamedTuple):
 
 
 def _parse_date(date_str: str) -> datetime.date:
-    for fmt in (DATE_FORMAT_ISO, DATE_FORMAT_DE):
+    for fmt in (_DATE_FORMAT_ISO, _DATE_FORMAT_DE):
         try:
             return datetime.datetime.strptime(date_str, fmt).date()
         except ValueError:
@@ -74,7 +74,7 @@ def _parse_date(date_str: str) -> datetime.date:
 
 
 def _parse_number(number_str: str) -> decimal.Decimal:
-    """Swiss format: apostrophe thousands separator, dot decimal point."""
+    """Swiss format: Apostrophe thousands separator, dot decimal point."""
     return decimal.Decimal(number_str.replace("'", "").replace(" ", ""))
 
 
@@ -88,13 +88,13 @@ def _amount_with_prefix(row: dict[str, str], prefix: str) -> amount.Amount | Non
 
 def _parse_row(row: dict[str, str]) -> _Row | None:
     """Returns the parsed row, or None if it is not a transaction."""
-    date_str = csvfile.get_value(row, DATE_COLS)
-    memo = text.normalize_text(csvfile.get_value(row, MEMO_COLS))
-    credit = _amount_with_prefix(row, CREDIT_PREFIX)
-    debit = _amount_with_prefix(row, DEBIT_PREFIX)
+    date_str = csvfile.get_value(row, _DATE_COLS)
+    memo = text.normalize_text(csvfile.get_value(row, _MEMO_COLS))
+    credit = _amount_with_prefix(row, _CREDIT_PREFIX)
+    debit = _amount_with_prefix(row, _DEBIT_PREFIX)
 
     if not date_str or (credit is None and debit is None):
-        if memo != TOTAL_MEMO:
+        if memo != _TOTAL_MEMO:
             logger.debug("Skipping row without a date or an amount.")
         return None
 
@@ -106,10 +106,10 @@ def _parse_row(row: dict[str, str]) -> _Row | None:
         _parse_date(date_str),
         memo,
         units,
-        _amount_with_prefix(row, BALANCE_PREFIX),
-        row.get(CATEGORY_COL) or None,
-        row.get(LABEL_COL) or None,
-        row.get(RECEIPT_DATE_COL) or None,
+        _amount_with_prefix(row, _BALANCE_PREFIX),
+        row.get(_CATEGORY_COL) or None,
+        row.get(_LABEL_COL) or None,
+        row.get(_RECEIPT_DATE_COL) or None,
     )
 
 
@@ -137,9 +137,9 @@ class _PostFinanceImporter(beangulp.Importer):
             return False
         row = rows[0]
         return (
-            csvfile.get_value(row, DATE_COLS) is not None
-            and csvfile.get_value(row, MEMO_COLS) is not None
-            and any(name.startswith(CREDIT_PREFIX) for name in row)
+            csvfile.get_value(row, _DATE_COLS) is not None
+            and csvfile.get_value(row, _MEMO_COLS) is not None
+            and any(name.startswith(_CREDIT_PREFIX) for name in row)
         )
 
     def account(self, filepath: str) -> data.Account:
@@ -203,12 +203,10 @@ class _PostFinanceImporter(beangulp.Importer):
     def _closing_balance(
         self, parsed: list[_Row]
     ) -> tuple[datetime.date, data.Account, amount.Amount] | None:
-        """Returns (date, account, amount) for the newest row with a Saldo.
-
-        One assertion per statement rather than per row. The Saldo is the
-        running balance after that transaction, and an assertion evaluates
-        at the start of its date, so it is dated the following day.
-        """
+        """Returns the assertion for the newest row carrying a Saldo."""
+        # One assertion per statement rather than per row. The Saldo is the
+        # running balance after that transaction, and an assertion evaluates at
+        # the start of its date, so it is dated the following day.
         if not parsed:
             return None
         # Statements come oldest or newest first. Walk from the newest end.
@@ -231,11 +229,9 @@ class CheckingImporter(_PostFinanceImporter):
 
 
 class CreditCardImporter(_PostFinanceImporter):
-    """PostFinance credit card statements.
-
-    Several physical cards share one card account, so the card is what
-    identifies the source, not the account.
-    """
+    """PostFinance credit card statements."""
 
     _metadata_keys = ("Kartenkonto:", "Karte:")
+    # Several physical cards share one card account, so the card identifies the
+    # source, not the account.
     _source_key = "Karte:"

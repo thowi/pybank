@@ -43,7 +43,7 @@ def test_import_id_shape():
     assert version == identity.VERSION
     assert date == "2026-03-01"
     assert amount == "-9"
-    assert len(digest) == identity.DIGEST_LEN
+    assert len(digest) == identity._DIGEST_LEN
     assert occurrence == "0"
 
 
