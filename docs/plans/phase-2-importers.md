@@ -164,9 +164,16 @@ the assertion is what makes the hole visible. See Backfill in
 
 ## End of phase
 
-- Retire `model.py` and the QIF writer path in `convert.py`, drop `pydantic`.
-- `tests/test_qif.py` replaced by importer tests with fixture files
-  (sanitized: Fake account numbers, payees, amounts).
+- Retire `convert.py`, the `pybank-convert` entry point, and the six old
+  importers under `pybank/importer/`. See
+  [phase 5](phase-5-export-extras.md) for what to salvage from three of
+  them.
+- `qif.py` and `model.py` stay, correcting an earlier claim that they go
+  here. `fetch.py` serializes every download through `qif.serialize_account`
+  and `download/bank.py` is built on the `model.py` types, so both are
+  load-bearing for the scraper path until [phase 4](phase-4-fetching.md)
+  moves it onto directives. `pydantic` stays with `model.py`, and
+  `tests/test_qif.py` stays with the code it tests.
 
 ## Acceptance
 

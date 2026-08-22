@@ -13,6 +13,23 @@ Order-flexible backlog, pick items as needed.
   (incl. equity awards), VIAC, crypto exchanges, insurance products.
 - Each is just another beangulp importer on the Phase 2 pattern.
 
+### Three of these were already solved once
+
+Wise, Revolut and Schwab had working CSV parsers on the old QIF path, which
+phase 2 deleted along with the rest of it. They read the same exports the
+new importers will read, so they record which columns each bank ships and
+how each one spells amounts, dates and signs. That is the slow part of
+writing an importer, and it is worth reading before starting from scratch.
+
+They live in history up to `ae8aa75`, under `src/pybank/importer/`, as
+`wise.py`, `revolut.py` and `schwab.py`, alongside `ib.py` for the IBKR
+Activity Statement CSVs. Read one with
+`git show ae8aa75:src/pybank/importer/wise.py`.
+
+Two warnings. None of them had a single test, so treat the behavior as
+undocumented rather than verified. And they emit the old `model.py` objects
+and carry no import-id, so the structure ports, not the code.
+
 ## Smarter categorization
 
 - Fuzzy merchant matching (rapidfuzz, flofi stage 4).
