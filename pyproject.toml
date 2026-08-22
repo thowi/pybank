@@ -23,7 +23,6 @@ dependencies = [
 
 [project.scripts]
 pybank-fetch = "pybank.fetch:main"
-pybank-convert = "pybank.convert:main"
 
 [dependency-groups]
 dev = [
