@@ -35,6 +35,29 @@ category and account names in the taxonomy.
 - Chat and scratchpad may hold real data. Neither is a staging area for the
   repo, do not carry values across.
 
+## The code is generic. One archive is not the spec
+
+pybank is for anyone banking with these institutions, not for one ledger.
+Code, docstrings, comments and the README describe the file format and what
+the importer does with it. They never describe one person's export.
+
+The test for a sentence: Would it still hold for a different user, with a
+different file, next year? "QIF carries no balance rows" holds, it is a fact
+about the format. "The export covers every account from 2008 on" does not, it
+is a fact about one file that happens to be on this machine.
+
+- Counts, date ranges, and "a few of these are broken" are observations of
+  one archive. They belong in `docs/plans/`, which is the record of this
+  migration, or in a commit message, which records why a change was made.
+  Keep them out of code.
+- Handle a quirk generically. Branch on what the format permits, and let the
+  comment say what the branch is for, never how often it fired here.
+- Configuration carries the personal part. An importer takes its accounts,
+  categories and currencies from the caller, so the ledger holds them and the
+  repo holds none of them. Never hardcode a default that fits one user only.
+- Naming an institution is fine, it is what the importer supports. Naming
+  one user's account, category, or archive layout is not.
+
 ## Review code changes before committing
 
 Overrides the global auto-commit convention for code changes in this repo.
