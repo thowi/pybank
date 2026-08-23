@@ -45,17 +45,45 @@ imports reconcile against it, rather than the other way round.
   assigned inside SEE Finance. Per-bank files converted straight from bank
   CSV carry at most a bank-assigned category, which is a hint and not a
   decision, so the two must not be treated as one source.
-- The labels are reliable but not clean: The converter left many entries
-  with an empty top level, and a handful carry an amount where a category
-  name belongs. Validate rather than trust.
-- The export has no balances and no currency, so no `balance` assertion is
-  derivable from it anywhere and CHF is assumed. Assertions have to come
-  from the statement sources, which is what makes the PostFinance balance
-  gap above worth closing rather than shrugging at.
+- The labels are reliable but not clean. Validate rather than trust.
+- The export has no balances anywhere, so no `balance` assertion is derivable
+  from it. Assertions have to come from the statement sources, which is what
+  makes the PostFinance balance gap above worth closing rather than
+  shrugging at.
 - Multi-account and multi-currency. It was written for an app that tracked
   everything, so it also covers accounts with no importer yet. Decide per
   account whether to take it or wait for the real source, and anchor
   whatever is taken with `Equity:Opening-Balances`.
+
+#### What the importer does
+
+`importer/beancount/qif.py`. All 11612 bank and card transactions parse and
+the result loads with no errors. What the file turned out to hold, now
+measured rather than assumed:
+
+- The export declares every category as income or expense in its own
+  `!Type:Cat` section, so account names derive themselves and only the
+  awkward ones need an override. There is no mapping file to write by hand.
+- Around 15% of transactions carry no category at all. Those become
+  `Expenses:Uncategorized` and stay flagged `!`.
+- `Split` in the category field is the exporter's marker, not a category.
+  Almost every split carries it alongside its legs. Six carry it with no
+  legs, having lost their breakdown on the way out, and those stay
+  uncategorized.
+- A dozen transactions point at accounts the old app no longer holds. They
+  read as categories and need an override to book as the transfers they are.
+- Category names and account names are private, so neither lives in this
+  repo. Accounts arrive through the constructor, which doubles as the
+  filter. Categories are read from the file at run time.
+- Every counter posting keeps the old app's own words in `qif-category` or
+  `qif-transfer`, and the leg's own text in `split-memo`. The mapping will
+  change, and this is what a remapping remaps from. None of it feeds the
+  import-id.
+
+Investment accounts are skipped. QIF carries neither lots nor prices, and
+IBKR holds nearly all of it with a full importer already. The consequence is
+that the clearing account cannot balance yet, because many transfers point
+at an account that was never imported.
 
 ## Transfers
 
