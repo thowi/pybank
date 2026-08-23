@@ -15,11 +15,12 @@ from selenium.webdriver import chrome
 from selenium.webdriver.support import ui
 
 from .. import download, model
+from . import bank
 
 logger = logging.getLogger(__name__)
 
 
-class InteractiveBrokers(download.bank.Bank):
+class InteractiveBrokers(bank.Bank):
     """Fetcher for Interactive Brokers (https://www.interactivebrokers.com/)."""
 
     _LOGIN_URL = "https://www.interactivebrokers.co.uk/sso/Login"

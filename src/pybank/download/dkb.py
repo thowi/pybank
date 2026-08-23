@@ -9,11 +9,12 @@ from selenium.common import exceptions
 from selenium.webdriver.support import ui
 
 from .. import download, model, text
+from . import bank
 
 logger = logging.getLogger(__name__)
 
 
-class DeutscheKreditBank(download.bank.Bank):
+class DeutscheKreditBank(bank.Bank):
     """Fetcher for Deutsche Kreditbank (http://www.dkb.de/).
 
     The accounts for a user will be identified by the bank account number

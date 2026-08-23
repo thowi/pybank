@@ -7,11 +7,12 @@ import logging
 import re
 
 from .. import download, model
+from . import bank
 
 logger = logging.getLogger(__name__)
 
 
-class Revolut(download.bank.Bank):
+class Revolut(bank.Bank):
     """Fetcher for Revolut (https://www.revolut.com/).
 
     Revolut doesn't have a Web interface, so we're just working with downloaded

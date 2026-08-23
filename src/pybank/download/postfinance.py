@@ -8,11 +8,12 @@ from selenium.common import exceptions
 from selenium.webdriver.support import ui
 
 from .. import download, model, text
+from . import bank
 
 logger = logging.getLogger(__name__)
 
 
-class PostFinance(download.bank.Bank):
+class PostFinance(bank.Bank):
     """Fetcher for PostFinance (http://www.postfincance.ch/)."""
 
     _BASE_URL = "https://www.postfinance.ch/ap/ba/fp/html/e-finance/"
