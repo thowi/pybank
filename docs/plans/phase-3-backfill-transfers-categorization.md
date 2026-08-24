@@ -20,24 +20,34 @@ carry no balance at all, so nothing detects a hole there.
 
 The archive alone therefore cannot produce a continuous checking history.
 Options in the order worth trying: The QIF export below, which covers the
-same years; re-fetching the missing windows from e-finance, which only works
-as far back as the bank retains; the monthly PDF Kontoauszüge for balances,
-which turns each gap into a padded stretch with a known endpoint.
+holes up to 2021 and nothing after, the monthly PDF statements, which carry
+balances and run unbroken from 2018-05 to now, and re-fetching the missing
+windows from e-finance, which only works as far back as the bank retains.
+
+The PDFs are the answer for everything the QIF does not reach, so parsing
+them is its own eventual task. 103 monthly checking statements carry a
+`Saldo` column plus an opening and closing `Kontostand`. 78 card statements
+carry `Saldo letzte Rechnung`, `Total Zahlungen`, `Total Transaktionen` and
+`Saldo neue Rechnung`, so a card statement checks its own arithmetic and not
+just its endpoint. Card CSV exports carry no balance at all, which leaves
+the PDFs as the only possible source of card assertions.
 
 ### The SEE Finance QIF export
 
 A one-shot importer, not part of the recurring set. It is the only source
 for the oldest years, and the only source anywhere carrying categories that
-were assigned by hand. Those labels seed every later categorization approach, the rules
-below and anything smarter in Phase 5, so they are worth more than the years
-they cover.
+were assigned by hand. Those labels seed every later categorization
+approach, the rules below and anything smarter in Phase 5, so they are worth
+more than the years they cover.
 
-It also covers far more than the oldest years. The file in the archive spans
-2008 to 2026, all accounts, because pybank has been feeding SEE Finance the
-whole time. So it is not a pre-2018 stopgap: It is a second, independent,
-already-categorized copy of the entire history, and it is the natural first
-answer to the archive holes above. Import it first and let the per-statement
-imports reconcile against it, rather than the other way round.
+It also covers more than the oldest years, though less than its filename
+suggests. Correcting an earlier claim: The name carries the range that was
+asked for, not the range that came back. The data runs 2011 to 2021, tapers
+through 2022, and stops. Within that window it is a complete second,
+independent, already-categorized copy across all accounts, and the natural
+first answer to the archive holes above. Import it first there and let the
+per-statement imports reconcile against it, rather than the other way round.
+After 2021 it contributes nothing and the statement sources stand alone.
 
 - The deliverable is the old-to-new category mapping, not just a parser. The
   export carries the old taxonomy.
@@ -79,6 +89,15 @@ measured rather than assumed:
   `qif-transfer`, and the leg's own text in `split-memo`. The mapping will
   change, and this is what a remapping remaps from. None of it feeds the
   import-id.
+
+The app's own SQLite database was checked as a way to skip the export, and
+rejected. On bank and card accounts the two agree exactly: Same 11612
+transactions, same 63 category definitions, same 336 splits, and the same
+607 / 56 / 95 split legs carrying a category, a transfer, or nothing. The
+only differences are spelling, the export prefixes a deleted account with
+`*` and flattens newlines in a memo. The three tables that would have
+justified a rewrite, account balances, transaction rules and statements, are
+all empty. The database is richer only for investments, which are skipped.
 
 Investment accounts are skipped. QIF carries neither lots nor prices, and
 IBKR holds nearly all of it with a full importer already. The consequence is
