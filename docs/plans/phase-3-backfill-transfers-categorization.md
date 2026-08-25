@@ -43,11 +43,8 @@ more than the years they cover.
 It also covers more than the oldest years, though less than its filename
 suggests. Correcting an earlier claim: The name carries the range that was
 asked for, not the range that came back. The data runs 2011 to 2021, tapers
-through 2022, and stops. Within that window it is a complete second,
-independent, already-categorized copy across all accounts, and the natural
-first answer to the archive holes above. Import it first there and let the
-per-statement imports reconcile against it, rather than the other way round.
-After 2021 it contributes nothing and the statement sources stand alone.
+through 2022, and stops. After 2021 it contributes nothing and the
+statement sources stand alone.
 
 - The deliverable is the old-to-new category mapping, not just a parser. The
   export carries the old taxonomy.
@@ -64,6 +61,47 @@ After 2021 it contributes nothing and the statement sources stand alone.
   everything, so it also covers accounts with no importer yet. Decide per
   account whether to take it or wait for the real source, and anchor
   whatever is taken with `Equity:Opening-Balances`.
+
+#### Where it overlaps the statement sources, the CSV wins
+
+The two sources overlap for several years, and nothing deduplicates them
+against each other: They hash different source text, so one bank event
+yields two `import-id`s and two transactions. Which one to keep was
+measured, not assumed. Matching on account, amount, and a five day window,
+3039 of the contested rows pair up, 190 are QIF-only and 67 are CSV-only,
+so neither source is a superset of the other.
+
+The CSV is the better record wherever it reaches:
+
+- Descriptions are the same text, and the QIF holds less of it. Card rows
+  are identical once case and punctuation are normalized. Checking rows are
+  worse: The exporter truncates a memo to 54 characters, and on one
+  institution the QIF is a literal prefix of the CSV on 378 of 388 pairs.
+- What the QIF appears to add is the old scraper's own doing. It appended
+  labels like `Account:`, `Original amount:` and `Exchange rate:` into the
+  memo, where the truncation then cut them. Every one duplicates a CSV
+  field that survives intact, and the FX block in the CSV also carries the
+  processing fee, which the QIF drops.
+- The QIF drops the bank's booking type (standing order, direct debit, card
+  payment, statement close). The CSV keeps it.
+- `counterparty-account`, `receipt-date` and `original-amount` exist only on
+  the CSV side, and only the statement sources can yield `balance`
+  assertions.
+
+So the QIF stops being a transaction source where a statement covers the
+same period, and becomes a side-car instead. It matches into the CSV
+transaction and donates two things:
+
+- The hand-assigned category, which is the whole reason to keep the export.
+- The hand-typed note, which about 1.5% of matched rows carry. Rare, but
+  those are the rows whose merchant string says nothing, so they are the
+  labeled examples Phase 5 wants. It goes in `meta`, never merged into the
+  narration.
+
+Outside that overlap, which is most of the export, the QIF row stays the
+transaction. This is also the shape the ledger needs long term: New data
+arrives only as CSV, so the export is a one-time seed for categorization,
+not a parallel history.
 
 #### What the importer does
 
