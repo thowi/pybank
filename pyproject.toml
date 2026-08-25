@@ -23,6 +23,7 @@ dependencies = [
 
 [project.scripts]
 pybank-fetch = "pybank.fetch:main"
+pybank-import = "pybank.ingest:main"
 
 [dependency-groups]
 dev = [
