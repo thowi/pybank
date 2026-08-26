@@ -12,6 +12,7 @@ from pybank.importer.beancount import postfinance
 
 CHECKING = "Assets:PostFinance:Checking"
 CARD = "Liabilities:PostFinance:Visa:Person"
+CARD_OTHER = "Liabilities:PostFinance:Visa:Other"
 
 # Current export: UTF-8 BOM, German dates, no balance column.
 CHECKING_CSV = """\
@@ -81,6 +82,17 @@ Disclaimer:
 Some trailing prose that is not a transaction.
 """
 
+# A second card on the same card account, with the masked number written
+# differently. The fragment has to match either shape.
+CARD_SPACED_CSV = """\
+Kartenkonto:;="0000 0000 0000 0000"
+Karte:;="XXXX XXXX XXXX 1111 PostFinance Visa Gold Card "
+Karteninhaber:;="B Person"
+
+Datum;Buchungsdetails;Gutschrift in CHF;Lastschrift in CHF
+2023-02-14;BOOKSHOP;;18.00
+"""
+
 # Card export without the billing period.
 CARD_DETAILS_CSV = """\
 Kartenkonto:;="0000 0000 0000 0000"
@@ -106,7 +118,7 @@ def checking():
 
 @pytest.fixture
 def card():
-    return postfinance.CreditCardImporter(CARD)
+    return postfinance.CreditCardImporter({"0000": CARD, "1111": CARD_OTHER})
 
 
 @pytest.fixture
@@ -140,6 +152,26 @@ def test_identify_checking(checking, card, checking_path):
 def test_identify_card(checking, card, card_path):
     assert card.identify(card_path)
     assert not checking.identify(card_path)
+
+
+def test_each_card_books_into_its_own_account(tmp_path, card, card_path):
+    spaced_path = _write(tmp_path, "spaced.csv", CARD_SPACED_CSV)
+
+    assert card.account(card_path) == CARD
+    assert card.account(spaced_path) == CARD_OTHER
+
+
+def test_a_card_with_no_account_configured_is_not_ours(card_path):
+    importer = postfinance.CreditCardImporter({"9999": CARD})
+
+    assert not importer.identify(card_path)
+
+
+def test_card_fragments_that_match_the_same_card_are_reported(card_path):
+    importer = postfinance.CreditCardImporter({"000": CARD, "0000": CARD_OTHER})
+
+    with pytest.raises(ValueError, match="overlap"):
+        importer.identify(card_path)
 
 
 def test_identify_rejects_other_files(tmp_path, checking):
@@ -255,7 +287,7 @@ def test_extracted_directives_load(tmp_path, checking, balance_path):
 
 
 def test_terse_card_variant(tmp_path, card):
-    """The 46-file majority: ISO dates, cp1252, a wide Total row."""
+    """ISO dates, cp1252, and a wide Total row."""
     path = _write(tmp_path, "terse.csv", CARD_TERSE_CSV, "cp1252")
     assert card.identify(path)
 

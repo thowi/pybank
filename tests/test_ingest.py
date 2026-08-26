@@ -14,8 +14,10 @@ checking = "Assets:Other:Checking"
 cash = "Assets:Broker:Cash"
 
 [postfinance]
-card = "Liabilities:Bank:Card"
 checking = "Assets:Bank:Checking"
+
+[postfinance.cards]
+"0000" = "Liabilities:Bank:Card"
 
 [qif.targets]
 "Old Checking" = { account = "Assets:Bank:Checking", currency = "CHF" }
@@ -64,7 +66,15 @@ def test_the_configured_account_reaches_the_importer(tmp_path):
 
     importer = ingest._importers(config)[0]
 
-    assert importer.account("ignored.csv") == "Assets:A"
+    assert importer._account == "Assets:A"
+
+
+def test_the_card_table_reaches_the_card_importer(tmp_path):
+    config = ingest._load_config(_write(tmp_path, FULL_CONFIG))
+
+    importer = _of_type(ingest._importers(config), postfinance.CreditCardImporter)[0]
+
+    assert importer._accounts == {"0000": "Liabilities:Bank:Card"}
 
 
 def test_ibkr_overrides_only_what_the_config_names(tmp_path):

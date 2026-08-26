@@ -40,10 +40,10 @@ def _ibkr(section: dict) -> list[beangulp.Importer]:
 
 def _postfinance(section: dict) -> list[beangulp.Importer]:
     importers = []
+    if "cards" in section:
+        importers.append(postfinance.CreditCardImporter(section["cards"]))
     if "checking" in section:
         importers.append(postfinance.CheckingImporter(section["checking"]))
-    if "card" in section:
-        importers.append(postfinance.CreditCardImporter(section["card"]))
     return importers
 
 

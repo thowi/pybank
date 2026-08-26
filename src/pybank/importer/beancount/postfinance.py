@@ -12,6 +12,7 @@ import datetime
 import decimal
 import logging
 import os
+from collections.abc import Mapping
 from typing import NamedTuple
 
 import beangulp
@@ -140,13 +141,18 @@ class _PostFinanceImporter(beangulp.Importer):
             csvfile.get_value(row, _DATE_COLS) is not None
             and csvfile.get_value(row, _MEMO_COLS) is not None
             and any(name.startswith(_CREDIT_PREFIX) for name in row)
+            # A card with no account configured is not ours. An unrecognized
+            # file is a better outcome than one booked into the wrong account.
+            and self._account_for(metadata) is not None
         )
 
     def account(self, filepath: str) -> data.Account:
-        return self._account
+        metadata, _ = csvfile.read_path_with_header(filepath)
+        return self._account_for(metadata)
 
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:
         metadata, rows = csvfile.read_path_with_header(filepath)
+        account = self._account_for(metadata)
         source_id = metadata.get(self._source_key, "")
 
         parsed = [row for row in map(_parse_row, rows) if row is not None]
@@ -172,9 +178,9 @@ class _PostFinanceImporter(beangulp.Importer):
                 entry_meta[META_LABEL] = row.label
             if row.receipt_date:
                 entry_meta[META_RECEIPT_DATE] = row.receipt_date
-            entries.append(self._transaction(row, entry_meta))
+            entries.append(self._transaction(account, row, entry_meta))
 
-        balance = self._closing_balance(parsed)
+        balance = self._closing_balance(account, parsed)
         if balance is not None:
             entries.append(data.Balance(meta.copy(), *balance, None, None))
         else:
@@ -184,9 +190,13 @@ class _PostFinanceImporter(beangulp.Importer):
     def deduplicate(self, entries: data.Entries, existing: data.Entries) -> None:
         identity.mark_duplicates(entries, existing)
 
-    def _transaction(self, row: _Row, meta: data.Meta) -> data.Transaction:
+    def _account_for(self, metadata: Mapping[str, str]) -> data.Account | None:
+        """Returns the account this file books into, if the caller named one."""
+        return self._account
+
+    def _transaction(self, account: data.Account, row: _Row, meta: data.Meta) -> data.Transaction:
         postings = [
-            data.Posting(self._account, row.units, None, None, None, None),
+            data.Posting(account, row.units, None, None, None, None),
             data.Posting(UNCATEGORIZED, None, None, None, None, None),
         ]
         return data.Transaction(
@@ -201,7 +211,7 @@ class _PostFinanceImporter(beangulp.Importer):
         )
 
     def _closing_balance(
-        self, parsed: list[_Row]
+        self, account: data.Account, parsed: list[_Row]
     ) -> tuple[datetime.date, data.Account, amount.Amount] | None:
         """Returns the assertion for the newest row carrying a Saldo."""
         # One assertion per statement rather than per row. The Saldo is the
@@ -215,7 +225,7 @@ class _PostFinanceImporter(beangulp.Importer):
             if row.balance is not None:
                 return (
                     row.date + datetime.timedelta(days=1),
-                    self._account,
+                    account,
                     row.balance,
                 )
         return None
@@ -229,9 +239,28 @@ class CheckingImporter(_PostFinanceImporter):
 
 
 class CreditCardImporter(_PostFinanceImporter):
-    """PostFinance credit card statements."""
+    """PostFinance credit card statements.
+
+    One export covers one card, and several cards can share one card account,
+    so the caller maps each card to the account it books into.
+    """
 
     _metadata_keys = ("Kartenkonto:", "Karte:")
-    # Several physical cards share one card account, so the card identifies the
-    # source, not the account.
+    # The card, not the card account, is the finest-grained source.
     _source_key = "Karte:"
+
+    def __init__(self, accounts: Mapping[str, data.Account]):
+        """Maps a fragment of the masked card number to a ledger account."""
+        self._accounts = dict(accounts)
+
+    def _account_for(self, metadata: Mapping[str, str]) -> data.Account | None:
+        # Match a fragment so that no full card number has to live in config.
+        # The field also carries spacing and the product name.
+        card = metadata.get(self._source_key, "")
+        matched = {a for fragment, a in self._accounts.items() if fragment in card}
+        if len(matched) > 1:
+            raise ValueError(f"Card fragments overlap, {sorted(matched)} all match one card.")
+        if not matched:
+            logger.info("No account configured for card %r.", card)
+            return None
+        return matched.pop()
