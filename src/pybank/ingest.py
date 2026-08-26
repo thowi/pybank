@@ -10,23 +10,41 @@ import tomllib
 import beangulp
 import click
 
-from pybank.importer.beancount import dkb, ibkr, postfinance, qif
+from pybank.importer.beancount import dkb, ibkr, postfinance, qif, routing
 
-_LOG_FORMAT = "%(message)s"
+# beangulp reports progress a file at a time and leaves the line open until
+# the file is done, so a log record written meanwhile lands mid-line.
+_LOG_FORMAT = "\n%(message)s"
 
 
-class _ConfigError(Exception):
-    """The config file is missing, unreadable, or does not say enough."""
+# Config that only an importer can find fault with raises the same type, so
+# one `except` covers a bad file and a file the config does not cover.
+_ConfigError = routing.ConfigError
+
+
+def _accounts(section: dict, key: str, table: str) -> dict | None:
+    """Returns the fragment-to-account table under `key`, if it is there."""
+    accounts = section.get(key)
+    if accounts is None:
+        return None
+    if not isinstance(accounts, dict):
+        raise _ConfigError(
+            f"[{table}] must be a table mapping a fragment of the account "
+            f"identifier to an account, not a bare account name."
+        )
+    return accounts
 
 
 def _dkb(section: dict) -> list[beangulp.Importer]:
     # The library is EUR-only in practice, but the account decides, not us.
     currency = section.get("currency", "EUR")
     importers = []
-    if "checking" in section:
-        importers.append(dkb.CheckingImporter(section["checking"], currency))
-    if "card" in section:
-        importers.append(dkb.CreditCardImporter(section["card"], currency))
+    card = _accounts(section, "card", "dkb.card")
+    if card is not None:
+        importers.append(dkb.CreditCardImporter(card, currency))
+    checking = _accounts(section, "checking", "dkb.checking")
+    if checking is not None:
+        importers.append(dkb.CheckingImporter(checking, currency))
     return importers
 
 
@@ -40,10 +58,12 @@ def _ibkr(section: dict) -> list[beangulp.Importer]:
 
 def _postfinance(section: dict) -> list[beangulp.Importer]:
     importers = []
-    if "cards" in section:
-        importers.append(postfinance.CreditCardImporter(section["cards"]))
-    if "checking" in section:
-        importers.append(postfinance.CheckingImporter(section["checking"]))
+    card = _accounts(section, "card", "postfinance.card")
+    if card is not None:
+        importers.append(postfinance.CreditCardImporter(card))
+    checking = _accounts(section, "checking", "postfinance.checking")
+    if checking is not None:
+        importers.append(postfinance.CheckingImporter(checking))
     return importers
 
 
@@ -122,7 +142,7 @@ def _cli() -> click.Group:
 
 
 def main(argv: list[str] | None = None) -> int:
-    logging.basicConfig(format=_LOG_FORMAT, level=logging.INFO)
+    logging.basicConfig(format=_LOG_FORMAT, level=logging.WARNING)
     # click exits rather than returning, and that is what prints usage errors.
     try:
         _cli().main(args=argv)

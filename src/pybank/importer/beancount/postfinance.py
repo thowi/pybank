@@ -19,7 +19,7 @@ import beangulp
 from beancount.core import amount, data, flags
 
 from ... import csvfile, text
-from . import UNCATEGORIZED, identity
+from . import UNCATEGORIZED, identity, routing
 
 _DATE_COLS = ["Buchungsdatum", "Datum"]
 _MEMO_COLS = [
@@ -121,9 +121,11 @@ class _PostFinanceImporter(beangulp.Importer):
     _metadata_keys: tuple[str, ...] = ()
     # Metadata key naming the finest-grained source, hashed into import-ids.
     _source_key: str = ""
+    # Config table this importer takes its accounts from, named in errors.
+    _config_table: str = ""
 
-    def __init__(self, account: data.Account):
-        self._account = account
+    def __init__(self, accounts: Mapping[str, data.Account]):
+        self._router = routing.AccountRouter(accounts, self._config_table)
 
     def identify(self, filepath: str) -> bool:
         if not filepath.lower().endswith(".csv"):
@@ -141,9 +143,6 @@ class _PostFinanceImporter(beangulp.Importer):
             csvfile.get_value(row, _DATE_COLS) is not None
             and csvfile.get_value(row, _MEMO_COLS) is not None
             and any(name.startswith(_CREDIT_PREFIX) for name in row)
-            # A card with no account configured is not ours. An unrecognized
-            # file is a better outcome than one booked into the wrong account.
-            and self._account_for(metadata) is not None
         )
 
     def account(self, filepath: str) -> data.Account:
@@ -190,9 +189,8 @@ class _PostFinanceImporter(beangulp.Importer):
     def deduplicate(self, entries: data.Entries, existing: data.Entries) -> None:
         identity.mark_duplicates(entries, existing)
 
-    def _account_for(self, metadata: Mapping[str, str]) -> data.Account | None:
-        """Returns the account this file books into, if the caller named one."""
-        return self._account
+    def _account_for(self, metadata: Mapping[str, str]) -> data.Account:
+        return self._router.account_for(metadata.get(self._source_key, ""))
 
     def _transaction(self, account: data.Account, row: _Row, meta: data.Meta) -> data.Transaction:
         postings = [
@@ -234,6 +232,7 @@ class _PostFinanceImporter(beangulp.Importer):
 class CheckingImporter(_PostFinanceImporter):
     """PostFinance checking account statements."""
 
+    _config_table = "postfinance.checking"
     _metadata_keys = ("Konto:",)
     _source_key = "Konto:"
 
@@ -245,22 +244,7 @@ class CreditCardImporter(_PostFinanceImporter):
     so the caller maps each card to the account it books into.
     """
 
+    _config_table = "postfinance.card"
     _metadata_keys = ("Kartenkonto:", "Karte:")
     # The card, not the card account, is the finest-grained source.
     _source_key = "Karte:"
-
-    def __init__(self, accounts: Mapping[str, data.Account]):
-        """Maps a fragment of the masked card number to a ledger account."""
-        self._accounts = dict(accounts)
-
-    def _account_for(self, metadata: Mapping[str, str]) -> data.Account | None:
-        # Match a fragment so that no full card number has to live in config.
-        # The field also carries spacing and the product name.
-        card = metadata.get(self._source_key, "")
-        matched = {a for fragment, a in self._accounts.items() if fragment in card}
-        if len(matched) > 1:
-            raise ValueError(f"Card fragments overlap, {sorted(matched)} all match one card.")
-        if not matched:
-            logger.info("No account configured for card %r.", card)
-            return None
-        return matched.pop()

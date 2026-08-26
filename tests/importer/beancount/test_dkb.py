@@ -99,12 +99,12 @@ def _write(tmp_path, name, content, encoding="cp1252"):
 
 @pytest.fixture
 def checking():
-    return dkb.CheckingImporter("Assets:DKB:Checking")
+    return dkb.CheckingImporter({"DE00": "Assets:DKB:Checking"})
 
 
 @pytest.fixture
 def card():
-    return dkb.CreditCardImporter("Liabilities:DKB:Visa")
+    return dkb.CreditCardImporter({"0000": "Liabilities:DKB:Visa"})
 
 
 @pytest.fixture
@@ -167,10 +167,10 @@ def test_a_foreign_statement_is_not_claimed(checking, card, tmp_path):
     assert not card.identify(path)
 
 
-def test_no_account_number_has_to_be_configured():
-    """The identifier is read from the file, so the constructor takes none."""
-    importer = dkb.CheckingImporter("Assets:DKB:Checking")
-    assert importer.account("ignored.csv") == "Assets:DKB:Checking"
+def test_the_account_is_resolved_from_the_file(checking, legacy_path, giro_2023_path):
+    """Both export vintages name the same account, so both route the same."""
+    assert checking.account(legacy_path) == "Assets:DKB:Checking"
+    assert checking.account(giro_2023_path) == "Assets:DKB:Checking"
 
 
 @pytest.mark.parametrize("fixture", ["legacy_path", "giro_2023_path"])

@@ -6,24 +6,32 @@ from pybank import ingest
 from pybank.importer.beancount import dkb, ibkr, postfinance, qif
 
 FULL_CONFIG = """\
-[dkb]
-card = "Liabilities:Other:Card"
-checking = "Assets:Other:Checking"
+[dkb.card]
+"1111" = "Liabilities:Other:Card"
+
+[dkb.checking]
+"2222" = "Assets:Other:Checking"
 
 [ibkr]
 cash = "Assets:Broker:Cash"
 
-[postfinance]
-checking = "Assets:Bank:Checking"
-
-[postfinance.cards]
+[postfinance.card]
 "0000" = "Liabilities:Bank:Card"
+
+[postfinance.checking]
+"3333" = "Assets:Bank:Checking"
 
 [qif.targets]
 "Old Checking" = { account = "Assets:Bank:Checking", currency = "CHF" }
 
 [qif.categories]
 "Odd Label" = "Expenses:Other"
+"""
+
+
+ONE_SECTION = """\
+[postfinance.checking]
+"0000" = "Assets:A"
 """
 
 
@@ -53,7 +61,7 @@ def test_a_full_config_builds_every_importer(tmp_path):
 
 
 def test_a_missing_section_turns_that_institution_off(tmp_path):
-    config = ingest._load_config(_write(tmp_path, '[postfinance]\nchecking = "Assets:A"\n'))
+    config = ingest._load_config(_write(tmp_path, ONE_SECTION))
 
     built = ingest._importers(config)
 
@@ -62,11 +70,11 @@ def test_a_missing_section_turns_that_institution_off(tmp_path):
 
 
 def test_the_configured_account_reaches_the_importer(tmp_path):
-    config = ingest._load_config(_write(tmp_path, '[postfinance]\nchecking = "Assets:A"\n'))
+    config = ingest._load_config(_write(tmp_path, ONE_SECTION))
 
     importer = ingest._importers(config)[0]
 
-    assert importer._account == "Assets:A"
+    assert importer._router.account_for("CH00 0000") == "Assets:A"
 
 
 def test_the_card_table_reaches_the_card_importer(tmp_path):
@@ -74,7 +82,14 @@ def test_the_card_table_reaches_the_card_importer(tmp_path):
 
     importer = _of_type(ingest._importers(config), postfinance.CreditCardImporter)[0]
 
-    assert importer._accounts == {"0000": "Liabilities:Bank:Card"}
+    assert importer._router.account_for("XXXX 0000 Visa") == "Liabilities:Bank:Card"
+
+
+def test_a_bare_account_name_where_a_table_belongs_is_reported(tmp_path):
+    config = ingest._load_config(_write(tmp_path, '[postfinance]\nchecking = "Assets:A"\n'))
+
+    with pytest.raises(ingest._ConfigError, match=r"postfinance\.checking"):
+        ingest._importers(config)
 
 
 def test_ibkr_overrides_only_what_the_config_names(tmp_path):

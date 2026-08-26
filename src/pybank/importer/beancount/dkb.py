@@ -2,8 +2,8 @@
 
 Covers the pre-2023 Girokonto export, the current one, and the Visa export.
 
-The account or card number is read from the file itself, never configured, so
-no account identifier has to live in config.
+The account or card number is read from the file itself and routed to a ledger
+account by `routing.AccountRouter`.
 
 Parsing is delegated to the `beancount-dkb` package, which builds transactions
 from date, amount, payee and purpose alone. The columns it drops ride along as
@@ -14,13 +14,14 @@ off them.
 import logging
 import os
 import re
+from collections.abc import Mapping
 
 import beangulp
 from beancount.core import data, flags
 from beancount_dkb import CreditImporter, ECImporter
 
 from ... import csvfile, text
-from . import UNCATEGORIZED, identity
+from . import UNCATEGORIZED, identity, routing
 
 # Source columns `beancount-dkb` drops, and the metadata key each lands under.
 # Values keep the export's own notation, German decimals included.
@@ -35,6 +36,10 @@ _META_COLS = {
 
 _PURPOSE_COL = "Verwendungszweck"
 _DAILY_BALANCE = "Tagessaldo"
+
+# The delegate wants an account name even when it is constructed only to
+# identify a file, where it never reads the name. Use a dummy for that case.
+_DUMMY_ACCOUNT = "Assets:Dummy"
 
 logger = logging.getLogger(__name__)
 
@@ -88,26 +93,29 @@ class _DkbImporter(beangulp.Importer):
     # also what `beancount-dkb` needs back to accept the file.
     _source_patterns: tuple[str, ...] = ()
     _delegate_class: type[beangulp.Importer]
+    # Config table this importer takes its accounts from, named in errors.
+    _config_table: str = ""
 
-    def __init__(self, account: data.Account, currency: str = "EUR"):
-        self._account = account
+    def __init__(self, accounts: Mapping[str, data.Account], currency: str = "EUR"):
+        self._router = routing.AccountRouter(accounts, self._config_table)
         self._currency = currency
 
     def identify(self, filepath: str) -> bool:
         if not filepath.lower().endswith(".csv"):
             return False
         source_id = _source_id(filepath, self._source_patterns)
-        return source_id is not None and bool(self._delegate(source_id).identify(filepath))
+        if source_id is None:
+            return False
+        return bool(self._delegate(source_id, _DUMMY_ACCOUNT).identify(filepath))
 
     def account(self, filepath: str) -> data.Account:
-        return self._account
+        return self._router.account_for(self._require_source_id(filepath))
 
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:
-        source_id = _source_id(filepath, self._source_patterns)
-        if source_id is None:
-            raise ValueError(f"Not a DKB statement: {filepath}")
+        source_id = self._require_source_id(filepath)
+        account = self._router.account_for(source_id)
 
-        entries = self._delegate(source_id).extract(filepath, existing)
+        entries = self._delegate(source_id, account).extract(filepath, existing)
         transactions = [_normalize(e) for e in entries if isinstance(e, data.Transaction)]
         rows = _aligned_rows(filepath, len(transactions))
         ids = identity.import_ids(
@@ -128,8 +136,14 @@ class _DkbImporter(beangulp.Importer):
     def deduplicate(self, entries: data.Entries, existing: data.Entries) -> None:
         identity.mark_duplicates(entries, existing)
 
-    def _delegate(self, source_id: str) -> beangulp.Importer:
-        return self._delegate_class(source_id, self._account, self._currency)
+    def _require_source_id(self, filepath: str) -> str:
+        source_id = _source_id(filepath, self._source_patterns)
+        if source_id is None:
+            raise ValueError(f"Not a DKB statement: {filepath}")
+        return source_id
+
+    def _delegate(self, source_id: str, account: data.Account) -> beangulp.Importer:
+        return self._delegate_class(source_id, account, self._currency)
 
     def _complete(
         self, txn: data.Transaction, row: dict[str, str], import_id: str
@@ -152,6 +166,7 @@ class _DkbImporter(beangulp.Importer):
 class CheckingImporter(_DkbImporter):
     """DKB checking statement importer."""
 
+    _config_table = "dkb.checking"
     _source_patterns = (
         r'"?Kontonummer:"?;"?(\S+)\s',
         r'"?Girokonto"?[;,]"?([^";,]+)"?',
@@ -162,5 +177,6 @@ class CheckingImporter(_DkbImporter):
 class CreditCardImporter(_DkbImporter):
     """DKB credit card statement importer."""
 
+    _config_table = "dkb.card"
     _source_patterns = (r'"?Kreditkarte:"?;"?([^"]+?)(?: Kreditkarte)?"?;',)
     _delegate_class = CreditImporter

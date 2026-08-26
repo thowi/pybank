@@ -8,7 +8,7 @@ from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
 
-from pybank.importer.beancount import postfinance
+from pybank.importer.beancount import postfinance, routing
 
 CHECKING = "Assets:PostFinance:Checking"
 CARD = "Liabilities:PostFinance:Visa:Person"
@@ -113,7 +113,7 @@ def _write(tmp_path, name, content, encoding="utf-8-sig"):
 
 @pytest.fixture
 def checking():
-    return postfinance.CheckingImporter(CHECKING)
+    return postfinance.CheckingImporter({"CH00": CHECKING})
 
 
 @pytest.fixture
@@ -161,17 +161,20 @@ def test_each_card_books_into_its_own_account(tmp_path, card, card_path):
     assert card.account(spaced_path) == CARD_OTHER
 
 
-def test_a_card_with_no_account_configured_is_not_ours(card_path):
+def test_a_card_with_no_account_configured_names_the_card(card_path):
     importer = postfinance.CreditCardImporter({"9999": CARD})
 
-    assert not importer.identify(card_path)
+    # The file is still ours. Only the config falls short, so say which card.
+    assert importer.identify(card_path)
+    with pytest.raises(routing.ConfigError, match="0000"):
+        importer.account(card_path)
 
 
-def test_card_fragments_that_match_the_same_card_are_reported(card_path):
+def test_card_fragments_that_disagree_about_the_account_are_reported(card_path):
     importer = postfinance.CreditCardImporter({"000": CARD, "0000": CARD_OTHER})
 
-    with pytest.raises(ValueError, match="overlap"):
-        importer.identify(card_path)
+    with pytest.raises(routing.ConfigError, match=r"postfinance\.card"):
+        importer.account(card_path)
 
 
 def test_identify_rejects_other_files(tmp_path, checking):
