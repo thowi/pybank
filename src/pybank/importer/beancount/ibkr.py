@@ -11,6 +11,10 @@ dates as `yyyyMMdd`, times as `HHmmss` and `;` between them.
 Instruments are identified by `conid` rather than by symbol, and the ledger
 holds that map. See `Commodities`.
 
+Open the securities account `"FIFO"`. A closing trade names only the currency
+its lot cost, so the ledger's own booking method picks the lot, and the
+default booking rejects a reduction that spans two lots.
+
 Reorgs book flagged, and may need their lots corrected by hand.
 
 Sections this does not read are logged with a reason. Statement of Funds is
@@ -293,14 +297,14 @@ def _by_action(
     return list(groups.values())
 
 
-def _lot_cost(open_date: datetime.date | None, currency: str) -> position.CostSpec:
+def _lot_cost(currency: str) -> position.CostSpec:
     """Returns the spec matching the open lot that a closing trade consumes."""
-    # Matched on the open date, not on a number. IBKR's `cost` and `tradePrice`
-    # on a lot are the basis net of the opening commission, which this importer
-    # books to an expense rather than into the lot, so neither can ever equal
-    # what the buy booked. The open date does, and under FIFO it is unambiguous
-    # unless two lots of one commodity opened on the same day.
-    return position.CostSpec(None, None, currency, open_date, None, False)
+    # Only the currency, so the ledger's booking method picks the lot. IBKR's
+    # `cost` and `tradePrice` on a lot are the basis net of the opening
+    # commission, which this importer books to an expense, so neither can equal
+    # what the buy booked. The open date it reports is the one from before any
+    # reorg, and a reorg here opens a fresh lot on its own date.
+    return position.CostSpec(None, None, currency, None, None, False)
 
 
 def _flex_date(value: str | None) -> datetime.date | None:
@@ -600,7 +604,7 @@ class Importer(beangulp.Importer):
                     _posting(
                         accounts.securities,
                         amount.Amount(residual, commodity),
-                        cost=_lot_cost(None, currency),
+                        cost=_lot_cost(currency),
                         price=price,
                     )
                 )
@@ -653,7 +657,7 @@ class Importer(beangulp.Importer):
                 _posting(
                     self._accounts.securities,
                     amount.Amount(trade.quantity, commodity),
-                    cost=_lot_cost(None, trade.currency),
+                    cost=_lot_cost(trade.currency),
                     price=price,
                 )
             ]
@@ -661,9 +665,7 @@ class Importer(beangulp.Importer):
             _posting(
                 self._accounts.securities,
                 amount.Amount(-lot.quantity, commodity),
-                cost=_lot_cost(
-                    lot.openDateTime.date() if lot.openDateTime else None, trade.currency
-                ),
+                cost=_lot_cost(trade.currency),
                 price=price,
             )
             for lot in lots
@@ -786,7 +788,7 @@ class Importer(beangulp.Importer):
                 per_unit = abs(lot.cost / lot.quantity) if lot.cost else _ZERO
                 cost = position.Cost(per_unit, lot.currency or currency, lot.open_date, None)
             else:
-                cost = _lot_cost(lot.open_date, lot.currency or currency)
+                cost = _lot_cost(lot.currency or currency)
             postings.append(
                 _posting(
                     self._accounts.securities,
@@ -950,7 +952,7 @@ class Importer(beangulp.Importer):
             _posting(
                 self._accounts.securities,
                 amount.Amount(action.quantity, commodity),
-                cost=_lot_cost(None, currency),
+                cost=_lot_cost(currency),
                 price=amount.Amount(per_unit, currency),
             )
         ]

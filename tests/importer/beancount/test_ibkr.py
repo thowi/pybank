@@ -397,16 +397,17 @@ def test_a_sale_closes_the_lots_ibkr_named(entries):
     assert all(p.price.number == _decimal("120.00") for p in lots)
 
 
-def test_a_closed_lot_is_matched_on_its_open_date_not_its_price(entries):
-    """IBKR's lot cost is net of the opening commission, which we expensed.
+def test_a_closed_lot_names_only_the_currency_it_cost(entries):
+    """Neither the number nor the date IBKR reports can match a held lot.
 
-    So its number can never equal what the buy booked, and the date it opened
-    is the only thing that can match.
+    Its lot cost is net of the opening commission, which we expensed. Its open
+    date is the one from before any reorg, and a reorg opens a fresh lot. So
+    the ledger's own booking method picks the lot.
     """
     lots = _postings(_by_id(entries, "X4"), SECURITIES)
 
-    assert [p.cost.date.isoformat() for p in lots] == ["2024-01-03", "2024-02-10"]
-    assert all(p.cost.number_per is None for p in lots)
+    assert all(p.cost.currency == "USD" for p in lots)
+    assert all(p.cost.number_per is None and p.cost.date is None for p in lots)
 
 
 def test_a_sale_leaves_the_gain_to_beancount(entries):
@@ -440,7 +441,6 @@ def test_selling_an_option_prices_the_close_per_contract(entries):
 
     assert lot.units == data.Amount(_decimal(-1), OPTION)
     assert lot.price.number == _decimal("400.00")
-    assert lot.cost.date.isoformat() == "2024-03-01"
 
 
 def test_an_option_expiring_worthless_closes_its_lot_at_zero(entries):
