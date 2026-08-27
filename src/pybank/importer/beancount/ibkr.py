@@ -67,6 +67,9 @@ _SNIFF_BYTES = 4096
 _ONE = decimal.Decimal(1)
 _ZERO = decimal.Decimal(0)
 
+# How far a cash assertion may miss before it means something.
+_BALANCE_TOLERANCE = decimal.Decimal("0.00001")
+
 # The largest imbalance to write off as rounding. IBKR reports rates and
 # position values to a fixed number of digits, so the legs of a conversion meet
 # a small fraction of a cent apart. Anything larger is a real gap and stays
@@ -297,6 +300,20 @@ def _by_action(
     return list(groups.values())
 
 
+def _closes(trade: Types.Trade) -> bool:
+    """Returns whether the trade reduces a position rather than opening one."""
+    # `openCloseIndicator` decides, not the sign of the quantity. A sale opens
+    # a position as readily as it closes one: Selling short carries `O` and
+    # names no lots, buying to cover carries `C` and names the lots it covered.
+    if trade.openCloseIndicator in (enums.OpenClose.CLOSE, enums.OpenClose.OPENCLOSE):
+        return True
+    # Except on a fractional share, where the indicator misleads. A fraction
+    # arrives from a corporate action and can only ever be sold off, so a
+    # negative quantity closes whatever the indicator says. Trusting it would
+    # open a position at a cost no held lot carries, which cannot book.
+    return trade.transactionType is enums.TradeType.FRACSHARE and (trade.quantity or _ZERO) < 0
+
+
 def _lot_cost(currency: str) -> position.CostSpec:
     """Returns the spec matching the open lot that a closing trade consumes."""
     # Only the currency, so the ledger's booking method picks the lot. IBKR's
@@ -451,6 +468,12 @@ class Importer(beangulp.Importer):
         _log_unread(statement)
 
         built = [self._cash_transaction(t) for t in statement.CashTransactions]
+        # Corporate actions and trades can be be on the same day, but CAs create
+        # the position and must be first in the ledger.
+        built += [
+            self._corporate_action(rows, commodities)
+            for rows in _by_action(statement.CorporateActions)
+        ]
         built += [
             self._trade(trade, lots, commodities)
             for trade, lots in _grouped(statement.Trades, Types.Trade, Types.Lot)
@@ -461,10 +484,6 @@ class Importer(beangulp.Importer):
             )
             for transfer in statement.Transfers
             if isinstance(transfer, Types.Transfer)
-        ]
-        built += [
-            self._corporate_action(rows, commodities)
-            for rows in _by_action(statement.CorporateActions)
         ]
         built += [self._sales_tax(t) for t in statement.SalesTaxes]
 
@@ -480,7 +499,12 @@ class Importer(beangulp.Importer):
         return data.sorted(entries)
 
     def _cash_transaction(self, txn: Types.CashTransaction) -> _Built:
-        date = txn.dateTime.date() if txn.dateTime else txn.reportDate
+        # `settleDate` is the day the cash moved, which is what the cash report
+        # counts, so it is what an assertion has to agree with. `dateTime` is
+        # when IBKR recorded the item, and a withholding tax, a fee or a
+        # dividend can settle days later. Dating by `dateTime` puts those in
+        # the wrong period, and across a year boundary the assertion misses.
+        date = txn.settleDate or txn.reportDate or (txn.dateTime and txn.dateTime.date())
         if date is None or txn.amount is None or not txn.currency:
             logger.warning("Skipping a cash transaction without a date, amount or currency.")
             return None
@@ -572,26 +596,22 @@ class Importer(beangulp.Importer):
         date: datetime.date,
     ) -> list[data.Posting]:
         """Returns the postings for one trade in a security."""
-        # `openCloseIndicator` decides what happens, not the sign of the
-        # quantity. A sale opens a position as readily as it closes one:
-        # Selling short carries `O` and names no lots, buying to cover carries
-        # `C` and names the lots it covered. The quantity only says which way
-        # round the position ends up. An option that expired worthless arrives
-        # as a close priced at zero, releasing the basis as the loss it is.
+        # The quantity only says which way round the position ends up, so
+        # `_closes` decides. An option that expired worthless arrives as a
+        # close priced at zero, releasing the basis as the loss it is.
         accounts = self._accounts
         currency = trade.currency
         unit_cost = _unit_cost(trade.tradePrice, trade.multiplier)
         price = amount.Amount(unit_cost, currency)
 
-        if trade.openCloseIndicator is enums.OpenClose.CLOSE or (
-            trade.openCloseIndicator is enums.OpenClose.OPENCLOSE
-        ):
+        if _closes(trade):
             postings = self._closing_postings(trade, lots, commodity, price)
             # A `C;O` trade closes the named lots and opens whatever is left
             # over, which is also where a lot set that does not quite add up
-            # to the trade ends up.
+            # to the trade ends up. With no lots at all there is no remainder:
+            # The postings above already cover the whole quantity under FIFO.
             closed = sum((lot.quantity for lot in lots if lot.quantity is not None), _ZERO)
-            residual = trade.quantity + closed
+            residual = trade.quantity + closed if lots else _ZERO
             if residual:
                 logger.warning(
                     "Trade %s closes %s %s but its lots name %s. Letting FIFO take the rest.",
@@ -973,7 +993,7 @@ class Importer(beangulp.Importer):
                     report.toDate + datetime.timedelta(days=1),
                     _cash_account(self._accounts, report.currency),
                     amount.Amount(report.endingCash, report.currency),
-                    None,
+                    _BALANCE_TOLERANCE,
                     None,
                 )
             )

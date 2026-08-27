@@ -206,6 +206,37 @@ REORG_XML = """\
 </FlexQueryResponse>
 """
 
+# A fraction bought whole, then sold off. IBKR marks the sale `O`, which is
+# the quirk: The row is a liquidation, so it can only close.
+FRACSHARE_XML = """\
+<FlexQueryResponse queryName="pybank" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="20250101" toDate="20251231"
+ period="" whenGenerated="20260102;080000">
+<SecuritiesInfo>
+<SecurityInfo assetCategory="STK" symbol="ABCD" description="Abcd Inc."
+ conid="1000001" isin="US0000000001" currency="USD" />
+</SecuritiesInfo>
+<Trades>
+<Trade accountId="U0000000" currency="USD" assetCategory="STK" symbol="ABCD"
+ description="Abcd Inc." conid="1000001" isin="US0000000001" tradeID="T1"
+ transactionID="F1" tradeDate="20250103" dateTime="20250103;153000"
+ buySell="BUY" openCloseIndicator="O" multiplier="1" quantity="10.5"
+ tradePrice="100.00" proceeds="-1050.00" ibCommission="0"
+ ibCommissionCurrency="USD" taxes="0" netCash="-1050.00" />
+<Trade accountId="U0000000" currency="USD" assetCategory="STK" symbol="ABCD"
+ description="Abcd Inc." conid="1000001" isin="US0000000001" tradeID="T2"
+ transactionID="F2" tradeDate="20250201" dateTime="20250201;153000"
+ buySell="SELL" openCloseIndicator="O" transactionType="FracShare"
+ multiplier="1" quantity="-0.5" tradePrice="120.00" proceeds="60.00"
+ ibCommission="0" ibCommissionCurrency="USD" taxes="0" netCash="60.00"
+ notes="LF" />
+</Trades>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
+"""
+
 # What the ledger says about the security IBKR now calls `WXYZ`. The second
 # conid is the contract IBKR reissued for the same listing after a reorg.
 PINNED_LEDGER = """\
@@ -704,6 +735,20 @@ def test_reorg_directives_load(tmp_path, reorg_entries):
     with ledger.open("w") as out:
         out.write(REORG_PREAMBLE)
         printer.print_entries(reorg_entries, file=out)
+
+    _loaded, errors, _options = loader.load_file(str(ledger))
+    assert errors == []
+
+
+def test_a_fractional_share_sale_reduces_whatever_ibkr_calls_it(importer, tmp_path):
+    """As an opening it names a cost no held lot carries, so it cannot load."""
+    path = _write(tmp_path, "frac.xml", FRACSHARE_XML)
+    entries = importer.extract(path, [])
+
+    ledger = tmp_path / "frac.beancount"
+    with ledger.open("w") as out:
+        out.write(LEDGER_PREAMBLE)
+        printer.print_entries(entries, file=out)
 
     _loaded, errors, _options = loader.load_file(str(ledger))
     assert errors == []
