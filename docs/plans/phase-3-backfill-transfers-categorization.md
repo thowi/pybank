@@ -10,6 +10,40 @@ Turn the working importers into a complete, categorized history.
   `Equity:Opening-Balances`, do not chase every format variant.
 - Balance assertions per statement validate the whole chain.
 
+### Where the backfill stands
+
+One pass over the archive, with the side-car below folded in, yields 18889
+transactions and loads with 27 errors: 25 balance assertions and 2 IBKR
+bookings. Folding the export into the statements is what took the balance
+failures from 59 down, since a doubled transaction breaks every assertion
+after it. The two remaining IBKR errors are both a fractional share sold
+after a reorg, out of some 21900 transactions, and are hand-fixable.
+
+Category accounts are a separate count and not an error yet: The export's own
+taxonomy names roughly 7700 postings that the ledger does not open, which is
+the old-to-new mapping below, still to write.
+
+### IBKR reports one contract under two symbols
+
+Measured over the archive: 11 `conid`s arrive under two different symbols,
+which the importer then books as two commodities. A reorg opening one and
+closing the other therefore closes a position nothing holds. The suffixed
+form is usually an off-exchange listing (`Z`) or a post-split rename
+(`.OLD`), and a plain ticker rename does the same thing.
+
+The importer cannot see this: An incremental import reads one file, and that
+file carries only the name that was current when it was generated. So the
+`conid` map is the ledger's to declare, which is what the `commodity`
+directives with `ibkr-conid` are for, and what `_log_securities` reports a
+missing one for. Declaring the 11 took the IBKR errors from 16 to 8.
+
+The other half was lot matching. A closing trade used to name the open date
+IBKR reports, but that date predates any reorg, and a reorg here closes the
+old lot and opens a new one on its own date. So after a merger or a split no
+held lot carries it. The reduction now names only the cost currency and lets
+the ledger's booking method pick, which is why the securities account has to
+be opened `"FIFO"`. That took 8 to 2.
+
 ### The PostFinance archive has holes
 
 Measured, not assumed. All 63 CSVs parse and 6620 transactions come out, but
@@ -93,15 +127,56 @@ same period, and becomes a side-car instead. It matches into the CSV
 transaction and donates two things:
 
 - The hand-assigned category, which is the whole reason to keep the export.
-- The hand-typed note, which about 1.5% of matched rows carry. Rare, but
-  those are the rows whose merchant string says nothing, so they are the
-  labeled examples Phase 5 wants. It goes in `meta`, never merged into the
-  narration.
+- The hand-typed note, which very few matched rows carry, see the count
+  below. Rare, but those are the rows whose merchant string says nothing, so
+  they are the labeled examples Phase 5 wants. It goes in `meta`, never
+  merged into the narration.
 
 Outside that overlap, which is most of the export, the QIF row stays the
 transaction. This is also the shape the ledger needs long term: New data
 arrives only as CSV, so the export is a one-time seed for categorization,
 not a parallel history.
+
+##### What the side-car does
+
+`importer/beancount/qif_sidecar.py`. A beangulp hook, so it needs one extract
+pass covering the statements and the export together. Only then are both
+sides in memory, and the exported row can be folded into the statement
+transaction rather than printed beside it. beangulp extends its `existing`
+list after extraction, not during it, so `--existing` cannot serve here.
+
+A row pairs with a statement transaction booking the same amount on the same
+account within five days, one row to one transaction. The pairing found 3039
+of them over the archive, matching what the measurement above predicted.
+
+Deciding what is a hand-typed note took three rules, and the export holds
+far fewer notes than the memo field suggests. Testing a memo for a copy of
+the statement text by substring keeps 341 of them, but 28 of the final 31 are
+the same description worded differently, which a substring never catches.
+Comparing shared words instead does catch them.
+
+Three rules survive measurement, and each rejects memos the others keep:
+
+- A memo carrying one of the old scraper's appended labels. 136 of the 224
+  labeled memos would otherwise survive the other two.
+- A memo half of whose words are bare numbers, which is a card and reference
+  string. 2 of those share no word at all with the statement, because the
+  statement holds the same numbers in its own columns.
+- A memo whose words the statement already carries, at 40% or more.
+
+An earlier version tested the memo's length instead of its numbers, on the
+grounds that the exporter cuts most memos at 54 characters. That threshold
+was a property of one exporter, and 492 memos in the archive run past it
+anyway. The number rule replaces it, keeps the same 3 notes, and says why a
+memo is machine text rather than how long it happens to be.
+
+Words are matched Unicode-aware, so an umlaut does not split a word in two.
+That changes the overlap score on 89 of 3027 pairs and the verdict on none of
+them, which is the sort of near miss worth removing before it fires.
+
+That leaves 3 hand-typed notes over the whole archive. The rule is worth
+keeping because it is cheap and Phase 5 wants the examples, and the yield is
+small enough that nothing should depend on it.
 
 #### What the importer does
 
@@ -148,6 +223,13 @@ at an account that was never imported.
   Simpler for importers than merging legs, and self-reconciling: A nonzero
   clearing balance means an unmatched transfer.
 - Detection key for matching: Amount, date window, counter-account hints.
+
+The residue splits in two, and only the smaller half is work. Of the 633
+clearing postings the export produces, most name an account with no importer,
+and those can only close once that account is seeded with
+`Equity:Opening-Balances`. The rest name an account that is imported, so both
+legs exist and should already cancel. They do not, and that gap is the one
+worth chasing.
 
 ## Categorization v1
 
