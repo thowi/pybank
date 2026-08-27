@@ -10,7 +10,7 @@ import tomllib
 import beangulp
 import click
 
-from pybank.importer.beancount import dkb, ibkr, postfinance, qif, routing
+from pybank.importer.beancount import dkb, ibkr, postfinance, qif, qif_sidecar, routing
 
 # beangulp reports progress a file at a time and leaves the line open until
 # the file is done, so a log record written meanwhile lands mid-line.
@@ -133,7 +133,7 @@ def _cli() -> click.Group:
     @click.pass_context
     def configure(ctx: click.Context, config: str) -> None:
         try:
-            ctx.obj = beangulp.Ingest(_importers(_load_config(config)))
+            ctx.obj = beangulp.Ingest(_importers(_load_config(config)), hooks=[qif_sidecar.donate])
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 
