@@ -12,16 +12,15 @@ Turn the working importers into a complete, categorized history.
 
 ### Where the backfill stands
 
-One pass over the archive, with the side-car below folded in, yields 18889
-transactions and loads with 27 errors: 25 balance assertions and 2 IBKR
+One pass over the archive, with the side-car below folded in, yields 18977
+transactions and loads with 26 errors: 24 balance assertions and 2 IBKR
 bookings. Folding the export into the statements is what took the balance
 failures from 59 down, since a doubled transaction breaks every assertion
 after it. The two remaining IBKR errors are both a fractional share sold
 after a reorg, out of some 21900 transactions, and are hand-fixable.
 
-Category accounts are a separate count and not an error yet: The export's own
-taxonomy names roughly 7700 postings that the ledger does not open, which is
-the old-to-new mapping below, still to write.
+Category accounts used to be a separate count of roughly 7700 postings the
+ledger did not open. The old-to-new mapping below closed that to zero.
 
 ### IBKR reports one contract under two symbols
 
@@ -197,7 +196,8 @@ measured rather than assumed:
   read as categories and need an override to book as the transfers they are.
 - Category names and account names are private, so neither lives in this
   repo. Accounts arrive through the constructor, which doubles as the
-  filter. Categories are read from the file at run time.
+  filter. Categories are read from the file at run time, and the mapping
+  from them to ledger accounts is config, see below.
 - Every counter posting keeps the old app's own words in `qif-category` or
   `qif-transfer`, and the leg's own text in `split-memo`. The mapping will
   change, and this is what a remapping remaps from. None of it feeds the
@@ -217,6 +217,35 @@ IBKR holds nearly all of it with a full importer already. The consequence is
 that the clearing account cannot balance yet, because many transfers point
 at an account that was never imported.
 
+#### The old-to-new category mapping
+
+`[qif.categories]` in the config, so no category name reaches this repo. It
+maps every label the export uses, 58 of them, to one ledger account. Nothing
+derives its own account any more: the two taxonomies agree on almost no name,
+so a derived name was right by accident or not at all.
+
+The mapping is not a bijection and cannot be. Three shapes recur:
+
+- **Several old labels to one account.** A receivable is one running balance
+  per party, and the old app kept a give and a receive label per person, so
+  both directions and every person in a group meet in one account.
+- **One old label to several new accounts.** The old label maps to the
+  account its payees mostly say, and the rest is accepted as wrong. Insurance
+  premiums and out-of-pocket treatment shared one label, and so did fuel and
+  parking, which the new tree splits on purpose.
+- **No new account at all.** A label too mixed to name goes to
+  `Expenses:Uncategorized`, where the rules below split it by payee. The
+  worst case is a label covering telecom, hosting and electricity, three
+  budget groups, whose payee strings are strong enough that a rule does
+  better than any single account could.
+
+None of this loses information. Every posting still carries the old label in
+`qif-category`, so a better mapping applies later without re-reading the
+export, and a query can always ask what the old app actually said.
+
+The export also lends in more than one currency, so the receivable accounts
+open on the currencies seen rather than on one.
+
 ## Transfers
 
 - Route both legs through an `Assets:Transfers:InTransit` clearing account.
@@ -233,6 +262,9 @@ worth chasing.
 
 ## Categorization v1
 
+- The QIF labels are already carried in, see the mapping above. The rules
+  below cover what no label reached: the statement-only years, and the labels
+  that were too mixed to name.
 - Rules-based only, modeled on the flofi cascade stages 1 to 3: Exclusions
   are structural (both transfer legs under `Assets:*`), then a rules file
   (contains / startswith / exact / regex on a normalized description).
