@@ -12,12 +12,15 @@ Turn the working importers into a complete, categorized history.
 
 ### Where the backfill stands
 
-One pass over the archive, with the side-car below folded in, yields 18977
-transactions and loads with 26 errors: 24 balance assertions and 2 IBKR
-bookings. Folding the export into the statements is what took the balance
-failures from 59 down, since a doubled transaction breaks every assertion
-after it. The two remaining IBKR errors are both a fractional share sold
-after a reorg, out of some 21900 transactions, and are hand-fixable.
+The backfill is in the ledger: 18889 transactions from 2009 to 2026, with
+the side-car below folded in. It loads with 7 errors, all balance
+assertions on an account whose archive has no statement for the window
+before it: 2 on PostFinance checking, 4 on the DKB card, 1 on DKB
+checking. No source in the archive holds a transaction in those windows,
+so only a missing statement can close them, not code.
+
+Folding the export into the statements is what took the balance failures
+from 59 down, since a doubled transaction breaks every assertion after it.
 
 Category accounts used to be a separate count of roughly 7700 postings the
 ledger did not open. The old-to-new mapping below closed that to zero.
@@ -42,6 +45,25 @@ old lot and opens a new one on its own date. So after a merger or a split no
 held lot carries it. The reduction now names only the cost currency and lets
 the ledger's booking method pick, which is why the securities account has to
 be opened `"FIFO"`. That took 8 to 2.
+
+### IBKR cash assertions
+
+The first import into the ledger loaded with 27 errors, most of them IBKR
+cash. Reconciling the archive against Statement of Funds and the cash
+report found five importer defects, among them dating cash by `dateTime`
+instead of `settleDate`. Fixing them took the ledger to 10 errors and left
+no IBKR booking errors.
+
+Three of those 10 are not importer defects. IBKR reports a withholding tax
+correction months later, and settles it inside a period that is already
+closed. The importer dates it by settlement, so it lands in a period whose
+cash report was generated before it existed, and that period's assertion
+fails. The archive holds 10 such corrections, in the three newest
+statements. Each carries a `reportDate` inside the statement that holds it.
+
+The three assertions are restated by hand in the ledger, each with a
+comment. That is a hand edit inside a generated file, so a full re-import
+erases it.
 
 ### The PostFinance archive has holes
 
@@ -253,12 +275,23 @@ open on the currencies seen rather than on one.
   clearing balance means an unmatched transfer.
 - Detection key for matching: Amount, date window, counter-account hints.
 
-The residue splits in two, and only the smaller half is work. Of the 633
-clearing postings the export produces, most name an account with no importer,
-and those can only close once that account is seeded with
-`Equity:Opening-Balances`. The rest name an account that is imported, so both
-legs exist and should already cancel. They do not, and that gap is the one
-worth chasing.
+Measured over the ledger, the clearing account is far from zero. Only the
+QIF importer posts to it, 644 postings, and the side-car carries them over
+to a statement row it folds. Every other statement row books its counter
+leg to `Expenses:Uncategorized`, transfers included. So the residue splits
+four ways, in the order worth working them:
+
+- **IBKR deposits and withdrawals.** Booked to `Expenses:Uncategorized` by
+  design, as the other half of a bank transfer. Where the export holds the
+  bank leg, that leg sits in the clearing account, unmatched. The largest
+  block, and a routing change in the importer.
+- **Both accounts imported, legs do not cancel.** Both legs exist and
+  should already cancel. They do not, and nothing explains why yet.
+- **Statement rows outside the export's years.** Both legs are
+  uncategorized, so they need matching on the detection key above.
+- **An account with no importer.** Most of the export's clearing postings
+  name one. They close only once that account is seeded with
+  `Equity:Opening-Balances`. Decide per account.
 
 ## Categorization v1
 
