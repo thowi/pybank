@@ -3,14 +3,24 @@
 Accounts are configured in a TOML file passed as `--config`.
 """
 
+import functools
 import logging
+import re
 import sys
 import tomllib
 
 import beangulp
 import click
 
-from pybank.importer.beancount import dkb, ibkr, postfinance, qif, qif_sidecar, routing
+from pybank.importer.beancount import (
+    dkb,
+    ibkr,
+    postfinance,
+    qif,
+    qif_sidecar,
+    routing,
+    transfer_hints,
+)
 
 # beangulp reports progress a file at a time and leaves the line open until
 # the file is done, so a log record written meanwhile lands mid-line.
@@ -79,6 +89,29 @@ def _qif(section: dict) -> list[beangulp.Importer]:
     return [qif.Importer(targets, section.get("categories", {}))]
 
 
+def _hints(config: dict) -> list[transfer_hints.Hint]:
+    """Returns the `[[transfers]]` hints, or raises `_ConfigError`."""
+    hints = []
+    for i, hint in enumerate(config.get("transfers", [])):
+        try:
+            # Banks change the case of their own text between export formats.
+            text = re.compile(hint["text"], re.IGNORECASE)
+            hints.append(transfer_hints.Hint(hint["account"], text))
+        except (KeyError, TypeError) as err:
+            raise _ConfigError(f"[[transfers]] #{i + 1} needs account and text") from err
+        except re.error as err:
+            raise _ConfigError(f"[[transfers]] #{i + 1}: Bad text pattern: {err}") from err
+    return hints
+
+
+def _hooks(config: dict) -> list:
+    """Returns the beangulp hooks, in the order they must run."""
+    # Both hooks change only rows that are still uncategorized.
+    # A row hinted first would hide from `donate`, which then keeps the export's
+    # copy of it as a second transaction.
+    return [qif_sidecar.donate, functools.partial(transfer_hints.book, _hints(config))]
+
+
 # One builder per config section. A section that is absent contributes no
 # importer, which is how an institution gets turned off.
 _BUILDERS = {
@@ -102,7 +135,7 @@ def _load_config(path: str) -> dict:
 
 def _importers(config: dict) -> list[beangulp.Importer]:
     """Returns one importer per configured source, or raises `_ConfigError`."""
-    unknown = sorted(set(config) - set(_BUILDERS))
+    unknown = sorted(set(config) - set(_BUILDERS) - {"transfers"})
     if unknown:
         raise _ConfigError(f"Unknown config sections: {', '.join(unknown)}")
     result = []
@@ -133,7 +166,8 @@ def _cli() -> click.Group:
     @click.pass_context
     def configure(ctx: click.Context, config: str) -> None:
         try:
-            ctx.obj = beangulp.Ingest(_importers(_load_config(config)), hooks=[qif_sidecar.donate])
+            loaded = _load_config(config)
+            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=_hooks(loaded))
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 

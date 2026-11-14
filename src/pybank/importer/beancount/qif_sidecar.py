@@ -62,7 +62,7 @@ def _words(value: str | None) -> set[str]:
     return set(_WORD.findall((value or "").casefold()))
 
 
-def _open_slot(txn: data.Transaction) -> data.Posting | None:
+def open_slot(txn: data.Transaction) -> data.Posting | None:
     """Returns the posting an export can categorize, if there is one."""
     # A statement importer books one account and leaves one posting open. Any
     # other shape already says where the money went.
@@ -126,7 +126,7 @@ class _Statements:
             for position, entry in enumerate(entries):
                 if not isinstance(entry, data.Transaction):
                     continue
-                booked = _open_slot(entry)
+                booked = open_slot(entry)
                 if booked is not None:
                     key = (booked.account, booked.units)
                     self._slots.setdefault(key, []).append((entries, position))

@@ -1,9 +1,12 @@
 """All values here are invented. Never derive a fixture from a real config."""
 
+import datetime
+
 import pytest
+from beancount.core import amount, data, flags
 
 from pybank import ingest
-from pybank.importer.beancount import dkb, ibkr, postfinance, qif
+from pybank.importer.beancount import UNCATEGORIZED, dkb, ibkr, postfinance, qif
 
 FULL_CONFIG = """\
 [dkb.card]
@@ -26,6 +29,10 @@ cash = "Assets:Broker:Cash"
 
 [qif.categories]
 "Odd Label" = "Expenses:Other"
+
+[[transfers]]
+account = "Liabilities:Other:Card"
+text = "card repayment"
 """
 
 
@@ -108,6 +115,77 @@ def test_qif_targets_become_account_and_currency(tmp_path):
 
     assert importer._targets == {"Old Checking": qif.Target("Assets:Bank:Checking", "CHF")}
     assert importer._categories == {"Odd Label": "Expenses:Other"}
+
+
+def test_transfer_hints_ignore_case(tmp_path):
+    (hint,) = ingest._hints(ingest._load_config(_write(tmp_path, FULL_CONFIG)))
+
+    assert hint.account == "Liabilities:Other:Card"
+    assert hint.text.search("CARD REPAYMENT")
+
+
+def test_a_transfer_hint_missing_its_text_is_reported(tmp_path):
+    config = ingest._load_config(_write(tmp_path, '[[transfers]]\naccount = "Assets:A"\n'))
+
+    with pytest.raises(ingest._ConfigError, match="transfers"):
+        ingest._hints(config)
+
+
+def test_a_bad_transfer_pattern_is_reported(tmp_path):
+    content = '[[transfers]]\naccount = "Assets:A"\ntext = "("\n'
+
+    with pytest.raises(ingest._ConfigError, match="Bad text pattern"):
+        ingest._hints(ingest._load_config(_write(tmp_path, content)))
+
+
+# The card's statement and an old export both cover one repayment.
+# A hint classifies that repayment as a transfer.
+OVERLAP_CONFIG = """\
+[postfinance.card]
+"0000" = "Liabilities:Bank:Card"
+
+[qif.targets]
+"Old Card" = { account = "Liabilities:Bank:Card", currency = "CHF" }
+
+[[transfers]]
+account = "Liabilities:Bank:Card"
+text = "card repayment"
+"""
+
+
+def _row(contra, flag):
+    units = amount.Amount(data.Decimal("50"), "CHF")
+    postings = [
+        data.Posting("Liabilities:Bank:Card", units, None, None, None, None),
+        data.Posting(contra, None, None, None, None, None),
+    ]
+    day = datetime.date(2019, 3, 4)
+    return data.Transaction(
+        {}, day, flag, None, "Card repayment", data.EMPTY_SET, data.EMPTY_SET, postings
+    )
+
+
+def test_the_hooks_keep_one_copy_of_a_hinted_row_the_export_also_holds(tmp_path):
+    config = ingest._load_config(_write(tmp_path, OVERLAP_CONFIG))
+    card, export = ingest._importers(config)
+    groups = [
+        ("card.csv", [_row(UNCATEGORIZED, flags.FLAG_WARNING)], "Liabilities:Bank:Card", card),
+        (
+            "old.qif",
+            [_row("Assets:Receivable:Friends", flags.FLAG_OKAY)],
+            "Liabilities:Bank:Card",
+            export,
+        ),
+    ]
+
+    for hook in ingest._hooks(config):
+        groups = hook(groups, [])
+
+    statements, exported = groups[0][1], groups[1][1]
+    assert exported == []
+    (kept,) = statements
+    assert kept.postings[1].account == "Assets:Receivable:Friends"
+    assert kept.meta[qif.META_CATEGORY_SOURCE] == qif.CATEGORY_SOURCE_QIF
 
 
 def test_an_empty_config_is_an_error_rather_than_a_silent_no_op(tmp_path):
