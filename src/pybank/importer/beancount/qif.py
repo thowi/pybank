@@ -66,7 +66,9 @@ _SPLIT_MARKER = "Split"
 _INCOME_ROOT = "Income"
 _EXPENSES_ROOT = "Expenses"
 _SEP = ":"
-_NON_COMPONENT = re.compile(r"[^0-9A-Za-z]+")
+_DASHES = re.compile(r"-{2,}")
+# Starts a component whose first letter has no uppercase form.
+_COMPONENT_PREFIX = "X"
 
 # What the file starts with. Per-account QIF exports carry no account list.
 _SNIFF_BYTES = 1024
@@ -155,12 +157,16 @@ def _number(number_str: str) -> decimal.Decimal:
 
 def _component(name: str) -> str:
     """Returns one QIF category name part as a Beancount account component."""
-    # A component holds letters, digits and dashes, and starts with a capital
-    # letter or a digit, so anything else collapses into a dash.
-    cleaned = _NON_COMPONENT.sub("-", name).strip("-")
+    # A component holds letters of any script, digits and dashes, and starts
+    # with an uppercase letter or a digit, so anything else becomes a dash.
+    kept = "".join(c if c.isalpha() or c.isdecimal() else "-" for c in name)
+    cleaned = _DASHES.sub("-", kept).strip("-")
     if not cleaned:
         return "Unknown"
-    return cleaned[0].upper() + cleaned[1:]
+    first = cleaned[0].upper()
+    if not (first.isupper() or first.isdecimal()):
+        return _COMPONENT_PREFIX + cleaned
+    return first + cleaned[1:]
 
 
 def _leg_meta(leg: _Leg) -> data.Meta | None:

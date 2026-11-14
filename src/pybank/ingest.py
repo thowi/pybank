@@ -32,8 +32,8 @@ _LOG_FORMAT = "\n%(message)s"
 _ANSWERS_FILE = "transfer-pairs.toml"
 
 
-# Config that only an importer can find fault with raises the same type, so
-# one `except` covers a bad file and a file the config does not cover.
+# Config that only an importer can find fault with raises the same type. Here
+# it stops the run. Inside beangulp it skips one file and prints the message.
 _ConfigError = routing.ConfigError
 
 

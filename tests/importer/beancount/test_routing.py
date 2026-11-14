@@ -1,6 +1,7 @@
 """All values here are invented. Never derive a fixture from a real config."""
 
 import pytest
+from beangulp import exceptions
 
 from pybank.importer.beancount import routing
 
@@ -51,3 +52,13 @@ def test_an_unconfigured_identifier_is_quoted_back_for_copying():
 
     assert "card 1111" in str(err.value)
     assert "bank.checking" in str(err.value)
+
+
+def test_beangulp_reports_a_routing_error_without_a_traceback():
+    """The message is the hint to copy into the config, so it stays readable."""
+    lines = []
+    with exceptions.ExceptionsTrap(lambda text, **_: lines.append(text)):
+        _router({"9999": ONE}).account_for("card 1111")
+
+    assert any("card 1111" in line for line in lines)
+    assert not any("Traceback" in line for line in lines)

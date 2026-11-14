@@ -65,7 +65,11 @@ def _aligned_rows(filepath: str, count: int) -> list[dict[str, str]]:
     # Both readers walk the same rows in the same order, so they line up. A
     # disagreement means an export shape neither of us has seen, where no
     # metadata beats metadata taken from the wrong row.
-    _metadata, rows = csvfile.read_path_with_header(filepath)
+    first_line = csvfile.read_text(filepath).partition("\n")[0]
+    # The current Girokonto export may separate fields with `,`, and then its
+    # first line holds no `;`.
+    delimiter = ";" if ";" in first_line else ","
+    _metadata, rows = csvfile.read_path_with_header(filepath, delimiter)
     # `beancount-dkb` turns `Tagessaldo` rows into `Balance` directives.
     rows = [row for row in rows if row.get(_PURPOSE_COL) != _DAILY_BALANCE]
     if len(rows) == count:

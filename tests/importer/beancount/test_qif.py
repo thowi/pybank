@@ -267,6 +267,16 @@ def test_a_category_name_is_sanitized_into_components(importer, path):
     assert split.postings[2].account == "Expenses:Auto-Transport:Fuel"
 
 
+@pytest.mark.parametrize(
+    ("label", "component"),
+    [("Gebühren", "Gebühren"), ("ärzte", "Ärzte"), ("食品", "X食品"), ("m² & ½", "M")],
+)
+def test_a_category_keeps_letters_of_any_script(label, component):
+    assert qif._component(label) == component
+    entries, errors, _ = loader.load_string(f"2020-01-01 open Expenses:{component}\n")
+    assert entries and not errors
+
+
 def test_an_undeclared_category_falls_back_to_an_expense(importer, path):
     txn = _by_narration(importer.extract(path, []))["Bookshop"]
     assert txn.postings[1].account == "Expenses:Unheard-Of"

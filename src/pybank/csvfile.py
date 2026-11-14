@@ -18,6 +18,7 @@ def read_text(filepath: str) -> str:
 
 def read_csv_with_header(
     file: TextIO,
+    delimiter: str = ";",
 ) -> tuple[dict[str, str], list[dict[str, str]]]:
     """Processes a CSV file with a header and returns metadata and transactions.
 
@@ -28,12 +29,13 @@ def read_csv_with_header(
     CSV files.
 
     :param file: The file object to read from.
+    :param delimiter: The field separator.
     :return: The metadata as a dict and the rows as a list of dicts, each
     mapping from the columen name to the value (similar to `DictReader`).
     """
     # In case the file was read before, e.g. in the can_import pass.
     file.seek(0)
-    reader = csv.reader(file, delimiter=";", quotechar='"')
+    reader = csv.reader(file, delimiter=delimiter, quotechar='"')
     # Read metadata.
     metadata = {}
     col_names = None
@@ -72,8 +74,10 @@ def read_csv_with_header(
     return metadata, rows
 
 
-def read_path_with_header(filepath: str) -> tuple[dict[str, str], list[dict[str, str]]]:
-    return read_csv_with_header(io.StringIO(read_text(filepath)))
+def read_path_with_header(
+    filepath: str, delimiter: str = ";"
+) -> tuple[dict[str, str], list[dict[str, str]]]:
+    return read_csv_with_header(io.StringIO(read_text(filepath)), delimiter)
 
 
 def get_value(row: dict[str, str], keys: list[str]) -> str | None:

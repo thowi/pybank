@@ -223,6 +223,9 @@ class Commodities:
 
     def __init__(self, existing: Iterable[data.Directive] = ()):
         self._names: dict[str, str] = {}
+        # Every row of a renamed security asks for its name, and one warning
+        # per conid is enough.
+        self._warned: set[str] = set()
         for entry in existing:
             if not isinstance(entry, data.Commodity):
                 continue
@@ -239,7 +242,8 @@ class Commodities:
         declared = self._names.get(conid or "")
         if declared is None:
             return derived
-        if declared != derived:
+        if declared != derived and conid not in self._warned:
+            self._warned.add(conid)
             logger.warning(
                 "IBKR now calls conid %s %r, which the ledger holds as %s, so it "
                 "books as %s. To follow the rename instead, edit that commodity "
@@ -361,12 +365,20 @@ def _transfer_lots(filepath: str) -> dict[str, list[TransferLot]]:
     for section in root.iter("Transfers"):
         for element in section:
             if element.tag == "Transfer":
-                current = lots.setdefault(element.get("transactionID") or "", [])
+                transaction_id = element.get("transactionID") or ""
+                current = lots.setdefault(transaction_id, [])
             elif element.tag == "TransferLot" and current is not None:
+                cost = _decimal(element.get("cost"))
+                if not cost:
+                    logger.warning(
+                        "Transfer %s has a lot without a cost. It books at cost 0, "
+                        "so a later sale overstates the gain.",
+                        transaction_id,
+                    )
                 current.append(
                     TransferLot(
                         _decimal(element.get("quantity")),
-                        _decimal(element.get("cost")),
+                        cost,
                         element.get("currency") or "",
                         _flex_date(element.get("openDateTime")),
                     )

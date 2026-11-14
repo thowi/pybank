@@ -3,9 +3,13 @@
 from collections.abc import Mapping
 
 from beancount.core import data
+from beangulp import exceptions
 
 
-class ConfigError(Exception):
+# beangulp prints only the message of its own error type, and a traceback for
+# any other. The message quotes what to copy into the config, so it has to stay
+# readable.
+class ConfigError(exceptions.Error):
     """The configuration is missing, unreadable, or does not say enough."""
 
 

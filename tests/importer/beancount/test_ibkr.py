@@ -819,6 +819,15 @@ def test_one_commodity_may_cover_several_conids(pinned):
     assert not commodities.pinned("1000007")
 
 
+def test_a_rename_is_reported_once_per_conid(pinned, caplog):
+    commodities = ibkr.Commodities(pinned)
+
+    commodities.name("WXYZ", "1000001")
+    commodities.name("WXYZ", "1000001")
+
+    assert caplog.text.count("IBKR now calls conid 1000001") == 1
+
+
 def test_a_conid_the_ledger_never_declared_stays_unpinned():
     commodities = ibkr.Commodities([])
 
@@ -953,3 +962,15 @@ def test_a_transfer_without_lots_moves_at_its_transfer_price(importer, tmp_path)
     assert posting.units.number == _decimal(4)
     assert posting.cost.number == _decimal(30)
     assert posting.cost.date.isoformat() == "2025-06-01"
+
+
+def test_a_transferred_lot_without_a_cost_is_reported(tmp_path, caplog):
+    no_cost = FLEX_XML.replace(
+        'quantity="10" transferPrice="0" cost="250.00"', 'quantity="10" transferPrice="0"'
+    )
+    path = _write(tmp_path, "no-cost.xml", no_cost)
+
+    lots = ibkr._transfer_lots(path)
+
+    assert [lot.cost for lot in lots["X20"]] == [400, 0]
+    assert "Transfer X20 has a lot without a cost" in caplog.text

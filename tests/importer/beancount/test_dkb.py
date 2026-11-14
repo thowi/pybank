@@ -118,6 +118,12 @@ def giro_2023_path(tmp_path):
 
 
 @pytest.fixture
+def giro_comma_path(tmp_path):
+    """The current export can also separate its fields with commas."""
+    return _write(tmp_path, "giro-comma.csv", GIRO_2023_CSV.replace('";"', '","'), "utf-8-sig")
+
+
+@pytest.fixture
 def card_path(tmp_path):
     return _write(tmp_path, "card.csv", CARD_CSV)
 
@@ -276,7 +282,7 @@ def test_the_card_receipt_date_is_kept(card, card_path):
     assert txn.meta["receipt-date"] == "31.12.2019"
 
 
-@pytest.mark.parametrize("fixture", ["legacy_path", "giro_2023_path"])
+@pytest.mark.parametrize("fixture", ["legacy_path", "giro_2023_path", "giro_comma_path"])
 def test_the_counterparty_account_is_kept(checking, fixture, request):
     """Both generations name it, under different column names."""
     txns = _txns(checking.extract(request.getfixturevalue(fixture), []))
