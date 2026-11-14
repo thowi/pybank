@@ -31,7 +31,7 @@ def read_csv_with_header(
     :param file: The file object to read from.
     :param delimiter: The field separator.
     :return: The metadata as a dict and the rows as a list of dicts, each
-    mapping from the columen name to the value (similar to `DictReader`).
+    mapping from the column name to the value (similar to `DictReader`).
     """
     # In case the file was read before, e.g. in the can_import pass.
     file.seek(0)

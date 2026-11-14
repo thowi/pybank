@@ -3,7 +3,7 @@ repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.16.0
     hooks:
-      # Formats in place, so a commit picks up the reformatted files.
+      # Formats in place and fails the commit, so re-stage the reformatted files.
       - id: ruff-format
       # Reports only. Fixing is a deliberate act, not a commit side effect.
       - id: ruff-check

@@ -7,6 +7,7 @@ import pytest
 from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
+from beangulp import extract
 
 from pybank.importer.beancount import postfinance, routing
 
@@ -14,7 +15,7 @@ CHECKING = "Assets:PostFinance:Checking"
 CARD = "Liabilities:PostFinance:Visa:Person"
 CARD_OTHER = "Liabilities:PostFinance:Visa:Other"
 
-# Current export: UTF-8 BOM, German dates, no balance column.
+# Checking export: UTF-8 BOM, German dates, no balance column.
 CHECKING_CSV = """\
 Datum von:;="01.01.2026"
 Datum bis:;="31.01.2026"
@@ -31,7 +32,7 @@ Disclaimer:
 Some trailing prose that is not a transaction.
 """
 
-# Older export: cp1252, ISO dates, running balance.
+# Checking export: cp1252, ISO dates, running balance.
 CHECKING_WITH_BALANCE_CSV = """\
 Datum von:;2025-11-01
 Datum bis:;2025-11-30
@@ -55,7 +56,7 @@ Rechnungsperiode;Buchungsdatum;Einkaufsdatum;Buchungsdetails;Gutschrift in CHF;L
 08.01.2026 - 07.02.2026;20.01.2026;19.01.2026;RETURN BOOKSHOP;18.00;;;Shopping
 """
 
-# Current checking export, the one that carries Label and Kategorie.
+# Checking export that carries Label and Kategorie.
 CHECKING_LABELLED_CSV = """\
 Datum von:;="01.03.2026"
 Datum bis:;="31.03.2026"
@@ -66,15 +67,15 @@ Datum;Bewegungstyp;Avisierungstext;Gutschrift in CHF;Lastschrift in CHF;Label;Ka
 04.03.2026;Zahlung;GROCER LTD;;12.00;Weekly;Groceries
 """
 
-# By far the most common card export: cp1252, ISO dates, and a header that
-# declares a Betrag column only the Total row fills in.
+# Card export: cp1252, ISO dates, and a header that declares a Betrag column
+# only the Total row fills in.
 CARD_TERSE_CSV = """\
 Kartenkonto:;0000 0000 0000 0000
 Karte:;XXXXXXXXXXXX0000
 Karteninhaber:;A Person
 
 Datum;Bezeichnung;Gutschrift in CHF;Lastschrift in CHF;Betrag in CHF
-2019-02-14;BOOKSHOP;;18.00
+2019-02-14;BÜCHER;;18.00
 2019-02-16;RETURN BOOKSHOP;18.00;
 2019-02-16;Total;;;-18.00
 
@@ -224,6 +225,21 @@ def test_extract_skips_the_total_row(checking, balance_path):
     assert len(_txns(checking.extract(balance_path, []))) == 2
 
 
+def test_a_newest_first_statement_asserts_its_newest_saldo(tmp_path, checking):
+    newest_first = CHECKING_WITH_BALANCE_CSV.replace(
+        "2025-11-03;GROCER LTD;;20.00;2025-11-03;980.00\n"
+        "2025-11-10;REFUND;30.00;;2025-11-10;1010.00\n",
+        "2025-11-10;REFUND;30.00;;2025-11-10;1010.00\n"
+        "2025-11-03;GROCER LTD;;20.00;2025-11-03;980.00\n",
+    )
+    path = _write(tmp_path, "newest_first.csv", newest_first, "cp1252")
+
+    (balance,) = _balances(checking.extract(path, []))
+
+    assert balance.date == datetime.date(2025, 11, 11)
+    assert balance.amount.number == decimal.Decimal("1010.00")
+
+
 def test_balance_assertion_is_dated_the_following_day(checking, balance_path):
     (balance,) = _balances(checking.extract(balance_path, []))
 
@@ -232,6 +248,21 @@ def test_balance_assertion_is_dated_the_following_day(checking, balance_path):
     )
     assert balance.account == CHECKING
     assert balance.amount.number == decimal.Decimal("1010.00")
+
+
+def test_a_one_day_statement_newest_first_asserts_its_newest_saldo(tmp_path, checking):
+    """With one date, the running balance tells the order of the rows."""
+    newest_first = CHECKING_WITH_BALANCE_CSV.replace(
+        "2025-11-03;GROCER LTD;;20.00;2025-11-03;980.00\n"
+        "2025-11-10;REFUND;30.00;;2025-11-10;1010.00\n",
+        "2025-11-10;GROCER LTD;;20.00;2025-11-10;960.00\n"
+        "2025-11-10;REFUND;30.00;;2025-11-10;980.00\n",
+    )
+    path = _write(tmp_path, "newest_first.csv", newest_first, "cp1252")
+
+    (balance,) = _balances(checking.extract(path, []))
+
+    assert balance.amount.number == decimal.Decimal("960.00")
 
 
 def test_no_balance_column_yields_no_assertion(checking, card, checking_path, card_path):
@@ -295,7 +326,7 @@ def test_terse_card_variant(tmp_path, card):
     assert card.identify(path)
 
     txns = _txns(card.extract(path, []))
-    assert [t.narration for t in txns] == ["Bookshop", "Return Bookshop"]
+    assert [t.narration for t in txns] == ["Bücher", "Return Bookshop"]
     assert [t.postings[0].units.number for t in txns] == [
         decimal.Decimal("-18.00"),
         decimal.Decimal("18.00"),
@@ -381,9 +412,10 @@ def test_bank_category_does_not_affect_the_import_id(tmp_path, checking):
     assert first.meta["import-id"] == second.meta["import-id"]
 
 
-def test_reimport_is_idempotent(checking, checking_path):
-    existing = _txns(checking.extract(checking_path, []))
-    again = checking.extract(checking_path, existing)
+def test_reimport_is_idempotent(checking, balance_path):
+    existing = checking.extract(balance_path, [])
+    again = checking.extract(balance_path, existing)
 
     checking.deduplicate(again, existing)
-    assert all("__duplicate__" in t.meta for t in _txns(again))
+    assert _balances(again)
+    assert all(extract.DUPLICATE in e.meta for e in again)

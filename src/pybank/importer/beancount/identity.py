@@ -69,15 +69,20 @@ def import_ids(rows: Sequence[IdFields]) -> list[str]:
 def mark_duplicates(entries: data.Entries, existing: data.Entries) -> None:
     """Marks entries already in the ledger, in place, and warns on near misses.
 
-    An entry whose `import-id` is already present is marked a duplicate. A
-    near miss only warns, since it may well be a separate transaction.
+    An entry whose `import-id` is already present is marked a duplicate, and
+    so is a balance the ledger already asserts. A near miss only warns, since
+    it may well be a separate transaction.
     """
     if not existing:
         return
     known = {entry.meta[META_KEY] for entry in existing if entry.meta and META_KEY in entry.meta}
+    # Balances carry no import-id. A re-import would assert the same one again.
+    known_balances = {_balance_key(entry) for entry in existing if isinstance(entry, data.Balance)}
     fresh = []
     for entry in entries:
-        if entry.meta.get(META_KEY) in known:
+        if entry.meta.get(META_KEY) in known or (
+            isinstance(entry, data.Balance) and _balance_key(entry) in known_balances
+        ):
             entry.meta[extract.DUPLICATE] = True
         else:
             fresh.append(entry)
@@ -85,6 +90,7 @@ def mark_duplicates(entries: data.Entries, existing: data.Entries) -> None:
     for entry, match in similar.find_similar_entries(
         fresh,
         sorted(existing, key=lambda e: e.date),
+        cmp=_similar,
         window_days=_SIMILAR_WINDOW_DAYS,
     ):
         logger.warning(
@@ -95,3 +101,18 @@ def mark_duplicates(entries: data.Entries, existing: data.Entries) -> None:
             match.date,
             match.narration,
         )
+
+
+def _balance_key(entry: data.Balance) -> tuple:
+    return entry.date, entry.account, entry.amount
+
+
+_heuristic = similar.heuristic_comparator()
+
+
+def _similar(entry: data.Directive, existing: data.Directive) -> bool:
+    # A fresh entry's open contra leg would fail the heuristic's account-subset
+    # check against a categorized twin, so only its booked legs are compared.
+    if isinstance(entry, data.Transaction):
+        entry = entry._replace(postings=[p for p in entry.postings if p.units is not None])
+    return _heuristic(entry, existing)

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "pybank"
 version = "0.1.0"
-description = "Download and convert bank statements"
+description = "Download bank statements and import them into Beancount"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{name = "Thomas Wittek", email = "thomas@wittek.me"}]
@@ -15,7 +15,7 @@ dependencies = [
     "beancount>=3.0.0",
     "beancount-dkb>=1.10.0",
     "beangulp>=0.2.0",
-    "charset-normalizer>=3.4.3",
+    "click>=8.1",
     "ibflex[web]>=1.1",
     "pydantic>=2.8.0",
     "selenium>=4.35.0",

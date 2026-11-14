@@ -7,12 +7,9 @@ from beangulp import extract
 from pybank.importer.beancount import identity
 
 
-def _txn(day: int, narration: str, number: str, import_id: str | None = None):
-    meta = {}
-    if import_id is not None:
-        meta[identity.META_KEY] = import_id
+def _txn(day: int, narration: str, number: str, import_id: str):
     return data.Transaction(
-        meta,
+        {identity.META_KEY: import_id},
         datetime.date(2026, 3, day),
         "*",
         None,
@@ -71,21 +68,22 @@ def test_differing_dates_yield_different_ids():
 
 def test_identical_rows_get_increasing_occurrences():
     fields = _fields(amount="-4.5", hashed=("acct", "Coffee"))
-    first, second, third = identity.import_ids([fields, fields, fields])
-    assert [i.rsplit(":", 1)[1] for i in (first, second, third)] == [
-        "0",
-        "1",
-        "2",
-    ]
-    assert len({first, second, third}) == 3
+    ids = identity.import_ids([fields, fields, fields])
+    assert [i.rsplit(":", 1)[1] for i in ids] == ["0", "1", "2"]
+    assert len(set(ids)) == 3
 
 
 def test_a_colliding_digest_does_not_merge_rows_of_other_dates():
     """Date and amount are part of the key, not just the digest."""
     same_digest = ("acct", "Memo")
-    (a,) = identity.import_ids([_fields(date="2026-03-01", hashed=same_digest)])
-    (b,) = identity.import_ids([_fields(date="2026-09-09", hashed=same_digest)])
+    a, b = identity.import_ids(
+        [
+            _fields(date="2026-03-01", hashed=same_digest),
+            _fields(date="2026-09-09", hashed=same_digest),
+        ]
+    )
     assert a.rsplit(":", 1)[0] != b.rsplit(":", 1)[0]
+    assert [i.rsplit(":", 1)[1] for i in (a, b)] == ["0", "0"]
 
 
 def test_field_separator_is_unambiguous():
@@ -121,3 +119,43 @@ def test_empty_ledger_marks_nothing():
     fresh = _txn(1, "Groceries", "-20.00", "v1:2026-03-01:-20:deadbeefcafe:0")
     identity.mark_duplicates([fresh], [])
     assert extract.DUPLICATE not in fresh.meta
+
+
+def test_a_categorized_twin_still_warns(caplog):
+    """The fresh entry's open contra leg must not hide a categorized match."""
+    categorized = _txn(1, "Supermarket", "-20.00", "v1:2026-03-01:-20:deadbeefcafe:0")
+    categorized.postings[1] = data.Posting(
+        "Expenses:Food",
+        amount.Amount(decimal.Decimal("20.00"), "CHF"),
+        None,
+        None,
+        None,
+        None,
+    )
+    reissued = _txn(1, "Supermarket Zurich", "-20.00", "v1:2026-03-01:-20:99999999aaaa:0")
+
+    identity.mark_duplicates([reissued], [categorized])
+
+    assert "looks like" in caplog.text
+
+
+def _balance(number: str):
+    return data.Balance(
+        {},
+        datetime.date(2026, 3, 2),
+        "Assets:Bank",
+        amount.Amount(decimal.Decimal(number), "CHF"),
+        None,
+        None,
+    )
+
+
+def test_a_balance_the_ledger_already_asserts_is_a_duplicate():
+    asserted = _balance("100.00")
+    again = _balance("100")
+    other = _balance("90.00")
+
+    identity.mark_duplicates([again, other], [asserted])
+
+    assert again.meta[extract.DUPLICATE] is True
+    assert extract.DUPLICATE not in other.meta

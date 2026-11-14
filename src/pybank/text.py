@@ -7,7 +7,8 @@ WHITESPACE_PATTERN = re.compile(r" +")
 def normalize_text(text: str | None) -> str | None:
     """Returns a normalized version of the input text.
 
-    Removes double spaces and "Capitalizes All Words" if they are "ALL CAPS".
+    Removes double spaces, strips each line, and "Capitalizes All Words" if
+    they are "ALL CAPS".
 
     Part of the import-id contract, see docs/importing.md: Changing this
     changes every hash and needs a version bump.

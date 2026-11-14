@@ -21,7 +21,7 @@ def parse_decimal_number(number_string: str, lang: str) -> float:
 
     :param number_string: The decimal number as a string.
     :param lang: The locale of the format.
-    :param: The parsed number.
+    :return: The parsed number.
     :raises ValueError: If the string is not a valid decimal number.
     """
     orig_locale = locale.getlocale(locale.LC_ALL)
@@ -61,34 +61,12 @@ def find_element_by_tag_name_and_text(parent: WebElement, tag_name: str, text: s
     return parent.find_element_by_xpath(f".//{tag_name}[normalize-space(text()) = '{text}']")
 
 
-def find_elements_by_tag_name_and_text(
-    parent: WebElement, tag_name: str, text: str
-) -> list[WebElement]:
-    return parent.find_elements_by_xpath(f".//{tag_name}[normalize-space(text()) = '{text}']")
-
-
 def find_element_by_text(parent: WebElement, text: str) -> WebElement:
     return find_element_by_tag_name_and_text(parent, "*", text)
 
 
-def find_elements_by_text(parent: WebElement, text: str) -> list[WebElement]:
-    return find_elements_by_tag_name_and_text(parent, "*", text)
-
-
-def get_first_displayed(elements: list[WebElement]) -> WebElement | None:
-    for e in elements:
-        if e.is_displayed():
-            return e
-
-
 def find_button_by_text(parent: WebElement, text: str) -> WebElement:
     return find_element_by_tag_name_and_text(parent, "button", text)
-
-
-def find_input_button_by_text(parent: WebElement, text: str) -> WebElement:
-    return parent.find_element_by_xpath(
-        f".//input[@type = 'button' and normalize-space(@value) = '{text}']"
-    )
 
 
 def get_element_or_none(

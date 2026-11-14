@@ -158,7 +158,7 @@ def serialize_transaction(transaction: model.Transaction) -> str:
     elif isinstance(transaction, model.InvestmentMiscIncome):
         return serialize_investment_transaction(transaction, INVESTMENT_ACTION_TYPES["misc income"])
     else:
-        raise SerializationError("Unknown transaction type: " + transaction)
+        raise SerializationError(f"Unknown transaction type: {type(transaction).__name__}")
 
 
 def serialize_payment(payment: model.Payment) -> str:
@@ -183,9 +183,7 @@ def serialize_payment(payment: model.Payment) -> str:
     return "\n".join(fields)
 
 
-def serialize_investment_transaction(
-    transaction: model.InvestmentSecurityTransaction, action: str
-) -> str:
+def serialize_investment_transaction(transaction: model.Transaction, action: str) -> str:
     """Serializes a investment transaction to the QIF format.
 
     :param transaction: The investment transaction to serialize.

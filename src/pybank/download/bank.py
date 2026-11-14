@@ -65,11 +65,11 @@ class Bank:
     def _get_cookies_filename(self, username):
         return self.__class__.__name__ + "_" + username + ".cookies"
 
-    def save_cookies(self, browser: selenium.webdriver, username: str) -> None:
+    def save_cookies(self, browser: selenium.webdriver.Remote, username: str) -> None:
         """Saves the seesion cookies into a file.
 
         :param browser: The browser instance.
-        :param str: The username that owns the session.
+        :param username: The username that owns the session.
         """
         cookies_filename = self._get_cookies_filename(username)
         logger.info(f"Saving cookies to {cookies_filename}...")
@@ -78,15 +78,16 @@ class Bank:
 
     def ask_and_restore_cookies(
         self,
-        browser: selenium.webdriver,
+        browser: selenium.webdriver.Remote,
         username: str,
         timeout_secs: int | None = None,
     ) -> bool:
         """Checks if cookies were found for a session and asks to restore them.
 
         :param browser: The browser instance.
-        :param str: The username that owned the session.
-        :param str: The timeout in seconds after which cookies are invalid.
+        :param username: The username that owned the session.
+        :param timeout_secs: The timeout in seconds after which cookies are
+            invalid.
         :return: True if any cookies were restored. False otherwise.
         """
         cookies_filename = self._get_cookies_filename(username)
@@ -121,7 +122,7 @@ class Bank:
     def delete_cookies(self, username: str) -> None:
         """Deletes any cookies for a session.
 
-        :param str: The username that owned the session.
+        :param username: The username that owned the session.
         """
         cookies_filename = self._get_cookies_filename(username)
         logger.info(f"Deleting cookies in {cookies_filename}...")

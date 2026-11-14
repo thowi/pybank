@@ -1,6 +1,6 @@
 """PostFinance CSV importers for beangulp.
 
-The archive holds six header variants in two encodings, so columns are
+Exports differ in their header columns and their encoding, so columns are
 matched by name and the encoding is sniffed.
 
 Only the variants carrying a `Saldo` column yield a balance assertion.
@@ -182,7 +182,7 @@ class _PostFinanceImporter(beangulp.Importer):
         if balance is not None:
             entries.append(data.Balance(meta.copy(), *balance, None, None))
         else:
-            logger.info("No balance column in %s.", os.path.basename(filepath))
+            logger.info("No row carries a Saldo in %s.", os.path.basename(filepath))
         return entries
 
     def deduplicate(self, entries: data.Entries, existing: data.Entries) -> None:
@@ -218,6 +218,12 @@ class _PostFinanceImporter(beangulp.Importer):
             return None
         # Statements come oldest or newest first. Walk from the newest end.
         oldest_first = parsed[0].date <= parsed[-1].date
+        if parsed[0].date == parsed[-1].date and len(parsed) > 1:
+            # One date gives no order, the running balance does: Oldest first,
+            # the second Saldo is the first plus the second row's amount.
+            first, second = parsed[0].balance, parsed[1].balance
+            if first is not None and second is not None:
+                oldest_first = second.number == first.number + parsed[1].units.number
         for row in reversed(parsed) if oldest_first else parsed:
             if row.balance is not None:
                 return (

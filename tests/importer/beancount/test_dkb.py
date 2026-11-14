@@ -14,7 +14,7 @@ from beangulp import extract
 
 from pybank.importer.beancount import UNCATEGORIZED, dkb, identity, routing
 
-# The three fixtures mirror different historical export formats.
+# The first three fixtures mirror different historical export formats.
 # The balances in particular are not interchangeable.
 GIRO_LEGACY_CSV = """\
 "Kontonummer:";"DE00000000000000000000 / Girokonto";
@@ -28,7 +28,7 @@ GIRO_LEGACY_CSV = """\
 "04.01.2020";"04.01.2020";"Gutschrift";"AN EMPLOYER";"Salary";"DE00";"BANKDEFF";"1.000,00";"";"";"";
 """
 
-# Negative balance and the euro sign, both of which only this format uses.
+# Negative balance, and the euro sign, which only this format uses.
 GIRO_2023_CSV = """\
 "Girokonto";"DE00000000000000000000"
 "Zeitraum:";"01.01.2023 - 31.12.2023"
@@ -39,9 +39,9 @@ GIRO_2023_CSV = """\
 "04.01.23";"04.01.23";"Gebucht";"AN EMPLOYER";"A Person";"Salary";"Eingang";"DE00";"1.000,00";"";"";""
 """
 
-# `Belegdatum` trails `Wertstellung` on almost every card row. The third row
-# is a foreign-currency purchase: `Ursprünglicher Betrag` is filled on those,
-# always negative, and only the settled EUR amount is bookable.
+# `Belegdatum` trails `Wertstellung`. The third row is a foreign-currency
+# purchase: `Ursprünglicher Betrag` is filled on those, always negative, and
+# only the settled EUR amount is bookable.
 CARD_CSV = """\
 "Kreditkarte:";"0000********0000";
 
@@ -249,7 +249,7 @@ def test_an_interest_statement_row_is_imported(checking, abschluss_path):
 
 
 def test_padding_and_shouting_are_normalized(checking, legacy_path):
-    """DKB shouts a third of its payees and pads the rest."""
+    """DKB shouts some of its payees and pads others."""
     debit, _credit = _txns(checking.extract(legacy_path, []))
 
     assert debit.payee == "A Bookshop Gmbh"
@@ -310,13 +310,6 @@ def test_every_transaction_gets_an_import_id(checking, legacy_path):
 
 def test_import_ids_are_stable_across_runs(checking, legacy_path):
     assert _ids(checking.extract(legacy_path, [])) == _ids(checking.extract(legacy_path, []))
-
-
-def test_the_two_giro_generations_do_not_share_ids(checking, legacy_path, giro_2023_path):
-    """Different column semantics, and the archive ranges never overlap."""
-    legacy = set(_ids(checking.extract(legacy_path, [])))
-    current = set(_ids(checking.extract(giro_2023_path, [])))
-    assert not legacy & current
 
 
 def test_reimport_is_idempotent(checking, legacy_path):

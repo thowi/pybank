@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from pybank import model, qif
 
 
@@ -33,3 +35,9 @@ def test_serialize_account():
 
     account = model.Account(name="Test", transactions=transactions)
     assert "Memo1" in qif.serialize_account(account)
+
+
+def test_unknown_transaction_type_raises_serialization_error():
+    transaction = model.Transaction(date=datetime.datetime(2020, 1, 2), amount=1)
+    with pytest.raises(qif.SerializationError, match="Transaction"):
+        qif.serialize_transaction(transaction)

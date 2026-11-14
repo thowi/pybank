@@ -2,7 +2,7 @@
 
 import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class Account(BaseModel):
@@ -19,7 +19,7 @@ class Account(BaseModel):
     currency: str | None = None
     balance: float | None = None
     balance_date: datetime.datetime | None = None
-    transactions: tuple["Transaction", ...] = Field(default_factory=tuple)
+    transactions: tuple["Transaction", ...] = ()
 
     def __str__(self) -> str:
         repr = [self.name]
@@ -133,31 +133,31 @@ class InvestmentDividend(Transaction):
 class InvestmentInterestExpense(Transaction):
     """An interest expense.
 
-    :param date: The date of the dividend.
-    :param amount: The total amount of the dividend.
-    :param memo: The memo of the dividend, if any.
-    :param category: The category of the dividend, if any.
+    :param date: The date of the interest expense.
+    :param amount: The total amount of the interest expense.
+    :param memo: The memo of the interest expense, if any.
+    :param category: The category of the interest expense, if any.
     """
 
 
 class InvestmentInterestIncome(Transaction):
     """An interest income.
 
-    :param date: The date of the dividend.
-    :param amount: The total amount of the dividend.
-    :param memo: The memo of the dividend, if any.
-    :param category: The category of the dividend, if any.
+    :param date: The date of the interest income.
+    :param amount: The total amount of the interest income.
+    :param memo: The memo of the interest income, if any.
+    :param category: The category of the interest income, if any.
     """
 
 
 class InvestmentMiscExpense(Transaction):
     """A misc expense.
 
-    :param date: The date of the dividend.
+    :param date: The date of the expense.
     :param amount: The total amount of the expense.
     :param symbol: The symbol of the security of the expense.
     :param memo: The memo of the expense, if any.
-    :param category: The category of the dividend, if any.
+    :param category: The category of the expense, if any.
     """
 
     symbol: str | None = None
@@ -166,11 +166,11 @@ class InvestmentMiscExpense(Transaction):
 class InvestmentMiscIncome(Transaction):
     """A misc income.
 
-    :param date: The date of the dividend.
-    :param amount: The total amount of the dividend.
+    :param date: The date of the income.
+    :param amount: The total amount of the income.
     :param symbol: The symbol of the security of the income.
-    :param memo: The memo of the dividend, if any.
-    :param category: The category of the dividend, if any.
+    :param memo: The memo of the income, if any.
+    :param category: The category of the income, if any.
     """
 
     symbol: str | None = None
