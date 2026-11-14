@@ -280,6 +280,33 @@ REORG_PREAMBLE = (
 """
 )
 
+# Withholding tax reclassified long after the dividend: Both corrections settle
+# before the statement starts. One was reported inside it, the other carries an
+# equally old report date. Formatted with the statement's first day.
+CORRECTION_XML = """\
+<FlexQueryResponse queryName="pybank" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="{from_date}" toDate="20251231"
+ period="" whenGenerated="20260102;080000">
+<CashTransactions>
+<CashTransaction accountId="U0000000" currency="USD" assetCategory="STK"
+ type="Withholding Tax" amount="-1.50" dateTime="20250610;000000"
+ settleDate="20250612" reportDate="20250610" transactionID="X60"
+ description="ABCD CASH DIVIDEND USD 1.00 PER SHARE" />
+<CashTransaction accountId="U0000000" currency="USD" assetCategory="STK"
+ type="Withholding Tax" amount="0.75" dateTime="20240401;000000"
+ settleDate="20240401" reportDate="20250305" transactionID="X61"
+ description="ABCD CASH DIVIDEND - US TAX RECLASSIFIED" />
+<CashTransaction accountId="U0000000" currency="USD" assetCategory="STK"
+ type="Withholding Tax" amount="0.25" dateTime="20240401;000000"
+ settleDate="20240401" reportDate="20240401" transactionID="X62"
+ description="ABCD CASH DIVIDEND - US TAX RECLASSIFIED" />
+</CashTransactions>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
+"""
+
 OPTION = "ABCD240719C00150000"
 SECURITIES = "Assets:IBKR:Securities"
 
@@ -308,6 +335,12 @@ def entries(importer, flex_path):
 @pytest.fixture
 def reorg_path(tmp_path):
     return _write(tmp_path, "reorg.xml", REORG_XML)
+
+
+@pytest.fixture
+def corrections(importer, tmp_path):
+    path = _write(tmp_path, "corrections.xml", CORRECTION_XML.format(from_date="20250101"))
+    return importer.extract(path, [])
 
 
 @pytest.fixture
@@ -588,6 +621,41 @@ def test_a_deposit_stays_uncategorized(entries):
     assert txn.flag == flags.FLAG_WARNING
     (contra,) = _postings(txn, UNCATEGORIZED)
     assert contra.units is None
+
+
+def test_a_cash_transaction_books_on_its_settle_date(corrections):
+    txn = _by_id(corrections, "X60")
+
+    assert txn.date.isoformat() == "2025-06-12"
+    assert ibkr.META_SETTLE_DATE not in txn.meta
+
+
+def test_a_backdated_correction_books_when_it_was_reported(corrections):
+    """The earlier cash report never counted it, so neither may the ledger."""
+    txn = _by_id(corrections, "X61")
+
+    assert txn.date.isoformat() == "2025-03-05"
+    assert txn.meta[ibkr.META_SETTLE_DATE].isoformat() == "2024-04-01"
+
+
+def test_a_correction_reported_before_the_statement_books_on_its_first_day(corrections):
+    txn = _by_id(corrections, "X62")
+
+    assert txn.date.isoformat() == "2025-01-01"
+    assert txn.meta[ibkr.META_SETTLE_DATE].isoformat() == "2024-04-01"
+
+
+def test_a_backdated_correction_keeps_the_id_of_its_settle_date(importer, tmp_path, corrections):
+    """A statement reaching back to the settle date books it there, same id."""
+    path = _write(tmp_path, "wide.xml", CORRECTION_XML.format(from_date="20240101"))
+    wide = importer.extract(path, [])
+
+    for transaction_id in ("X61", "X62"):
+        assert _by_id(wide, transaction_id).date.isoformat() == "2024-04-01"
+        assert (
+            _by_id(wide, transaction_id).meta[identity.META_KEY]
+            == _by_id(corrections, transaction_id).meta[identity.META_KEY]
+        )
 
 
 # Balances and identity.

@@ -57,6 +57,10 @@ META_COMMODITY_CONIDS = "ibkr-conid"
 # position it touched, and this is what says those rows were the same event.
 META_ACTION_ID = "ibkr-action-id"
 
+# For a cash transaction that was booked on another day than it settled.
+# See `Importer._cash_transaction`.
+META_SETTLE_DATE = "settle-date"
+
 # The fake currency IBKR uses for the base-currency roll-up row in the cash
 # report. Not a balance of anything the ledger holds.
 _BASE_SUMMARY = "BASE_SUMMARY"
@@ -467,7 +471,7 @@ class Importer(beangulp.Importer):
         _log_securities(statement, commodities)
         _log_unread(statement)
 
-        built = [self._cash_transaction(t) for t in statement.CashTransactions]
+        built = [self._cash_transaction(t, statement.fromDate) for t in statement.CashTransactions]
         # Corporate actions and trades can be be on the same day, but CAs create
         # the position and must be first in the ledger.
         built += [
@@ -498,21 +502,36 @@ class Importer(beangulp.Importer):
         entries.extend(self._balances(statement, meta))
         return data.sorted(entries)
 
-    def _cash_transaction(self, txn: Types.CashTransaction) -> _Built:
+    def _cash_transaction(
+        self, txn: Types.CashTransaction, from_date: datetime.date | None
+    ) -> _Built:
         # `settleDate` is the day the cash moved, which is what the cash report
         # counts, so it is what an assertion has to agree with. `dateTime` is
         # when IBKR recorded the item, and a withholding tax, a fee or a
         # dividend can settle days later. Dating by `dateTime` puts those in
         # the wrong period, and across a year boundary the assertion misses.
-        date = txn.settleDate or txn.reportDate or (txn.dateTime and txn.dateTime.date())
-        if date is None or txn.amount is None or not txn.currency:
+        settled = txn.settleDate or txn.reportDate or (txn.dateTime and txn.dateTime.date())
+        if settled is None or txn.amount is None or not txn.currency:
             logger.warning("Skipping a cash transaction without a date, amount or currency.")
             return None
 
+        # A correction (e.g. withholding tax) can be in a newer statement, but
+        # backdated to the range of an older statement.
+        # The earlier statement's cash report never counted it.
+        # To avoid balance violation, we book such corrections on the report
+        # date (new statement), not settled date (old statement), and no earlier
+        # than the statement's first day.
+        # The id keeps the settle date, so overlapping statements dedupe.
+        date = settled
+        if from_date and settled < from_date:
+            date = max(txn.reportDate or from_date, from_date)
+
         key = txn.transactionID or f"{txn.type}:{txn.description}"
-        fields = _id_fields(txn.accountId, "cash", key, date, txn.amount)
+        fields = _id_fields(txn.accountId, "cash", key, settled, txn.amount)
 
         def build(meta: data.Meta) -> data.Transaction:
+            if date != settled:
+                meta[META_SETTLE_DATE] = settled
             if txn.transactionID:
                 meta[META_TRANSACTION_ID] = txn.transactionID
             if txn.conid:
