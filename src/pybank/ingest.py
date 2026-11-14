@@ -5,6 +5,7 @@ Accounts are configured in a TOML file passed as `--config`.
 
 import functools
 import logging
+import os
 import re
 import sys
 import tomllib
@@ -20,11 +21,15 @@ from pybank.importer.beancount import (
     qif_sidecar,
     routing,
     transfer_hints,
+    transfer_matcher,
 )
 
 # beangulp reports progress a file at a time and leaves the line open until
 # the file is done, so a log record written meanwhile lands mid-line.
 _LOG_FORMAT = "\n%(message)s"
+
+# The answers on transfer pairs, kept next to the config file.
+_ANSWERS_FILE = "transfer-pairs.toml"
 
 
 # Config that only an importer can find fault with raises the same type, so
@@ -104,12 +109,16 @@ def _hints(config: dict) -> list[transfer_hints.Hint]:
     return hints
 
 
-def _hooks(config: dict) -> list:
+def _hooks(config: dict, answers: transfer_matcher.Answers) -> list:
     """Returns the beangulp hooks, in the order they must run."""
-    # Both hooks change only rows that are still uncategorized.
+    # `donate` and the hints change only rows that are still uncategorized.
     # A row hinted first would hide from `donate`, which then keeps the export's
     # copy of it as a second transaction.
-    return [qif_sidecar.donate, functools.partial(transfer_hints.book, _hints(config))]
+    return [
+        qif_sidecar.donate,
+        functools.partial(transfer_hints.book, _hints(config)),
+        functools.partial(transfer_matcher.book, answers),
+    ]
 
 
 # One builder per config section. A section that is absent contributes no
@@ -167,7 +176,10 @@ def _cli() -> click.Group:
     def configure(ctx: click.Context, config: str) -> None:
         try:
             loaded = _load_config(config)
-            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=_hooks(loaded))
+            answers = transfer_matcher.load_answers(
+                os.path.join(os.path.dirname(config), _ANSWERS_FILE)
+            )
+            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=_hooks(loaded, answers))
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 

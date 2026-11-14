@@ -62,14 +62,16 @@ def _words(value: str | None) -> set[str]:
     return set(_WORD.findall((value or "").casefold()))
 
 
-def open_slot(txn: data.Transaction) -> data.Posting | None:
-    """Returns the posting an export can categorize, if there is one."""
+def open_slot(
+    txn: data.Transaction, open_accounts: tuple[data.Account, ...] = (UNCATEGORIZED,)
+) -> data.Posting | None:
+    """Returns the booked posting, if the other one is in `open_accounts`."""
     # A statement importer books one account and leaves one posting open. Any
     # other shape already says where the money went.
     if len(txn.postings) != 2:
         return None
     booked, contra = txn.postings
-    if contra.account != UNCATEGORIZED or booked.units is None:
+    if contra.account not in open_accounts or booked.units is None:
         return None
     return booked
 
