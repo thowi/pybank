@@ -61,9 +61,11 @@ cash report was generated before it existed, and that period's assertion
 fails. The archive holds 10 such corrections, in the three newest
 statements. Each carries a `reportDate` inside the statement that holds it.
 
-The three assertions are restated by hand in the ledger, each with a
-comment. That is a hand edit inside a generated file, so a full re-import
-erases it.
+The importer now books such a correction on its `reportDate`, and no
+earlier than the first day of the statement that holds it, with the
+settle date kept as `settle-date`. The import-id stays on the settle date.
+A full rebuild moved the 10 corrections and put the three assertions back
+at the cash report values, with no hand edits left in the year files.
 
 ### The PostFinance archive has holes
 
