@@ -33,7 +33,7 @@ import beangulp
 from beancount.core import amount, data, flags
 
 from ... import csvfile, text
-from . import IN_TRANSIT, UNCATEGORIZED, identity
+from . import IN_TRANSIT, OPENING_BALANCES, UNCATEGORIZED, identity
 
 # Records under `!Account` declare accounts while AutoSwitch is on. Once it is
 # cleared, a one-record `!Account` section selects the account that the
@@ -344,7 +344,7 @@ class Importer(beangulp.Importer):
         for leg in row.legs:
             postings.append(
                 data.Posting(
-                    self._counter_account(leg, income),
+                    self._counter_account(leg, income, row.source),
                     amount.Amount(-leg.number, target.currency),
                     None,
                     None,
@@ -367,11 +367,14 @@ class Importer(beangulp.Importer):
             postings,
         )
 
-    def _counter_account(self, leg: _Leg, income: Mapping[str, bool]) -> data.Account:
+    def _counter_account(self, leg: _Leg, income: Mapping[str, bool], source: str) -> data.Account:
         if not leg.label:
             return UNCATEGORIZED
         if leg.label in self._categories:
             return self._categories[leg.label]
+        # QIF records an opening balance as a transfer from the account itself.
+        if leg.label == f"[{source}]":
+            return OPENING_BALANCES
         # Both legs of a transfer land here and cancel out, so a nonzero
         # clearing balance is the report of what failed to pair up.
         if _is_transfer(leg.label):

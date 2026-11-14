@@ -8,7 +8,7 @@ from beancount import loader
 from beancount.core import data, flags
 from beancount.parser import printer
 
-from pybank.importer.beancount import IN_TRANSIT, UNCATEGORIZED, qif
+from pybank.importer.beancount import IN_TRANSIT, OPENING_BALANCES, UNCATEGORIZED, qif
 
 CHECKING = "Assets:Bank:Checking"
 CARD = "Liabilities:Bank:Card"
@@ -281,6 +281,15 @@ def test_both_legs_of_a_transfer_go_through_the_clearing_account(importer, path)
     assert out.postings[1].account == IN_TRANSIT
     assert back.postings[1].account == IN_TRANSIT
     assert out.postings[1].units.number == -back.postings[1].units.number
+
+
+def test_a_transfer_from_the_account_itself_is_its_opening_balance(tmp_path, importer):
+    opening = "!Type:Bank\nD01.01.2026\nT1000.00\nPOpening Balance\nL[Checking]\n^\n"
+    content = EXPORT_QIF.replace("!Type:Bank\n", opening, 1)
+    txns = _txns(importer.extract(_write(tmp_path, "opening.qif", content), []))
+
+    assert txns[0].payee == "Opening Balance"
+    assert txns[0].postings[1].account == OPENING_BALANCES
 
 
 def test_the_split_marker_never_becomes_a_category(importer, path):

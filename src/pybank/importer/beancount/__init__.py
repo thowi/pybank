@@ -5,3 +5,5 @@ UNCATEGORIZED = "Expenses:Uncategorized"
 
 # Clearing account for transfers.
 IN_TRANSIT = "Assets:Transfers:InTransit"
+
+OPENING_BALANCES = "Equity:Opening-Balances"
