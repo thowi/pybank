@@ -127,7 +127,7 @@ def test_transfer_hints_ignore_case(tmp_path):
 def test_a_transfer_hint_missing_its_text_is_reported(tmp_path):
     config = ingest._load_config(_write(tmp_path, '[[transfers]]\naccount = "Assets:A"\n'))
 
-    with pytest.raises(ingest._ConfigError, match="transfers"):
+    with pytest.raises(ingest._ConfigError, match="needs account and text"):
         ingest._hints(config)
 
 

@@ -22,12 +22,11 @@ import tomllib
 from collections.abc import Iterable
 from typing import NamedTuple
 
-import beangulp
 from beancount.core import amount, data, flags, prices
 from beangulp import extract
 
 from . import IN_TRANSIT, UNCATEGORIZED, identity, qif, routing
-from .qif_sidecar import open_slot
+from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_PAIR = "pair"
 
@@ -40,9 +39,6 @@ _WINDOW = datetime.timedelta(days=7)
 _RATE_BAND = decimal.Decimal("0.05")
 
 logger = logging.getLogger(__name__)
-
-# What beangulp hands to a hook, one per imported file.
-_Group = tuple[str, data.Entries, data.Account, beangulp.Importer]
 
 # One answer per pair, keyed by the import-ids of both legs.
 Answers = dict[frozenset[str], bool]
@@ -192,7 +188,7 @@ def _confirmed(answers: Answers, legs: dict[str, Leg]) -> list[Pair]:
     return result
 
 
-def book(answers: Answers, extracted: list[_Group], existing: data.Entries) -> list[_Group]:
+def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> list[Group]:
     """Books every confirmed pair through `IN_TRANSIT`."""
     entries = [entry for _, group, _, _ in extracted for entry in group]
     legs = {leg.import_id: leg for leg in map(_leg, entries) if leg is not None}

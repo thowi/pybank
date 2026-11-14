@@ -515,13 +515,11 @@ class Importer(beangulp.Importer):
             logger.warning("Skipping a cash transaction without a date, amount or currency.")
             return None
 
-        # A correction (e.g. withholding tax) can be in a newer statement, but
-        # backdated to the range of an older statement.
-        # The earlier statement's cash report never counted it.
-        # To avoid balance violation, we book such corrections on the report
-        # date (new statement), not settled date (old statement), and no earlier
-        # than the statement's first day.
-        # The id keeps the settle date, so overlapping statements dedupe.
+        # A later statement can report a correction (e.g. withholding tax) that
+        # settled before it starts. The earlier statement's cash report never
+        # counted it, so it books on its report date, no earlier than this
+        # statement's first day. The id keeps the settle date, so overlapping
+        # statements dedupe.
         date = settled
         if from_date and settled < from_date:
             date = max(txn.reportDate or from_date, from_date)

@@ -652,6 +652,7 @@ def test_a_backdated_correction_keeps_the_id_of_its_settle_date(importer, tmp_pa
 
     for transaction_id in ("X61", "X62"):
         assert _by_id(wide, transaction_id).date.isoformat() == "2024-04-01"
+        assert ibkr.META_SETTLE_DATE not in _by_id(wide, transaction_id).meta
         assert (
             _by_id(wide, transaction_id).meta[identity.META_KEY]
             == _by_id(corrections, transaction_id).meta[identity.META_KEY]

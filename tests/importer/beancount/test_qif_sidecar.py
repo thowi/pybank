@@ -4,7 +4,13 @@ import datetime
 
 from beancount.core import amount, data, flags
 
-from pybank.importer.beancount import UNCATEGORIZED, postfinance, qif, qif_sidecar
+from pybank.importer.beancount import (
+    OPENING_BALANCES,
+    UNCATEGORIZED,
+    postfinance,
+    qif,
+    qif_sidecar,
+)
 
 CHECKING = "Assets:Bank:Checking"
 DINING = "Expenses:Dining"
@@ -160,6 +166,16 @@ def test_a_split_hands_over_every_leg():
         GROCERIES,
         DINING,
     ]
+
+
+def test_an_opening_balance_does_not_fold_into_a_deposit_of_the_same_amount():
+    deposit = _statement("500")
+    opening = _exported("500", category=OPENING_BALANCES)
+
+    statements, exports = _donate([deposit], [opening])
+
+    assert statements == [deposit]
+    assert exports == [opening]
 
 
 def test_an_export_imported_on_its_own_is_left_alone():

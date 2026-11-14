@@ -15,22 +15,23 @@ import logging
 import re
 from typing import NamedTuple
 
-import beangulp
 from beancount.core import data, flags
 
 from . import IN_TRANSIT, qif
-from .qif_sidecar import open_slot
+from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_HINT = "hint"
 
 logger = logging.getLogger(__name__)
 
-# What beangulp hands to a hook, one per imported file.
-_Group = tuple[str, data.Entries, data.Account, beangulp.Importer]
-
 
 class Hint(NamedTuple):
-    """Rows on `account`, or on an account below it, whose text matches."""
+    """Rows on `account`, or on an account below it, whose text matches.
+
+    `account` is the statement's own account. The other side is always
+    `IN_TRANSIT`. `text` searches the payee and the narration, joined by a
+    space.
+    """
 
     account: data.Account
     text: re.Pattern
@@ -54,7 +55,7 @@ def _booked(hints: list[Hint], entry: data.Directive) -> data.Directive | None:
     return entry._replace(meta=meta, flag=flags.FLAG_OKAY, postings=[booked, contra])
 
 
-def book(hints: list[Hint], extracted: list[_Group], existing: data.Entries) -> list[_Group]:
+def book(hints: list[Hint], extracted: list[Group], existing: data.Entries) -> list[Group]:
     """Books every uncategorized row that matches a hint to `IN_TRANSIT`."""
     if not hints:
         return extracted

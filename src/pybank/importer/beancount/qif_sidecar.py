@@ -14,10 +14,10 @@ import datetime
 import logging
 import re
 
-import beangulp
 from beancount.core import data
 
-from . import UNCATEGORIZED, qif
+from . import OPENING_BALANCES, UNCATEGORIZED, qif
+from .hooks import Group, open_slot
 
 # How far apart the two sources may date the same transaction.
 _WINDOW = datetime.timedelta(days=5)
@@ -50,9 +50,6 @@ _SCRAPER_LABELS = ("account:", "exchange rate:", "original amount:")
 
 logger = logging.getLogger(__name__)
 
-# What beangulp hands a hook, one per imported file.
-_Group = tuple[str, data.Entries, data.Account, beangulp.Importer]
-
 # Where a statement transaction sits, so folding can write it back.
 _Slot = tuple[data.Entries, int]
 
@@ -60,20 +57,6 @@ _Slot = tuple[data.Entries, int]
 def _words(value: str | None) -> set[str]:
     """Returns the words in the text, lowercased, for comparing."""
     return set(_WORD.findall((value or "").casefold()))
-
-
-def open_slot(
-    txn: data.Transaction, open_accounts: tuple[data.Account, ...] = (UNCATEGORIZED,)
-) -> data.Posting | None:
-    """Returns the booked posting, if the other one is in `open_accounts`."""
-    # A statement importer books one account and leaves one posting open. Any
-    # other shape already says where the money went.
-    if len(txn.postings) != 2:
-        return None
-    booked, contra = txn.postings
-    if contra.account not in open_accounts or booked.units is None:
-        return None
-    return booked
 
 
 def _extra_note(txn: data.Transaction, exported: data.Transaction) -> str | None:
@@ -121,7 +104,7 @@ class _Statements:
     A row pairs with the nearest one inside `_WINDOW` that no other row took.
     """
 
-    def __init__(self, groups: list[_Group]):
+    def __init__(self, groups: list[Group]):
         self._slots: dict[tuple[data.Account, data.Amount], list[_Slot]] = {}
         self._claimed: set[tuple[int, int]] = set()
         for _filepath, entries, _account, _importer in groups:
@@ -135,6 +118,10 @@ class _Statements:
 
     def fold(self, exported: data.Transaction) -> bool:
         """Hands the row to the statement that repeats it. True if one did."""
+        # An opening balance is no statement row. A deposit of the same amount
+        # nearby would take its equity contra and hide a real transfer.
+        if any(posting.account == OPENING_BALANCES for posting in exported.postings[1:]):
+            return False
         # The QIF importer books the account first and the legs after it.
         booked = exported.postings[0]
         slot = self._nearest(exported.date, self._slots.get((booked.account, booked.units), []))
@@ -163,7 +150,7 @@ class _Statements:
         return best
 
 
-def donate(extracted: list[_Group], existing: data.Entries) -> list[_Group]:
+def donate(extracted: list[Group], existing: data.Entries) -> list[Group]:
     """Drops every exported transaction a statement already covers."""
     # An importer cannot do this itself: beangulp adds a run's own entries to
     # `existing` only after every importer has extracted.
