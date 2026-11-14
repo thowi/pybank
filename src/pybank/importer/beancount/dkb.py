@@ -1,6 +1,7 @@
 """DKB CSV importers for beangulp.
 
-Covers the pre-2023 Girokonto export, the current one, and the Visa export.
+Covers the pre-2023 Girokonto export, the current one, and the pre-2023 Visa
+export.
 
 The account or card number is read from the file itself and routed to a ledger
 account by `routing.AccountRouter`.

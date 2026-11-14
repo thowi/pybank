@@ -3,8 +3,7 @@
 The archive holds six header variants in two encodings, so columns are
 matched by name and the encoding is sniffed.
 
-Only the variants carrying a `Saldo` column yield a balance assertion, which is
-a minority of files.
+Only the variants carrying a `Saldo` column yield a balance assertion.
 """
 
 import csv
@@ -48,8 +47,8 @@ _TOTAL_MEMO = "Total"
 META_CATEGORY = "bank-category"
 META_LABEL = "bank-label"
 
-# Card only. The purchase date, which trails `Buchungsdatum` on almost every
-# row. Kept in the export's own notation, as the DKB importer keeps its own.
+# Card only. The purchase date, which trails `Buchungsdatum`. Kept in the
+# export's own notation, as the DKB importer keeps its own.
 META_RECEIPT_DATE = "receipt-date"
 
 logger = logging.getLogger(__name__)

@@ -188,12 +188,12 @@ REORG_XML = """\
 <CorporateAction accountId="U0000000" currency="USD" assetCategory="STK"
  symbol="RGHT" description="Rght Rights" conid="1000007" transactionID="Y50"
  actionID="A50" type="RI" dateTime="20250501;202500" reportDate="20250501"
- quantity="100" proceeds="0" value="100.00"
+ quantity="100" proceeds="0" value="100.00" isin="US0000000007"
  actionDescription="WXYZ(US0000000001) SUBSCRIBABLE RIGHTS ISSUE" />
 <CorporateAction accountId="U0000000" currency="USD" assetCategory="STK"
  symbol="RGHT" description="Rght Rights" conid="1000007" transactionID="Y51"
  actionID="A51" type="SR" dateTime="20250601;194500" reportDate="20250601"
- quantity="-100" proceeds="-400.00" value="-100.00"
+ quantity="-100" proceeds="-400.00" value="-100.00" isin="US0000000007"
  actionDescription="WXYZ(US0000000001) SUBSCRIBES TO 20 FOR 100" />
 <CorporateAction accountId="U0000000" currency="USD" assetCategory="STK"
  symbol="WXYZ" description="Wxyz Inc." conid="1000001" transactionID="Y52"
@@ -232,6 +232,80 @@ FRACSHARE_XML = """\
  ibCommission="0" ibCommissionCurrency="USD" taxes="0" netCash="60.00"
  notes="LF" />
 </Trades>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
+"""
+
+# A long position sold through zero: The sale closes the one lot it names and
+# opens a short with the rest.
+CLOSE_OPEN_XML = """\
+<FlexQueryResponse queryName="pybank" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="20250101" toDate="20251231"
+ period="" whenGenerated="20260102;080000">
+<Trades>
+<Trade accountId="U0000000" currency="USD" assetCategory="STK" symbol="ABCD"
+ description="Abcd Inc." conid="1000001" tradeID="T1" transactionID="C1"
+ tradeDate="20250103" dateTime="20250103;153000" buySell="BUY"
+ openCloseIndicator="O" multiplier="1" quantity="10" tradePrice="100.00"
+ proceeds="-1000.00" ibCommission="0" ibCommissionCurrency="USD" taxes="0"
+ netCash="-1000.00" />
+<Trade accountId="U0000000" currency="USD" assetCategory="STK" symbol="ABCD"
+ description="Abcd Inc." conid="1000001" tradeID="T2" transactionID="C2"
+ tradeDate="20250201" dateTime="20250201;153000" buySell="SELL"
+ openCloseIndicator="C;O" multiplier="1" quantity="-15" tradePrice="120.00"
+ proceeds="1800.00" ibCommission="0" ibCommissionCurrency="USD" taxes="0"
+ netCash="1800.00" />
+<Lot accountId="U0000000" currency="USD" assetCategory="STK" symbol="ABCD"
+ conid="1000001" tradeDate="20250201" openDateTime="20250103;153000"
+ multiplier="1" quantity="10" tradePrice="100.00" cost="1000.00" />
+</Trades>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
+"""
+
+# A position transferred in without its lots.
+TRANSFER_NO_LOTS_XML = """\
+<FlexQueryResponse queryName="pybank" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="20250101" toDate="20251231"
+ period="" whenGenerated="20260102;080000">
+<Transfers>
+<Transfer accountId="U0000000" currency="USD" assetCategory="STK" symbol="IJKL"
+ description="Ijkl Plc." conid="1000004" transactionID="N1" type="ACATS"
+ direction="IN" date="20250601" dateTime="20250601;120000" quantity="4"
+ transferPrice="30.00" positionAmount="120.00" cashTransfer="0"
+ account="00000000" />
+</Transfers>
+</FlexStatement>
+</FlexStatements>
+</FlexQueryResponse>
+"""
+
+# Rights issued and sold on one day. The sale only loads if the action that
+# created the rights books first.
+SAME_DAY_XML = """\
+<FlexQueryResponse queryName="pybank" type="AF">
+<FlexStatements count="1">
+<FlexStatement accountId="U0000000" fromDate="20250101" toDate="20251231"
+ period="" whenGenerated="20260102;080000">
+<Trades>
+<Trade accountId="U0000000" currency="USD" assetCategory="STK" symbol="RGHT"
+ description="Rght Rights" conid="1000007" tradeID="T1" transactionID="S2"
+ tradeDate="20250501" dateTime="20250501;100000" buySell="SELL"
+ openCloseIndicator="C" multiplier="1" quantity="-100" tradePrice="1.00"
+ proceeds="100.00" ibCommission="0" ibCommissionCurrency="USD" taxes="0"
+ netCash="100.00" />
+</Trades>
+<CorporateActions>
+<CorporateAction accountId="U0000000" currency="USD" assetCategory="STK"
+ symbol="RGHT" description="Rght Rights" conid="1000007" transactionID="S1"
+ actionID="A1" type="RI" dateTime="20250501;202500" reportDate="20250501"
+ quantity="100" proceeds="0" value="100.00"
+ actionDescription="WXYZ(US0000000001) SUBSCRIBABLE RIGHTS ISSUE" />
+</CorporateActions>
 </FlexStatement>
 </FlexStatements>
 </FlexQueryResponse>
@@ -417,6 +491,18 @@ def test_a_numeric_listing_takes_a_prefix():
 
 def test_a_plain_ticker_is_left_alone():
     assert ibkr._commodity("ABCD") == "ABCD"
+
+
+@pytest.mark.parametrize(("symbol", "commodity"), [("ABCD.", "ABCD"), (".ABCD", "X.ABCD")])
+def test_punctuation_at_either_end_still_makes_a_legal_commodity(symbol, commodity):
+    assert ibkr._commodity(symbol) == commodity
+    entries, errors, _ = loader.load_string(f"2020-01-01 commodity {commodity}\n")
+    assert entries and not errors
+
+
+def test_a_conid_list_may_have_spaces_after_its_commas():
+    directive = data.Commodity({ibkr.META_COMMODITY_CONIDS: "1000001, 1000009"}, None, "ABCD")
+    assert ibkr.Commodities([directive]).name("EFGH", "1000009") == "ABCD"
 
 
 def test_a_rewritten_symbol_is_kept_in_metadata(entries):
@@ -761,6 +847,7 @@ def test_an_action_reporting_one_row_keeps_its_own_identifiers(reorg_entries):
     txn = _by_id(reorg_entries, "Y50")
 
     assert txn.meta[ibkr.META_ACTION_ID] == "A50"
+    assert txn.meta[ibkr.META_ISIN] == "US0000000007"
     assert _commodities(txn) == ["RGHT"]
 
 
@@ -821,3 +908,48 @@ def test_a_fractional_share_sale_reduces_whatever_ibkr_calls_it(importer, tmp_pa
 
     _loaded, errors, _options = loader.load_file(str(ledger))
     assert errors == []
+
+
+def test_a_sale_naming_no_lots_reduces_its_quantity_once(importer, tmp_path):
+    entries = importer.extract(_write(tmp_path, "frac.xml", FRACSHARE_XML), [])
+
+    (sale,) = _postings(_by_id(entries, "F2"), SECURITIES)
+    assert sale.units.number == _decimal("-0.5")
+
+
+def test_an_action_books_before_a_trade_on_the_same_day(importer, tmp_path):
+    entries = importer.extract(_write(tmp_path, "same-day.xml", SAME_DAY_XML), [])
+
+    ledger = tmp_path / "same-day.beancount"
+    with ledger.open("w") as out:
+        out.write(REORG_PREAMBLE)
+        printer.print_entries(entries, file=out)
+
+    _loaded, errors, _options = loader.load_file(str(ledger))
+    assert errors == []
+
+
+def test_a_sale_through_zero_opens_a_short_with_what_its_lots_leave(importer, tmp_path):
+    entries = importer.extract(_write(tmp_path, "close-open.xml", CLOSE_OPEN_XML), [])
+
+    closed, opened = _postings(_by_id(entries, "C2"), SECURITIES)
+    assert closed.units.number == _decimal(-10)
+    assert opened.units.number == _decimal(-5)
+    assert opened.cost.number == _decimal(120)
+
+    ledger = tmp_path / "close-open.beancount"
+    with ledger.open("w") as out:
+        out.write(LEDGER_PREAMBLE)
+        printer.print_entries(entries, file=out)
+
+    _loaded, errors, _options = loader.load_file(str(ledger))
+    assert errors == []
+
+
+def test_a_transfer_without_lots_moves_at_its_transfer_price(importer, tmp_path):
+    entries = importer.extract(_write(tmp_path, "no-lots.xml", TRANSFER_NO_LOTS_XML), [])
+
+    (posting,) = _postings(_by_id(entries, "N1"), SECURITIES)
+    assert posting.units.number == _decimal(4)
+    assert posting.cost.number == _decimal(30)
+    assert posting.cost.date.isoformat() == "2025-06-01"

@@ -86,14 +86,14 @@ def _extra_note(txn: data.Transaction, exported: data.Transaction) -> str | None
 
 def _donated(txn: data.Transaction, exported: data.Transaction) -> data.Transaction:
     """Returns the statement transaction, now carrying the export's labels."""
-    counters = exported.postings[1:]
-    if all(posting.account == UNCATEGORIZED for posting in counters):
-        return txn
     meta = dict(txn.meta)
-    meta[qif.META_CATEGORY_SOURCE] = qif.CATEGORY_SOURCE_QIF
     note = _extra_note(txn, exported)
     if note:
         meta[META_NOTE] = note
+    counters = exported.postings[1:]
+    if all(posting.account == UNCATEGORIZED for posting in counters):
+        return txn._replace(meta=meta)
+    meta[qif.META_CATEGORY_SOURCE] = qif.CATEGORY_SOURCE_QIF
     kept = [posting for posting in txn.postings if posting.account != UNCATEGORIZED]
     return txn._replace(meta=meta, flag=exported.flag, postings=[*kept, *counters])
 
@@ -151,7 +151,10 @@ class _Statements:
 
 
 def donate(extracted: list[Group], existing: data.Entries) -> list[Group]:
-    """Drops every exported transaction a statement already covers."""
+    """Drops every exported transaction a statement already covers.
+
+    That statement takes the dropped row's category and note.
+    """
     # An importer cannot do this itself: beangulp adds a run's own entries to
     # `existing` only after every importer has extracted.
     statements = [group for group in extracted if not isinstance(group[3], qif.Importer)]

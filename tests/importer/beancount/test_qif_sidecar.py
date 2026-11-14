@@ -146,6 +146,15 @@ def test_a_row_the_export_left_uncategorized_still_gives_way():
     assert qif.META_CATEGORY_SOURCE not in statements[0].meta
 
 
+def test_a_row_the_export_left_uncategorized_still_hands_over_its_note():
+    export = _exported(narration="Repaid by Sam", category=UNCATEGORIZED)
+
+    statements, _ = _donate([_statement()], [export])
+
+    assert statements[0].meta[qif_sidecar.META_NOTE] == "Repaid by Sam"
+    assert statements[0].postings[1].account == UNCATEGORIZED
+
+
 def test_a_split_hands_over_every_leg():
     export = _txn(
         DAY,

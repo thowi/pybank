@@ -78,8 +78,8 @@ META_QIF_CATEGORY = "qif-category"
 META_QIF_TRANSFER = "qif-transfer"
 META_SPLIT_MEMO = "split-memo"
 
-# Marks a category the old app's user assigned by hand, as opposed to one a
-# rule guessed later. See the phase 3 plan.
+# Records who set a category. `qif` marks one the old app's user assigned by
+# hand, as opposed to one a rule guessed later. See the phase 3 plan.
 META_CATEGORY_SOURCE = "category-source"
 CATEGORY_SOURCE_QIF = "qif"
 
@@ -200,6 +200,7 @@ def _declared_categories(sections: Sequence[_Section]) -> dict[str, bool]:
 
 def _legs(record: _Record) -> tuple[_Leg, ...]:
     """Returns the split legs, or one leg carrying the whole amount."""
+    total = _number(_first(record, _AMOUNT) or "0")
     legs: list[_Leg] = []
     for code, value in record:
         if code == _SPLIT_CATEGORY:
@@ -211,6 +212,14 @@ def _legs(record: _Record) -> tuple[_Leg, ...]:
         elif code == _SPLIT_AMOUNT:
             legs[-1] = legs[-1]._replace(number=_number(value))
     if legs:
+        # An uncategorized leg for the rest keeps the transaction balanced.
+        rest = total - sum(leg.number for leg in legs)
+        if rest:
+            logger.warning(
+                "The split on %s does not add up to its total. Leaving the rest uncategorized.",
+                _first(record, _DATE),
+            )
+            legs.append(_Leg("", None, rest))
         return tuple(legs)
     label = _first(record, _CATEGORY) or ""
     if label == _SPLIT_MARKER:
@@ -219,7 +228,7 @@ def _legs(record: _Record) -> tuple[_Leg, ...]:
             _first(record, _DATE),
         )
         label = ""
-    return (_Leg(label, None, _number(_first(record, _AMOUNT) or "0")),)
+    return (_Leg(label, None, total),)
 
 
 def _transaction(record: _Record, source: str) -> _Transaction | None:
@@ -285,7 +294,8 @@ class Importer(beangulp.Importer):
 
     def account(self, filepath: str) -> data.Account:
         # The export covers every account at once, so none of them owns the
-        # file. beangulp only uses this to name an archive directory.
+        # file. beangulp only uses this to name an archive directory and to
+        # sort the extracted files.
         return next(iter(self._targets.values())).account
 
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:

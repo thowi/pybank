@@ -12,7 +12,7 @@ from beancount.core import data, flags
 from beancount.parser import printer
 from beangulp import extract
 
-from pybank.importer.beancount import UNCATEGORIZED, dkb, identity
+from pybank.importer.beancount import UNCATEGORIZED, dkb, identity, routing
 
 # The three fixtures mirror different historical export formats.
 # The balances in particular are not interchangeable.
@@ -171,6 +171,15 @@ def test_the_account_is_resolved_from_the_file(checking, legacy_path, giro_2023_
     """Both export vintages name the same account, so both route the same."""
     assert checking.account(legacy_path) == "Assets:DKB:Checking"
     assert checking.account(giro_2023_path) == "Assets:DKB:Checking"
+
+
+def test_a_card_with_no_account_configured_names_table_and_card(card_path):
+    importer = dkb.CreditCardImporter({"9999": "Liabilities:DKB:Visa"})
+
+    assert importer.identify(card_path)
+    with pytest.raises(routing.ConfigError, match=r"dkb\.card") as err:
+        importer.account(card_path)
+    assert "0000********0000" in str(err.value)
 
 
 @pytest.mark.parametrize("fixture", ["legacy_path", "giro_2023_path"])

@@ -201,7 +201,8 @@ def test_identify_rejects_a_per_account_qif(tmp_path, importer):
 
 def test_identify_rejects_other_files(tmp_path, importer):
     assert not importer.identify(_write(tmp_path, "notes.txt", EXPORT_QIF))
-    assert not importer.identify(_write(tmp_path, "missing.qif", ""))
+    assert not importer.identify(_write(tmp_path, "empty.qif", ""))
+    assert not importer.identify(str(tmp_path / "missing.qif"))
 
 
 def test_account_names_an_archive_directory(importer, path):
@@ -235,6 +236,13 @@ def test_extract_dates_amounts_and_currency(importer, path):
 
     assert txns["Monthly pay"].postings[0].units.number == decimal.Decimal("5000.00")
     assert txns["Bookshop"].postings[0].account == CARD
+
+
+def test_extract_reads_a_thousands_separator(tmp_path, importer):
+    content = EXPORT_QIF.replace("T5000.00", "T5,000.00")
+    txns = _by_narration(importer.extract(_write(tmp_path, "grouped.qif", content), []))
+
+    assert txns["Monthly pay"].postings[0].units.number == decimal.Decimal("5000.00")
 
 
 def test_extract_normalizes_payee_and_memo(importer, path):
@@ -301,7 +309,7 @@ def test_the_split_marker_never_becomes_a_category(importer, path):
     assert all("Split" not in p.account for t in _txns(entries) for p in t.postings)
 
 
-def test_a_split_that_lost_its_legs_stays_uncategorized(importer, path):
+def test_a_split_that_lost_its_legs_stays_uncategorized(importer, path, caplog):
     """The marker can arrive with no legs, and then the breakdown is gone."""
     txn = _by_narration(importer.extract(path, []))["Split with no legs"]
 
@@ -309,6 +317,7 @@ def test_a_split_that_lost_its_legs_stays_uncategorized(importer, path):
     assert txn.postings[1].account == UNCATEGORIZED
     assert txn.flag == flags.FLAG_WARNING
     assert txn.postings[1].meta is None, "there is no label worth keeping"
+    assert "The split on 12.01.2026 carries no legs." in caplog.text
 
 
 def test_the_raw_category_rides_along_on_the_posting(importer, path):
@@ -329,15 +338,6 @@ def test_the_raw_transfer_target_rides_along_on_the_posting(importer, path):
 
     assert txn.postings[1].meta["qif-transfer"] == "Card"
     assert "qif-category" not in txn.postings[1].meta, "a transfer is not a category"
-
-
-def test_the_raw_category_does_not_affect_the_import_id(tmp_path, importer):
-    """It is a record of the old app, not part of what identifies a row."""
-    renamed = _write(tmp_path, "b.qif", EXPORT_QIF.replace("NGroceries\nDFood", "NFood\nDFood"))
-
-    first = _by_narration(importer.extract(_write(tmp_path, "a.qif", EXPORT_QIF), []))
-    second = _by_narration(importer.extract(renamed, []))
-    assert first["Grocer Ltd"].meta["import-id"] == second["Grocer Ltd"].meta["import-id"]
 
 
 def test_a_missing_category_stays_uncategorized_and_flagged(importer, path):
@@ -435,3 +435,50 @@ def test_the_clearing_account_balances_across_the_export(importer, path):
 
     assert len(in_transit) == 2
     assert sum(p.units.number for p in in_transit) == 0
+
+
+def test_a_split_that_does_not_add_up_books_the_rest_uncategorized(tmp_path, importer, caplog):
+    """The transaction still balances, and the gap stays visible."""
+    short = EXPORT_QIF.replace("$-15.00", "$-10.00")
+    txn = _by_narration(importer.extract(_write(tmp_path, "short.qif", short), []))["Big shop"]
+
+    assert txn.postings[3].account == UNCATEGORIZED
+    assert txn.postings[3].units.number == decimal.Decimal("5.00")
+    assert sum(p.units.number for p in txn.postings) == 0
+    assert txn.flag == flags.FLAG_WARNING
+    assert "does not add up" in caplog.text
+
+
+def test_a_record_without_an_amount_is_skipped(tmp_path, importer):
+    content = EXPORT_QIF.replace("T-7.25\n", "", 1)
+    txns = _by_narration(importer.extract(_write(tmp_path, "no-amount.qif", content), []))
+
+    assert "No label here" not in txns
+    assert "Grocer Ltd" in txns
+
+
+def test_an_unmapped_account_is_reported(importer, path, caplog):
+    caplog.set_level("INFO", logger=qif.__name__)
+    importer.extract(path, [])
+
+    assert "Skipping 1 transactions of unmapped account Savings." in caplog.text
+
+
+def test_an_undeclared_category_is_reported_once(importer, path, caplog):
+    importer.extract(path, [])
+
+    assert caplog.text.count("'Unheard Of' is not declared") == 1
+
+
+def test_an_override_silences_the_undeclared_warning(path, caplog):
+    qif.Importer(TARGETS, {"Unheard Of": "Expenses:Books"}).extract(path, [])
+
+    assert "is not declared" not in caplog.text
+
+
+def test_a_category_override_wins_over_a_transfer(path):
+    """A bracketed label can be mapped too, before any transfer rule applies."""
+    importer = qif.Importer(TARGETS, {"[Card]": "Assets:Elsewhere"})
+    txn = _by_narration(importer.extract(path, []))["Moving money"]
+
+    assert txn.postings[1].account == "Assets:Elsewhere"

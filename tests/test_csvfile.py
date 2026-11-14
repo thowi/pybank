@@ -23,8 +23,7 @@ def _write(tmp_path, content, encoding):
     return str(path)
 
 
-def test_read_text_handles_every_encoding_in_the_archive(tmp_path):
-    """Two banks, four export generations, three encodings between them."""
+def test_read_text_handles_utf8_with_and_without_bom_and_cp1252(tmp_path):
     text = "Konto:;Zürich"
     assert csvfile.read_text(_write(tmp_path, text, "utf-8")) == text
     assert csvfile.read_text(_write(tmp_path, text, "utf-8-sig")) == text

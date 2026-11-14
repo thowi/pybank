@@ -5,8 +5,8 @@ Activity Statement CSVs: Only Flex carries the `Lot` and `TransferLot` elements
 that let a sale name the lots it closes.
 
 The saved query must select Trades with Closed Lots, Cash Transactions,
-Transfers, Corporate Actions, and Cash Report with a currency breakout, with
-dates as `yyyyMMdd`, times as `HHmmss` and `;` between them.
+Transfers, Corporate Actions, Sales Tax, and Cash Report with a currency
+breakout, with dates as `yyyyMMdd`, times as `HHmmss` and `;` between them.
 
 Instruments are identified by `conid` rather than by symbol, and the ledger
 holds that map. See `Commodities`.
@@ -194,10 +194,12 @@ def _commodity(symbol: str) -> str:
     # Option symbols are OCC codes padded with spaces, `ABCD  240119C00150000`,
     # and some listings are all digits, `700` on the SEHK. Neither is a legal
     # commodity name, so the padding goes and a leading digit takes a prefix.
-    name = _NOT_COMMODITY.sub("", symbol.upper())
+    # A commodity also has to end in a letter or digit, so trailing
+    # punctuation goes too.
+    name = _NOT_COMMODITY.sub("", symbol.upper()).rstrip("._-")
     if not name:
         return _SYMBOL_PREFIX
-    return f"{_SYMBOL_PREFIX}{name}" if name[0].isdigit() else name
+    return name if name[0].isalpha() else f"{_SYMBOL_PREFIX}{name}"
 
 
 # A symbol is not an identity. IBKR renames a ticker in place, so one holding
@@ -273,10 +275,10 @@ def _grouped(
     child: type,
 ) -> list[tuple[Types.FlexElement, list[Types.FlexElement]]]:
     """Returns each parent with the children that followed it."""
-    # Flex nests closed lots inside the trade that closed them, and transfer
-    # lots inside their transfer, but `ibflex` flattens every container and the
-    # child carries no id back to the parent. `tradeID` is empty on a `Lot`. So
-    # position in the document is the only thing left to group on.
+    # Flex lists closed lots right after the trade that closed them, and
+    # transfer lots after their transfer, as siblings. The child carries no id
+    # back to the parent. `tradeID` is empty on a `Lot`. So position in the
+    # document is the only thing left to group on.
     groups: list[tuple[Types.FlexElement, list[Types.FlexElement]]] = []
     for element in elements:
         if isinstance(element, parent):
@@ -388,9 +390,9 @@ def _id_fields(
 
 def _log_securities(statement: Types.FlexStatement, commodities: Commodities) -> None:
     """Reports each security, and what to declare for a missing one."""
-    # Commodity directives are hand-maintained: They live in
-    # `accounts.beancount`, which spans years, and an importer that emitted
-    # them would re-emit them on every run. Naming a new conid after the
+    # Commodity directives are hand-maintained: They live in the ledger, which
+    # spans years, and an importer that emitted them would re-emit them on
+    # every run. Naming a new conid after the
     # symbol it happens to carry today is a guess, so it is reported as one.
     for info in statement.SecuritiesInfo:
         symbol = info.symbol or ""
@@ -472,7 +474,7 @@ class Importer(beangulp.Importer):
         _log_unread(statement)
 
         built = [self._cash_transaction(t, statement.fromDate) for t in statement.CashTransactions]
-        # Corporate actions and trades can be be on the same day, but CAs create
+        # Corporate actions and trades can be on the same day, but CAs create
         # the position and must be first in the ledger.
         built += [
             self._corporate_action(rows, commodities)
@@ -509,7 +511,8 @@ class Importer(beangulp.Importer):
         # counts, so it is what an assertion has to agree with. `dateTime` is
         # when IBKR recorded the item, and a withholding tax, a fee or a
         # dividend can settle days later. Dating by `dateTime` puts those in
-        # the wrong period, and across a year boundary the assertion misses.
+        # the wrong period, and across a statement boundary the assertion
+        # misses.
         settled = txn.settleDate or txn.reportDate or (txn.dateTime and txn.dateTime.date())
         if settled is None or txn.amount is None or not txn.currency:
             logger.warning("Skipping a cash transaction without a date, amount or currency.")
@@ -625,11 +628,16 @@ class Importer(beangulp.Importer):
             postings = self._closing_postings(trade, lots, commodity, price)
             # A `C;O` trade closes the named lots and opens whatever is left
             # over, which is also where a lot set that does not quite add up
-            # to the trade ends up. With no lots at all there is no remainder:
-            # The postings above already cover the whole quantity under FIFO.
+            # to the trade ends up. With no lots at all nothing splits the close
+            # from the open: The postings above reduce the whole quantity under
+            # FIFO, also for a `C;O` trade.
             closed = sum((lot.quantity for lot in lots if lot.quantity is not None), _ZERO)
             residual = trade.quantity + closed if lots else _ZERO
-            if residual:
+            if residual and trade.openCloseIndicator is enums.OpenClose.OPENCLOSE:
+                postings.append(
+                    self._opening_posting(residual, commodity, unit_cost, currency, date)
+                )
+            elif residual:
                 logger.warning(
                     "Trade %s closes %s %s but its lots name %s. Letting FIFO take the rest.",
                     trade.tradeID,
@@ -678,11 +686,11 @@ class Importer(beangulp.Importer):
         commodity: str,
         price: amount.Amount,
     ) -> list[data.Posting]:
-        """Returns one posting per closed lot, matched on the date it opened."""
+        """Returns one posting per closed lot."""
         # A closed lot states a positive quantity against the negative quantity
         # of the sale that consumed it, so the posting is its opposite. Without
-        # lots there is nothing to match on and FIFO picks, which is what IBKR
-        # did too, but it is worth saying so.
+        # lots, one reduction covers the whole quantity and FIFO picks, which is
+        # what IBKR did too, but it is worth saying so.
         if not lots:
             logger.warning(
                 "Trade %s closes %s %s without naming lots. Letting FIFO choose.",
@@ -690,22 +698,15 @@ class Importer(beangulp.Importer):
                 -trade.quantity,
                 commodity,
             )
-            return [
-                _posting(
-                    self._accounts.securities,
-                    amount.Amount(trade.quantity, commodity),
-                    cost=_lot_cost(trade.currency),
-                    price=price,
-                )
-            ]
+        quantities = [-lot.quantity for lot in lots] if lots else [trade.quantity]
         return [
             _posting(
                 self._accounts.securities,
-                amount.Amount(-lot.quantity, commodity),
+                amount.Amount(quantity, commodity),
                 cost=_lot_cost(trade.currency),
                 price=price,
             )
-            for lot in lots
+            for quantity in quantities
         ]
 
     def _forex_postings(self, trade: Types.Trade) -> list[data.Posting]:
@@ -768,7 +769,7 @@ class Importer(beangulp.Importer):
             if transfer.conid:
                 meta[META_CONID] = transfer.conid
 
-            postings = self._transfer_postings(transfer, lots, commodity, currency)
+            postings = self._transfer_postings(transfer, lots, commodity, currency, date)
             if transfer.cashTransfer:
                 postings.append(
                     _posting(
@@ -797,6 +798,7 @@ class Importer(beangulp.Importer):
         lots: Sequence[TransferLot],
         commodity: str,
         currency: str,
+        date: datetime.date,
     ) -> list[data.Posting]:
         """Returns one posting per transferred lot, at its incoming basis."""
         # `transferPrice` is zero on a real transfer in, so the basis has to
@@ -810,7 +812,6 @@ class Importer(beangulp.Importer):
                 commodity,
             )
             price = transfer.transferPrice if transfer.transferPrice is not None else _ZERO
-            date = transfer.dateTime.date() if transfer.dateTime else transfer.date
             return [
                 _posting(
                     self._accounts.securities,
