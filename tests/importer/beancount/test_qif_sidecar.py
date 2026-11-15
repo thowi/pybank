@@ -112,6 +112,26 @@ def test_a_row_outside_the_window_stays_a_transaction_of_its_own():
     assert statements[0].postings[1].account == UNCATEGORIZED
 
 
+def test_a_row_dated_by_the_purchase_pairs_with_its_card_booking():
+    booked = _statement(number="20", date=DAY - datetime.timedelta(days=20))
+    booked.meta[postfinance.META_RECEIPT_DATE] = DAY.strftime("%d.%m.%Y")
+
+    statements, exports = _donate([booked], [_exported(number="20")])
+
+    assert exports == []
+    assert statements[0].postings[1].account == GROCERIES
+
+
+def test_an_unreadable_purchase_date_leaves_the_booking_date():
+    booked = _statement()
+    booked.meta[postfinance.META_RECEIPT_DATE] = "not a date"
+
+    statements, exports = _donate([booked], [_exported()])
+
+    assert exports == []
+    assert statements[0].postings[1].account == GROCERIES
+
+
 def test_a_different_amount_is_a_different_event():
     statements, exports = _donate([_statement(number="-21")], [_exported(number="-20")])
 

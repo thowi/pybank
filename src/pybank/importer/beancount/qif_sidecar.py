@@ -16,11 +16,14 @@ import re
 
 from beancount.core import data
 
-from . import OPENING_BALANCES, UNCATEGORIZED, qif
+from . import OPENING_BALANCES, UNCATEGORIZED, postfinance, qif
 from .hooks import Group, open_slot
 
 # How far apart the two sources may date the same transaction.
 _WINDOW = datetime.timedelta(days=5)
+
+# How a card statement writes the purchase date it keeps next to the booking.
+_RECEIPT_DATE_FORMAT = "%d.%m.%Y"
 
 # A memo the export carries and the statement does not. It stays here, out of
 # the narration, because the statement's own text is the better description.
@@ -144,10 +147,23 @@ class _Statements:
         for entries, position in slots:
             if (id(entries), position) in self._claimed:
                 continue
-            distance = abs(entries[position].date - date)
+            distance = min(abs(day - date) for day in _dates(entries[position]))
             if distance <= _WINDOW and (best_distance is None or distance < best_distance):
                 best, best_distance = (entries, position), distance
         return best
+
+
+def _dates(entry: data.Transaction) -> list[datetime.date]:
+    """Returns the booking date, and the purchase date if the row has one."""
+    # The export may date a card row by its purchase. The two can be weeks
+    # apart.
+    dates = [entry.date]
+    receipt = entry.meta.get(postfinance.META_RECEIPT_DATE)
+    try:
+        dates.append(datetime.datetime.strptime(receipt, _RECEIPT_DATE_FORMAT).date())
+    except (TypeError, ValueError):
+        pass
+    return dates
 
 
 def donate(extracted: list[Group], existing: data.Entries) -> list[Group]:
