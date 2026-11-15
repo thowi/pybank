@@ -1,4 +1,5 @@
-Python modules and scripts to download and convert bank statements.
+Python modules and scripts to download bank statements and import them into
+Beancount.
 
 # Set up the virtual environment and install requirements.
 
@@ -18,11 +19,11 @@ $ direnv allow
 
 # Run
 
-Two entry points, `pybank-convert` and `pybank-fetch`. Run either with
+Two entry points, `pybank-import` and `pybank-fetch`. Run either with
 `--help` for details.
 
 ```bash
-$ uv run pybank-convert -i dkb-checking "$file" > "$outfile"
+$ uv run pybank-import --config "$config" extract "$statements" > "$outfile"
 ```
 
 # Development

@@ -41,7 +41,7 @@ class Bank:
         raise NotImplementedError()
 
     def get_accounts(self) -> list[model.Account]:
-        """Returns the names of all accounts.
+        """Returns all accounts.
 
         :return: The available accounts on this bank.
         """

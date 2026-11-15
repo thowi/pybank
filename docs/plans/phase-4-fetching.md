@@ -21,8 +21,9 @@ research docs (`../research/`).
 ## Cleanup
 
 The `download/` package stays, its implementations get replaced one by one.
-`__init__.py` holds selenium-free helpers, `bank.py` holds the base-class
-concept, both carry over. Delete each legacy scraper module once its
+`__init__.py` holds parsing and formatting helpers, which carry over, and
+selenium element helpers, which go with selenium. `bank.py` holds the
+base-class concept, which carries over. Delete each legacy scraper module once its
 replacement reaches parity, mining it first for login-flow and URL knowledge.
 Drop `selenium` when the last one goes.
 
