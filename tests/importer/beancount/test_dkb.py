@@ -302,6 +302,11 @@ def test_a_daily_balance_row_does_not_shift_the_metadata(checking, tagessaldo_pa
     assert [t.meta["counterparty-account"] for t in _txns(entries)] == ["DE11", "DE22"]
 
 
+def test_a_row_count_mismatch_drops_all_metadata(caplog, legacy_path):
+    assert dkb._aligned_rows(legacy_path, 3) == [{}, {}, {}]
+    assert "dropping the extra metadata" in caplog.text
+
+
 def test_every_transaction_gets_an_import_id(checking, legacy_path):
     ids = _ids(checking.extract(legacy_path, []))
     assert len(set(ids)) == len(ids)
@@ -344,5 +349,7 @@ def test_card_transactions_are_completed(card, card_path):
     assert len(txns) == 3
     for txn in txns:
         assert txn.flag == flags.FLAG_WARNING
+        assert len(txn.postings) == 2
         assert txn.postings[0].account == "Liabilities:DKB:Visa"
         assert txn.postings[1].account == UNCATEGORIZED
+        assert txn.postings[1].units is None

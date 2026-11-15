@@ -1,6 +1,7 @@
 import datetime
 import decimal
 
+import pytest
 from beancount.core import amount, data
 from beangulp import extract
 
@@ -64,6 +65,14 @@ def test_differing_dates_yield_different_ids():
     a = identity.import_ids([_fields(date="2026-03-01")])
     b = identity.import_ids([_fields(date="2026-03-02")])
     assert a != b
+
+
+@pytest.mark.parametrize(
+    "number, expected",
+    [("24", "24"), ("24.00", "24"), ("1000.00", "1000"), ("-85.50", "-85.5")],
+)
+def test_canonical_amount_drops_trailing_zeros_without_an_exponent(number, expected):
+    assert identity.canonical_amount(decimal.Decimal(number)) == expected
 
 
 def test_identical_rows_get_increasing_occurrences():

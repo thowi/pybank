@@ -35,6 +35,8 @@ FLEX_XML = """\
  fromDate="20240101" toDate="20241231" startingCash="0" endingCash="1000.00" />
 <CashReportCurrency accountId="U0000000" currency="CHF"
  fromDate="20240101" toDate="20241231" startingCash="0" endingCash="-2.50" />
+<CashReportCurrency accountId="U0000000" currency="BASE_SUMMARY"
+ fromDate="20240101" toDate="20241231" startingCash="0" endingCash="20000.00" />
 </CashReport>
 <SecuritiesInfo>
 <SecurityInfo assetCategory="STK" symbol="ABCD" description="Abcd Inc."
@@ -446,6 +448,11 @@ def _by_id(entries, transaction_id):
     return txn
 
 
+def _by_action(entries, action_id):
+    (txn,) = [t for t in _txns(entries) if t.meta.get(ibkr.META_ACTION_ID) == action_id]
+    return txn
+
+
 def _postings(txn, account):
     return [p for p in txn.postings if p.account == account]
 
@@ -751,6 +758,7 @@ def test_a_backdated_correction_keeps_the_id_of_its_settle_date(importer, tmp_pa
 def test_one_balance_assertion_per_currency(entries):
     balances = _balances(entries)
 
+    assert len(balances) == 3
     assert {b.account: b.amount.number for b in balances} == {
         "Assets:IBKR:Cash:USD": _decimal("18355.30"),
         "Assets:IBKR:Cash:EUR": _decimal("1000.00"),
@@ -839,14 +847,14 @@ def test_a_conid_the_ledger_never_declared_stays_unpinned():
 
 
 def test_the_legs_of_one_action_book_as_one_transaction(reorg_entries):
-    (txn,) = [t for t in _txns(reorg_entries) if t.meta.get(ibkr.META_ACTION_ID) == "A51"]
+    txn = _by_action(reorg_entries, "A51")
 
     assert _commodities(txn) == ["RGHT", "WXYZ"]
     assert [p.units.number for p in _postings(txn, "Assets:IBKR:Cash:USD")] == [_decimal("-400.00")]
 
 
 def test_a_paired_action_carries_no_single_transaction_id(reorg_entries):
-    (txn,) = [t for t in _txns(reorg_entries) if t.meta.get(ibkr.META_ACTION_ID) == "A51"]
+    txn = _by_action(reorg_entries, "A51")
 
     assert ibkr.META_TRANSACTION_ID not in txn.meta
     assert ibkr.META_ISIN not in txn.meta
@@ -901,8 +909,11 @@ def test_reorg_directives_load(tmp_path, reorg_entries):
         out.write(REORG_PREAMBLE)
         printer.print_entries(reorg_entries, file=out)
 
-    _loaded, errors, _options = loader.load_file(str(ledger))
+    loaded, errors, _options = loader.load_file(str(ledger))
     assert errors == []
+    # Beancount drops the PnL auto-posting when the legs leave no residual.
+    subscription = _by_action(loaded, "A51")
+    assert _postings(subscription, "Income:IBKR:PnL") == []
 
 
 def test_a_fractional_share_sale_reduces_whatever_ibkr_calls_it(importer, tmp_path):

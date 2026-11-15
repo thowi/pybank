@@ -50,7 +50,8 @@ def canonical_amount(number: decimal.Decimal) -> str:
 def import_ids(rows: Sequence[IdFields]) -> list[str]:
     """Returns one import-id per source row, in the order given.
 
-    Rows yielding the same ID get increasing occurrence indices.
+    Rows yielding the same ID get increasing occurrence indices. They count
+    within one call, so pass all rows of one statement together.
     """
     # Two identical rows on one day are legitimate, two coffees at the same
     # shop, and without the index the second would be silently dropped.
