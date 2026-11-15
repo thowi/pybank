@@ -40,6 +40,12 @@ the migration is to leave history alone and not re-import files already
 imported under `v1`. To re-import history instead, run both normalizations
 over the source archive to build a `v1` to `v2` map, then rewrite the keys.
 
+The source identifier and the memo go into the digest as the export writes
+them, after `normalize_text()`. A bank that changes the shape of either
+between export formats gives the same row a new import-id. Dedupe then
+misses it. An import against an existing ledger warns on the near miss,
+and a rebuild from scratch imports both copies without a warning.
+
 The occurrence index exists because two identical rows on one day are
 legitimate. Two coffees, same shop, same price. Without it the second is
 silently dropped.
