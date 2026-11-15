@@ -12,12 +12,17 @@ Turn the working importers into a complete, categorized history.
 
 ### Where the backfill stands
 
-The backfill is in the ledger: 18889 transactions from 2009 to 2026, with
-the side-car below folded in. It loads with 7 errors, all balance
-assertions on an account whose archive has no statement for the window
-before it: 2 on PostFinance checking, 4 on the DKB card, 1 on DKB
-checking. No source in the archive holds a transaction in those windows,
-so only a missing statement can close them, not code.
+The backfill is in the ledger: About 19000 transactions from 2009 to 2026,
+with the side-car below folded in. It loads with 3 errors, all balance
+assertions: 2 on PostFinance checking, 1 on DKB checking. Whether a
+missing statement or the import causes them is still open.
+
+The 4 errors on the DKB card were import bugs, not missing statements.
+The export dated a few card refunds by their purchase date, weeks away from
+the booking date the statement uses, so the side-car did not fold them.
+It now also matches on the statement's purchase date. Two card bills the
+export booked as a transfer to the account itself had the same effect on
+DKB checking.
 
 Folding the export into the statements is what took the balance failures
 from 59 down, since a doubled transaction breaks every assertion after it.
