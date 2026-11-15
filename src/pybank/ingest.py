@@ -13,6 +13,7 @@ import tomllib
 import beangulp
 import click
 from beancount import loader
+from beancount.core import amount, data, prices
 from beancount.parser import printer
 
 from pybank.importer.beancount import (
@@ -134,6 +135,10 @@ _BUILDERS = {
 }
 
 
+def _answers_path(config: str) -> str:
+    return os.path.join(os.path.dirname(config), _ANSWERS_FILE)
+
+
 def _load_config(path: str) -> dict:
     """Reads the config file, or raises `_ConfigError`."""
     try:
@@ -179,32 +184,70 @@ def _cli() -> click.Group:
     def configure(ctx: click.Context, config: str) -> None:
         try:
             loaded = _load_config(config)
-            answers = transfer_matcher.load_answers(
-                os.path.join(os.path.dirname(config), _ANSWERS_FILE)
-            )
+            answers = transfer_matcher.load_answers(_answers_path(config))
             ctx.obj = beangulp.Ingest(_importers(loaded), hooks=_hooks(loaded, answers))
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 
     group.callback = configure
+    group.add_command(_confirm)
     group.add_command(_unpaired)
     return group
+
+
+def _load_ledger(ledger: str) -> data.Entries:
+    entries, errors, _options = loader.load_file(ledger)
+    # An entry the loader drops takes its leg along, which skews what pairs up.
+    printer.print_errors(errors, file=sys.stderr)
+    return entries
+
+
+def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account) -> None:
+    click.echo(f"{txn.date}  {account}  {units}  {txn.narration}")
+
+
+@click.command("confirm")
+@click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
+@click.pass_context
+def _confirm(ctx: click.Context, ledger: str) -> None:
+    """Ask about each candidate transfer pair in LEDGER that has no answer.
+
+    The answers go to the answers file next to the config, and a rebuild of
+    the ledger from its sources books the confirmed pairs.
+    """
+    path = _answers_path(ctx.find_root().params["config"])
+    entries = _load_ledger(ledger)
+    answers = transfer_matcher.load_answers(path)
+    found = transfer_matcher.candidates(entries, prices.build_price_map(entries))
+    pairs = [pair for pair in found if pair.key not in answers]
+    answered = 0
+    for i, pair in enumerate(pairs, start=1):
+        click.echo(f"\nPair {i} of {len(pairs)}:")
+        for leg in pair:
+            _echo_leg(leg.txn, leg.units, leg.txn.postings[0].account)
+        choice = click.prompt(
+            "Same transfer? [y]es, [n]o, [s]kip, [q]uit",
+            type=click.Choice(["y", "n", "s", "q"], case_sensitive=False),
+            show_choices=False,
+        )
+        if choice == "q":
+            break
+        if choice != "s":
+            transfer_matcher.save_answer(path, pair, choice == "y")
+            answered += 1
+    click.echo(f"Answered {answered} of {len(pairs)} pairs.")
 
 
 @click.command("unpaired")
 @click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
 def _unpaired(ledger: str) -> None:
     """List the clearing postings in LEDGER that no other one cancels."""
-    entries, errors, _options = loader.load_file(ledger)
-    # An entry the loader drops takes its leg along, and its partner then
-    # shows up here without one.
-    printer.print_errors(errors, file=sys.stderr)
-    legs = transfer_matcher.unpaired(entries)
+    legs = transfer_matcher.unpaired(_load_ledger(ledger))
     for txn, posting in legs:
         # A QIF split carries the clearing leg next to category legs, so the
         # amount comes from the clearing posting, seen from the own account.
         own = next(p for p in txn.postings if p.account != IN_TRANSIT)
-        click.echo(f"{txn.date}  {own.account}  {-posting.units}  {txn.narration}")
+        _echo_leg(txn, -posting.units, own.account)
     click.echo(f"Clearing postings without a partner: {len(legs)}")
 
 

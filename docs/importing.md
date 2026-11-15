@@ -63,3 +63,38 @@ and unattended fetching has to keep working.
 Both failure directions are silent. A duplicate inflates every total it
 touches. A dropped row leaves a gap. Only the second is caught, by the next
 balance assertion, so duplicates are the direction worth the warning.
+
+## Transfer pairs
+
+A transfer between own accounts arrives as two rows, one per statement. Both
+book to `Assets:Transfers:InTransit` (see [accounting.md](accounting.md)).
+A row reaches it in one of three ways:
+
+- A `[[transfers]]` hint in the config names its account and text.
+- The QIF export categorizes it as a transfer.
+- It is one leg of a confirmed pair.
+
+A *candidate pair* is two uncategorized rows on different accounts with
+opposite amounts within a week, where neither row fits any other row. In two
+currencies the implied rate has to lie near the market rate. Two unrelated
+rows can carry the same amount, so a candidate books only once it is
+confirmed.
+
+```
+pybank-import --config pybank.toml confirm main.beancount
+```
+
+`confirm` shows each candidate with no answer yet and asks yes, no or skip.
+It appends each answer to `transfer-pairs.toml` next to the config, keyed by
+the import-ids of both legs. The legs are already in the ledger, so an
+incremental import skips them as duplicates. A rebuild from the sources books
+the confirmed pairs.
+
+```
+pybank-import --config pybank.toml unpaired main.beancount
+```
+
+`unpaired` lists the clearing postings that no opposite posting in the same
+currency cancels within a week. These keep `InTransit` from zero. Typical
+causes: The other account has no importer, the transfer changed currency, or
+a fee made the two amounts differ.

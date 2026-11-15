@@ -258,3 +258,25 @@ def test_clearing_postings_in_two_currencies_do_not_cancel():
     entries = [_cleared(CHECKING, "-100"), _cleared(SAVINGS, "100", currency="EUR")]
 
     assert len(_unpaired(entries)) == 2
+
+
+def _pair(sender_id, receiver_id):
+    sender = _leg(sender_id, CHECKING, "-100")
+    receiver = _leg(receiver_id, SAVINGS, "100")
+    return transfer_matcher.Pair(
+        transfer_matcher.Leg(sender_id, sender), transfer_matcher.Leg(receiver_id, receiver)
+    )
+
+
+def test_saved_answers_load_back_after_what_the_file_held(tmp_path):
+    path = tmp_path / "transfer-pairs.toml"
+    path.write_text("# Kept by hand.", encoding="utf-8")
+
+    transfer_matcher.save_answer(str(path), _pair("out", "in"), True)
+    transfer_matcher.save_answer(str(path), _pair("out-2", "in-2"), False)
+
+    assert transfer_matcher.load_answers(str(path)) == {
+        frozenset(["out", "in"]): True,
+        frozenset(["out-2", "in-2"]): False,
+    }
+    assert path.read_text(encoding="utf-8").startswith("# Kept by hand.\n[[pair]]")

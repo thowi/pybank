@@ -1,12 +1,20 @@
 """All values here are invented. Never derive a fixture from a real config."""
 
 import datetime
+import io
 
 import pytest
 from beancount.core import amount, data, flags
 
 from pybank import ingest
-from pybank.importer.beancount import UNCATEGORIZED, dkb, ibkr, postfinance, qif
+from pybank.importer.beancount import (
+    UNCATEGORIZED,
+    dkb,
+    ibkr,
+    postfinance,
+    qif,
+    transfer_matcher,
+)
 
 FULL_CONFIG = """\
 [dkb.card]
@@ -281,3 +289,60 @@ def test_unpaired_reports_load_errors(tmp_path, capsys):
     ingest.main(["--config", _write(tmp_path, ONE_SECTION), "unpaired", str(ledger)])
 
     assert "Expenses:Food" in capsys.readouterr().err
+
+
+CANDIDATES_LEDGER = """\
+2019-01-01 open Assets:Bank:Checking
+2019-01-01 open Assets:Other:Savings
+2019-01-01 open Expenses:Uncategorized
+
+2019-03-04 ! "First out"
+  import-id: "out-1"
+  Assets:Bank:Checking  -100.00 CHF
+  Expenses:Uncategorized
+
+2019-03-05 ! "First in"
+  import-id: "in-1"
+  Assets:Other:Savings  100.00 CHF
+  Expenses:Uncategorized
+
+2019-05-04 ! "Second out"
+  import-id: "out-2"
+  Assets:Bank:Checking  -7.00 CHF
+  Expenses:Uncategorized
+
+2019-05-05 ! "Second in"
+  import-id: "in-2"
+  Assets:Other:Savings  7.00 CHF
+  Expenses:Uncategorized
+"""
+
+
+def _confirm(tmp_path, monkeypatch, keys):
+    ledger = tmp_path / "main.beancount"
+    ledger.write_text(CANDIDATES_LEDGER, encoding="utf-8")
+    monkeypatch.setattr("sys.stdin", io.StringIO(keys))
+    argv = ["--config", _write(tmp_path, ONE_SECTION), "confirm", str(ledger)]
+    assert ingest.main(argv) == 0
+    return transfer_matcher.load_answers(str(tmp_path / "transfer-pairs.toml"))
+
+
+def test_confirm_saves_each_answer(tmp_path, monkeypatch, capsys):
+    answers = _confirm(tmp_path, monkeypatch, "Y\nn\n")
+
+    assert answers == {frozenset(["out-1", "in-1"]): True, frozenset(["out-2", "in-2"]): False}
+    out = capsys.readouterr().out
+    assert "2019-03-04  Assets:Bank:Checking  -100.00 CHF  First out" in out
+    assert "Answered 2 of 2 pairs." in out
+
+
+def test_confirm_asks_only_about_pairs_without_an_answer(tmp_path, monkeypatch, capsys):
+    _confirm(tmp_path, monkeypatch, "s\ny\n")
+
+    answers = _confirm(tmp_path, monkeypatch, "n\n")
+
+    assert answers == {frozenset(["out-2", "in-2"]): True, frozenset(["out-1", "in-1"]): False}
+
+
+def test_confirm_stops_on_quit(tmp_path, monkeypatch):
+    assert _confirm(tmp_path, monkeypatch, "q\n") == {}

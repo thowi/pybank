@@ -9,9 +9,10 @@ of the market rate the ledger's prices give for that day.
 
 A candidate can still be wrong: Two unrelated rows can carry the same amount.
 So only confirmed pairs are booked. `load_answers` reads the answers, which are
-keyed by the import-ids of both legs, and `book` is the beangulp hook that books
-the confirmed pairs. Run it after `transfer_hints.book`, for the same reason
-that one runs after `qif_sidecar.donate`.
+keyed by the import-ids of both legs, `save_answer` appends one, and `book` is
+the beangulp hook that books the confirmed pairs. Run it after
+`transfer_hints.book`, for the same reason that one runs after
+`qif_sidecar.donate`.
 
 `unpaired` reads a whole ledger and returns the clearing postings that nothing
 cancels, which is what keeps the clearing account from zero.
@@ -21,6 +22,7 @@ import bisect
 import collections
 import datetime
 import decimal
+import json
 import logging
 import tomllib
 from collections.abc import Iterable
@@ -153,6 +155,16 @@ def load_answers(path: str) -> Answers:
             raise routing.ConfigError(f"{path}: [[pair]] #{i + 1} needs two legs and confirmed")
         answers[frozenset(legs)] = confirmed
     return answers
+
+
+def save_answer(path: str, pair: Pair, confirmed: bool) -> None:
+    """Appends the answer on one pair to the answers file."""
+    # Appending keeps what the file already holds, comments and hand edits too.
+    # Hand edits must use `[[pair]]` tables, since an inline `pair = [...]`
+    # takes no more. A JSON array of strings is valid TOML.
+    legs = json.dumps([pair.sender.import_id, pair.receiver.import_id])
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"\n[[pair]]\nlegs = {legs}\nconfirmed = {str(confirmed).lower()}\n")
 
 
 def _booked_pair(pair: Pair) -> tuple[data.Transaction, data.Transaction]:
