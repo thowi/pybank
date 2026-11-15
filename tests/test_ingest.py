@@ -344,5 +344,15 @@ def test_confirm_asks_only_about_pairs_without_an_answer(tmp_path, monkeypatch, 
     assert answers == {frozenset(["out-2", "in-2"]): True, frozenset(["out-1", "in-1"]): False}
 
 
+def test_confirm_skips_a_leg_of_a_confirmed_pair(tmp_path, monkeypatch):
+    path = tmp_path / "transfer-pairs.toml"
+    path.write_text('[[pair]]\nlegs = ["out-1", "elsewhere"]\nconfirmed = true\n', encoding="utf-8")
+
+    answers = _confirm(tmp_path, monkeypatch, "n\n")
+
+    assert frozenset(["out-1", "in-1"]) not in answers
+    assert answers[frozenset(["out-2", "in-2"])] is False
+
+
 def test_confirm_stops_on_quit(tmp_path, monkeypatch):
     assert _confirm(tmp_path, monkeypatch, "q\n") == {}

@@ -219,7 +219,10 @@ def _confirm(ctx: click.Context, ledger: str) -> None:
     entries = _load_ledger(ledger)
     answers = transfer_matcher.load_answers(path)
     found = transfer_matcher.candidates(entries, prices.build_price_map(entries))
-    pairs = [pair for pair in found if pair.key not in answers]
+    # A leg of a confirmed pair is taken. A fee pair books its receiver beyond
+    # what a leg can be, so its sender would otherwise seek a new partner.
+    taken = {import_id for key, confirmed in answers.items() if confirmed for import_id in key}
+    pairs = [pair for pair in found if pair.key not in answers and pair.key.isdisjoint(taken)]
     answered = 0
     for i, pair in enumerate(pairs, start=1):
         click.echo(f"\nPair {i} of {len(pairs)}:")

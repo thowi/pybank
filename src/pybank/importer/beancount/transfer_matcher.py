@@ -6,6 +6,9 @@ Two legs are a *candidate pair* when money leaves one account and arrives on
 another within `_WINDOW`, and neither leg fits any other leg.
 Legs in different currencies fit when their implied rate is within `_RATE_BAND`
 of the market rate the ledger's prices give for that day.
+Legs in one currency fit when the amounts match. Two legs that match nothing
+exactly also fit when the receiver got up to `_FEE_SHARE` or `_FEE_FLOOR`
+less, the fee a bank on the way kept. Booking puts that fee on `BANK_FEES`.
 
 A candidate can still be wrong: Two unrelated rows can carry the same amount.
 So only confirmed pairs are booked. `load_answers` reads the answers, which are
@@ -25,7 +28,7 @@ import decimal
 import json
 import logging
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
 from beancount.core import amount, data, flags, prices
@@ -43,6 +46,13 @@ _WINDOW = datetime.timedelta(days=7)
 # How far a cross-currency pair's rate may stray from the market rate. Banks
 # charge a spread on the rate, and a fixed fee weighs more on a small amount.
 _RATE_BAND = decimal.Decimal("0.05")
+
+# The largest fee a bank on the way may keep: A share of the amount, or the
+# floor, in the transfer's currency.
+_FEE_SHARE = decimal.Decimal("0.005")
+_FEE_FLOOR = decimal.Decimal(10)
+
+BANK_FEES = "Expenses:Fees:Bank"
 
 logger = logging.getLogger(__name__)
 
@@ -86,8 +96,6 @@ def _leg(entry: data.Directive) -> Leg | None:
 
 
 def _fits(sender: Leg, receiver: Leg, price_map: prices.PriceMap) -> bool:
-    if sender.txn.postings[0].account == receiver.txn.postings[0].account:
-        return False
     sent, received = -sender.units.number, receiver.units.number
     if sender.units.currency == receiver.units.currency:
         return sent == received
@@ -98,21 +106,40 @@ def _fits(sender: Leg, receiver: Leg, price_map: prices.PriceMap) -> bool:
     return abs(received / sent / market - 1) <= _RATE_BAND
 
 
-def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Pair]:
-    """Returns every pair of legs that fit each other and nothing else."""
-    legs = [leg for leg in map(_leg, entries) if leg is not None]
+def _fits_with_fee(sender: Leg, receiver: Leg) -> bool:
+    if sender.units.currency != receiver.units.currency:
+        return False
+    sent = -sender.units.number
+    return 0 < sent - receiver.units.number <= max(sent * _FEE_SHARE, _FEE_FLOOR)
+
+
+def _fit_map(legs: list[Leg], fits: Callable[[Leg, Leg], bool]) -> dict[str, list[Leg]]:
+    """Returns the legs each leg fits within `_WINDOW`, keyed by import-id."""
     senders = [leg for leg in legs if leg.units.number < 0]
     receivers = sorted((leg for leg in legs if leg.units.number > 0), key=lambda leg: leg.txn.date)
     dates = [leg.txn.date for leg in receivers]
 
-    fits: dict[str, list[Leg]] = {}
+    result: dict[str, list[Leg]] = {}
     for sender in senders:
         start = bisect.bisect_left(dates, sender.txn.date - _WINDOW)
         end = bisect.bisect_right(dates, sender.txn.date + _WINDOW)
         for receiver in receivers[start:end]:
-            if _fits(sender, receiver, price_map):
-                fits.setdefault(sender.import_id, []).append(receiver)
-                fits.setdefault(receiver.import_id, []).append(sender)
+            if sender.txn.postings[0].account == receiver.txn.postings[0].account:
+                continue
+            if fits(sender, receiver):
+                result.setdefault(sender.import_id, []).append(receiver)
+                result.setdefault(receiver.import_id, []).append(sender)
+    return result
+
+
+def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Pair]:
+    """Returns every pair of legs that fit each other and nothing else."""
+    legs = [leg for leg in map(_leg, entries) if leg is not None]
+    senders = [leg for leg in legs if leg.units.number < 0]
+    fits = _fit_map(legs, lambda sender, receiver: _fits(sender, receiver, price_map))
+    # A fee only explains a gap for legs that fit nothing exactly. Otherwise a
+    # leg a fee away would make an exact pair ambiguous.
+    fits |= _fit_map([leg for leg in legs if leg.import_id not in fits], _fits_with_fee)
 
     result = []
     for sender in senders:
@@ -120,15 +147,16 @@ def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) ->
         if len(matched) != 1 or len(fits[matched[0].import_id]) != 1:
             continue
         pair = Pair(sender, matched[0])
-        # Two legs already in the clearing account in one currency cancel out
-        # without anyone's say. They only counted above, to spot ambiguity.
+        # Two legs already in the clearing account with opposite amounts in one
+        # currency cancel out without anyone's say. They only counted above, to
+        # spot ambiguity.
         if _needs_booking(pair):
             result.append(pair)
     return result
 
 
 def _needs_booking(pair: Pair) -> bool:
-    if pair.sender.units.currency != pair.receiver.units.currency:
+    if -pair.sender.units != pair.receiver.units:
         return True
     return any(leg.txn.postings[1].account == UNCATEGORIZED for leg in pair)
 
@@ -170,16 +198,24 @@ def save_answer(path: str, pair: Pair, confirmed: bool) -> None:
 def _booked_pair(pair: Pair) -> tuple[data.Transaction, data.Transaction]:
     """Returns both legs, booked through the clearing account."""
     sender, receiver = (_cleared(leg.txn) for leg in pair)
-    if pair.sender.units.currency != pair.receiver.units.currency:
+    sent, received = pair.sender.units, pair.receiver.units
+    if sent.currency != received.currency:
         # The clearing account holds the sender's currency, and the receiving
         # leg converts it at the rate the banks applied.
-        sent, received = pair.sender.units, pair.receiver.units
         # A quotient rarely terminates. Eight places keep the rounding error far
         # below a cent on any amount a transfer carries.
         rate = (received.number / -sent.number).quantize(decimal.Decimal("1e-8"))
         price = amount.Amount(rate, received.currency)
         contra = receiver.postings[1]._replace(units=sent, price=price)
         receiver = receiver._replace(postings=[receiver.postings[0], contra])
+    elif _fits_with_fee(*pair):
+        # The clearing account takes back what was sent, and the receiving
+        # leg books what did not arrive as the fee. Any other gap stays in
+        # the clearing account, where `unpaired` reports it.
+        contra = receiver.postings[1]._replace(units=sent)
+        fee = amount.Amount(-sent.number - received.number, sent.currency)
+        fee_posting = data.Posting(BANK_FEES, fee, None, None, None, None)
+        receiver = receiver._replace(postings=[receiver.postings[0], contra, fee_posting])
     return sender, receiver
 
 

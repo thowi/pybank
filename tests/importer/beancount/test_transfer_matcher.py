@@ -107,6 +107,52 @@ def test_currencies_without_a_market_rate_do_not_pair():
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
+# The fee limit is 0.5% of the amount, or 10 where that is more.
+@pytest.mark.parametrize(("sent", "received"), [("-4000", "3980"), ("-100", "90")])
+def test_a_leg_that_arrives_short_by_a_fee_pairs(sent, received):
+    entries = [_leg("out", CHECKING, sent), _leg("in", SAVINGS, received, days=1)]
+
+    assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
+
+
+@pytest.mark.parametrize(
+    ("sent", "received"), [("-4000", "3979.99"), ("-100", "89.99"), ("-100", "101")]
+)
+def test_a_gap_no_fee_explains_does_not_pair(sent, received):
+    entries = [_leg("out", CHECKING, sent), _leg("in", SAVINGS, received, days=1)]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
+def test_an_exact_partner_wins_over_one_a_fee_away():
+    entries = [
+        _leg("out", CHECKING, "-100"),
+        _leg("in", SAVINGS, "100"),
+        _leg("short", BROKER, "98"),
+    ]
+
+    assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
+
+
+def test_two_legs_a_fee_away_pair_with_neither():
+    entries = [
+        _leg("out", CHECKING, "-100"),
+        _leg("in", SAVINGS, "98"),
+        _leg("also-in", BROKER, "97"),
+    ]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
+def test_clearing_postings_a_fee_apart_need_an_answer():
+    entries = [
+        _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "98", contra=IN_TRANSIT),
+    ]
+
+    assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
+
+
 def _book(answers, entries):
     groups = [("statement.csv", entries, CHECKING, postfinance.CheckingImporter({}))]
     return transfer_matcher.book(answers, groups, [])[0][1]
@@ -133,6 +179,17 @@ def test_a_confirmed_pair_in_two_currencies_converts_on_the_receiving_leg():
     assert contra.units == amount.Amount(data.Decimal("-100"), "EUR")
     assert contra.units.number * contra.price.number == data.Decimal("-107.50")
     assert contra.price.currency == "CHF"
+
+
+def test_a_confirmed_pair_books_the_fee_on_the_receiving_leg():
+    entries = [_leg("out", CHECKING, "-100"), _leg("in", SAVINGS, "98")]
+
+    _, received = _book({frozenset(["out", "in"]): True}, entries)
+
+    assert [(p.account, p.units) for p in received.postings[1:]] == [
+        (IN_TRANSIT, amount.Amount(data.Decimal("-100"), "CHF")),
+        (transfer_matcher.BANK_FEES, amount.Amount(data.Decimal("2"), "CHF")),
+    ]
 
 
 def test_a_rejected_or_unanswered_pair_stays_as_it_was():

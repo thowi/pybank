@@ -76,7 +76,10 @@ A row reaches it in one of three ways:
 
 A *candidate pair* is two uncategorized rows on different accounts with
 opposite amounts within a week, where neither row fits any other row. In two
-currencies the implied rate has to lie near the market rate. Two unrelated
+currencies the implied rate has to lie near the market rate. In one currency,
+two rows that match nothing exactly also pair when the receiver got up to
+0.5% less, or up to 10 on a small amount. Booking puts that gap on
+`Expenses:Fees:Bank`. Two unrelated
 rows can carry the same amount, so a candidate books only once it is
 confirmed.
 
@@ -97,4 +100,4 @@ pybank-import --config pybank.toml unpaired main.beancount
 `unpaired` lists the clearing postings that no opposite posting in the same
 currency cancels within a week. These keep `InTransit` from zero. Typical
 causes: The other account has no importer, the transfer changed currency, or
-a fee made the two amounts differ.
+a fee made the two amounts differ and the pair is not confirmed yet.
