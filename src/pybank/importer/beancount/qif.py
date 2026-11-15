@@ -279,7 +279,8 @@ class Importer(beangulp.Importer):
         targets: Mapping[str, Target],
         categories: Mapping[str, data.Account] = {},
     ):
-        """
+        """Maps the export's accounts and categories to ledger accounts.
+
         :param targets: Ledger account and currency per account name in the
             export. Accounts left out are skipped.
         :param categories: Ledger account per QIF category label, for the ones

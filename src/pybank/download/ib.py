@@ -603,8 +603,7 @@ class InteractiveBrokers(bank.Bank):
         return displayed
 
     def _split_account_name(self, account_name: str) -> tuple[str, str]:
-        """Splits a combined account name in the form ACCNAME.CUR into the
-        account name and currency parts.
+        """Splits a combined account name ACCNAME.CUR into name and currency.
 
         :param account_name: The combined account name in the form ACCNAME.CUR.
         :returns: The account name and currency parts as a tuple.

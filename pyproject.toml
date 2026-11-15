@@ -44,14 +44,21 @@ extend-exclude = ["docs"]
 
 [tool.ruff.lint]
 # `ruff format` reflows code but never docstrings or comments, so prose has
-# nothing holding it to a width. W505 is the only check that reads it.
-extend-select = ["W505"]
-# Transaction dates are calendar dates. Timezone-aware datetimes would
+# nothing holding it to a width. W505 is the only check that reads it. D holds
+# docstrings to PEP 257.
+extend-select = ["D", "W505"]
+# D1: A docstring that only restates the name is noise, so none is required.
+# D401: Summaries use the third person ("Returns ...", "Splits ..."), and
+# D401 wants the imperative ("Return ...").
+# DTZ: Transaction dates are calendar dates. Timezone-aware datetimes would
 # attach a value we do not have. The real fix is datetime.date, which the
 # Beancount importers already use.
-ignore = ["DTZ"]
+ignore = ["D1", "D401", "DTZ"]
 
 [tool.ruff.lint.pycodestyle]
 # Prose wraps narrower than the 100 columns code gets, which is what the
 # Beancount importers already do by hand.
 max-doc-length = 80
+
+[tool.ruff.lint.pydocstyle]
+convention = "pep257"

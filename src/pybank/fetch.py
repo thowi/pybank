@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 
 
 class Usage(Exception):
+    # The docstring is the help text `__str__` prints, so it keeps that shape.
     """Usage: bank.py
     [-h|--help]
     [-b bank|--bank=bank]
@@ -50,7 +51,7 @@ class Usage(Exception):
     [-o outfile|--outfile=outfile]     Default: STDOUT.
         Variables will be replaced: %(bank)s %(account)s %(from)s %(till)s
     [-d|--debug]
-    """
+    """  # noqa: D205, D400
 
     def __init__(self, msg=""):
         self.msg = msg

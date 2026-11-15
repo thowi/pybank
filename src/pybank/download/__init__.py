@@ -84,8 +84,9 @@ def get_element_or_none(
 
 
 def is_element_present(lookup_callable: Callable[[], WebElement]) -> bool:
-    """Returns whether the lookup was successful or a NoSuchElementException was
-    caught.
+    """Returns whether the lookup was successful.
+
+    A caught NoSuchElementException counts as unsuccessful.
 
     :param lookup_callable: The lookup to execute
     :return: Returns whether the lookup was successful
@@ -94,11 +95,10 @@ def is_element_present(lookup_callable: Callable[[], WebElement]) -> bool:
 
 
 def is_element_displayed(lookup_callable: Callable[[], WebElement]) -> bool:
-    """Returns whether the lookup was successful, the element was found, and it
-    is displayed.
+    """Returns whether the lookup found an element and it is displayed.
 
     :param lookup_callable: The lookup to execute
-    :return: Returns whether the was found and is displayed
+    :return: Returns whether the element was found and is displayed
     """
     element = get_element_or_none(lookup_callable)
     return element is not None and element.is_displayed()
