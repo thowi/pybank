@@ -293,7 +293,12 @@ four ways, in the order worth working them:
   uncategorized, so they need matching on the detection key above.
 - **An account with no importer.** Most of the export's clearing postings
   name one. They close only once that account is seeded with
-  `Equity:Opening-Balances`. Decide per account.
+  `Equity:Opening-Balances`. Decided: The export is the only source for
+  eight such accounts (Revolut and Wise in three currencies each, a rent
+  deposit, a pillar 3a account). They are now `[qif.targets]`, and their
+  history ends where the export ends. Kraken, Coinbase and EquityZen wait
+  for phase 5. Unpaired clearing postings went from 213 to 204. Most of the
+  rest are statement legs that have no QIF row.
 
 ## Categorization v1
 
