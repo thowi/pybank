@@ -47,9 +47,18 @@ Done. The skeleton passes `bean-check`.
   account is. Swiss private capital gains are generally tax-free, so lots
   serve performance reporting, not tax. Equity compensation books the same
   way, which keeps vested and open-market lots of one ticker comparable.
-- Prices: `beanprice`, monthly. Year-end prices are needed for wealth tax
-  regardless. Monthly is enough to make a performance chart readable without
-  turning `prices.beancount` into a data feed.
+- Prices: `beanprice`. Currencies weekly, from the ECB reference rates. The
+  transfer matcher prices a cross-currency pair at the rate of its day, and
+  a month-old rate eats most of its band. `beanprice` has no monthly rate
+  either. Year-end prices are needed for wealth tax regardless. Securities
+  follow once they have a source.
+- ECB source: pybank ships its own, `pybank.ecb_rates`. The `ecbrates`
+  source in `beanprice` stops on an ECB holiday, because the ECB lists that
+  day with an empty rate. `ratesapi` gets stale, partial answers from
+  Frankfurter. `beanprice` asks once per date, and one failed request ends
+  its run, so the source retries timeouts and 5xx answers. To do: Fix
+  `ecbrates` upstream (ask for a window of dates, skip empty rates). Then
+  switch the ledger back and delete the module.
 - Commodities: The ticker is the commodity name. ISIN and the IBKR `conid`
   ride along as `commodity` metadata, so a ticker rename or a dual listing
   stays resolvable.
