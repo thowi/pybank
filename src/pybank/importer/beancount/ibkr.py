@@ -74,6 +74,10 @@ _ZERO = decimal.Decimal(0)
 # How far a cash assertion may miss before it means something.
 _BALANCE_TOLERANCE = decimal.Decimal("0.00001")
 
+# The finest step Flex reports a lot quantity in. A lot converted by a
+# corporate action rounds to it, so the lots of one trade can miss its quantity.
+_LOT_QUANTITY_STEP = decimal.Decimal("0.000001")
+
 # The largest imbalance to write off as rounding. IBKR reports rates and
 # position values to a fixed number of digits, so the legs of a conversion meet
 # a small fraction of a cent apart. Anything larger is a real gap and stays
@@ -639,13 +643,18 @@ class Importer(beangulp.Importer):
         if _closes(trade):
             postings = self._closing_postings(trade, lots, commodity, price)
             # A `C;O` trade closes the named lots and opens whatever is left
-            # over, which is also where a lot set that does not quite add up
-            # to the trade ends up. With no lots at all nothing splits the close
-            # from the open: The postings above reduce the whole quantity under
-            # FIFO, also for a `C;O` trade.
+            # over. With no lots at all nothing splits the close from the open:
+            # The postings above reduce the whole quantity under FIFO, also for
+            # a `C;O` trade.
             closed = sum((lot.quantity for lot in lots if lot.quantity is not None), _ZERO)
             residual = trade.quantity + closed if lots else _ZERO
-            if residual and trade.openCloseIndicator is enums.OpenClose.OPENCLOSE:
+            # Each lot can miss by up to a step, whether Flex rounds or cuts.
+            # Such a miss is rounding, so the last lot takes it and FIFO picks.
+            if residual and abs(residual) <= len(lots) * _LOT_QUANTITY_STEP:
+                last = postings[-1]
+                units = amount.Amount(last.units.number + residual, commodity)
+                postings[-1] = last._replace(units=units)
+            elif residual and trade.openCloseIndicator is enums.OpenClose.OPENCLOSE:
                 postings.append(
                     self._opening_posting(residual, commodity, unit_cost, currency, date)
                 )

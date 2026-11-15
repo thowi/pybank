@@ -966,6 +966,34 @@ def test_a_sale_through_zero_opens_a_short_with_what_its_lots_leave(importer, tm
     assert errors == []
 
 
+@pytest.mark.parametrize("lot", ["14.999999", "15.000001"])
+def test_lots_that_miss_by_rounding_close_the_whole_trade(importer, tmp_path, caplog, lot):
+    rounded = (
+        CLOSE_OPEN_XML.replace(
+            'quantity="10" tradePrice="100.00"\n proceeds="-1000.00"',
+            'quantity="15" tradePrice="100.00"\n proceeds="-1500.00"',
+        )
+        .replace('netCash="-1000.00"', 'netCash="-1500.00"')
+        .replace(
+            'quantity="10" tradePrice="100.00" cost="1000.00"',
+            f'quantity="{lot}" tradePrice="100.00" cost="1500.00"',
+        )
+    )
+    entries = importer.extract(_write(tmp_path, "rounded.xml", rounded), [])
+
+    (closed,) = _postings(_by_id(entries, "C2"), SECURITIES)
+    assert closed.units.number == _decimal(-15)
+    assert "FIFO" not in caplog.text
+
+    ledger = tmp_path / "rounded.beancount"
+    with ledger.open("w") as out:
+        out.write(LEDGER_PREAMBLE)
+        printer.print_entries(entries, file=out)
+
+    _loaded, errors, _options = loader.load_file(str(ledger))
+    assert errors == []
+
+
 def test_a_transfer_without_lots_moves_at_its_transfer_price(importer, tmp_path):
     entries = importer.extract(_write(tmp_path, "no-lots.xml", TRANSFER_NO_LOTS_XML), [])
 
