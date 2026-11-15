@@ -12,8 +12,11 @@ import tomllib
 
 import beangulp
 import click
+from beancount import loader
+from beancount.parser import printer
 
 from pybank.importer.beancount import (
+    IN_TRANSIT,
     dkb,
     ibkr,
     postfinance,
@@ -184,7 +187,25 @@ def _cli() -> click.Group:
             raise click.ClickException(str(err)) from err
 
     group.callback = configure
+    group.add_command(_unpaired)
     return group
+
+
+@click.command("unpaired")
+@click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
+def _unpaired(ledger: str) -> None:
+    """List the clearing postings in LEDGER that no other one cancels."""
+    entries, errors, _options = loader.load_file(ledger)
+    # An entry the loader drops takes its leg along, and its partner then
+    # shows up here without one.
+    printer.print_errors(errors, file=sys.stderr)
+    legs = transfer_matcher.unpaired(entries)
+    for txn, posting in legs:
+        # A QIF split carries the clearing leg next to category legs, so the
+        # amount comes from the clearing posting, seen from the own account.
+        own = next(p for p in txn.postings if p.account != IN_TRANSIT)
+        click.echo(f"{txn.date}  {own.account}  {-posting.units}  {txn.narration}")
+    click.echo(f"Clearing postings without a partner: {len(legs)}")
 
 
 def main(argv: list[str] | None = None) -> int:

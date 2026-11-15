@@ -197,3 +197,64 @@ def test_an_answer_with_a_nested_leg_is_reported(tmp_path):
 
     with pytest.raises(routing.ConfigError, match="two legs"):
         transfer_matcher.load_answers(str(path))
+
+
+def _cleared(account, number, days=0, currency="CHF"):
+    """A leg as the loaded ledger holds it, with the clearing amount set."""
+    units = amount.Amount(data.Decimal(number), currency)
+    postings = [
+        data.Posting(account, units, None, None, None, None),
+        data.Posting(IN_TRANSIT, -units, None, None, None, None),
+    ]
+    date = DAY + datetime.timedelta(days=days)
+    return data.Transaction(
+        {}, date, flags.FLAG_OKAY, None, "Transfer", data.EMPTY_SET, data.EMPTY_SET, postings
+    )
+
+
+def _unpaired(entries):
+    return [(txn.date, posting.units.number) for txn, posting in transfer_matcher.unpaired(entries)]
+
+
+def test_opposite_clearing_postings_within_the_window_cancel():
+    entries = [_cleared(CHECKING, "-100"), _cleared(SAVINGS, "100", days=7)]
+
+    assert _unpaired(entries) == []
+
+
+def test_clearing_postings_too_far_apart_stay_unpaired():
+    entries = [_cleared(CHECKING, "-100"), _cleared(SAVINGS, "100", days=8)]
+
+    assert len(_unpaired(entries)) == 2
+
+
+def test_an_arrival_cancels_only_the_oldest_open_departure():
+    entries = [
+        _cleared(CHECKING, "-100"),
+        _cleared(CHECKING, "-100", days=4),
+        _cleared(SAVINGS, "100", days=5),
+    ]
+
+    assert _unpaired(entries) == [(DAY + datetime.timedelta(days=4), data.Decimal("100"))]
+
+
+def test_crossing_transfers_all_cancel():
+    """Pairing each arrival with its nearest departure would strand two legs."""
+    entries = [
+        _cleared(CHECKING, "-100", days=-5),
+        _cleared(SAVINGS, "100"),
+        _cleared(CHECKING, "-100", days=3),
+        _cleared(SAVINGS, "100", days=7),
+    ]
+
+    assert _unpaired(entries) == []
+
+
+def test_a_zero_clearing_posting_is_no_leftover():
+    assert _unpaired([_cleared(CHECKING, "0")]) == []
+
+
+def test_clearing_postings_in_two_currencies_do_not_cancel():
+    entries = [_cleared(CHECKING, "-100"), _cleared(SAVINGS, "100", currency="EUR")]
+
+    assert len(_unpaired(entries)) == 2

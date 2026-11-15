@@ -234,3 +234,50 @@ def test_main_without_a_config_exits_rather_than_guessing(capsys):
 
 def test_the_config_option_reaches_the_importers(tmp_path):
     assert ingest.main(["--config", _write(tmp_path, FULL_CONFIG), "identify"]) == 0
+
+
+UNPAIRED_LEDGER = """\
+2019-01-01 open Assets:Bank:Checking
+2019-01-01 open Assets:Other:Savings
+2019-01-01 open Assets:Transfers:InTransit
+2019-01-01 open Expenses:Food
+
+2019-03-04 * "Paired out"
+  Assets:Bank:Checking  -100.00 CHF
+  Assets:Transfers:InTransit
+
+2019-03-06 * "Paired in"
+  Assets:Other:Savings  100.00 CHF
+  Assets:Transfers:InTransit
+
+2019-03-08 * "Lonely out"
+  Assets:Bank:Checking  -40.00 CHF
+  Assets:Transfers:InTransit
+
+2019-03-09 * "Split with a transfer"
+  Assets:Bank:Checking  -150.00 CHF
+  Expenses:Food  100.00 CHF
+  Assets:Transfers:InTransit  50.00 CHF
+"""
+
+
+def test_unpaired_lists_the_clearing_postings_nothing_cancels(tmp_path, capsys):
+    ledger = tmp_path / "main.beancount"
+    ledger.write_text(UNPAIRED_LEDGER, encoding="utf-8")
+
+    assert ingest.main(["--config", _write(tmp_path, ONE_SECTION), "unpaired", str(ledger)]) == 0
+
+    out = capsys.readouterr().out
+    assert "2019-03-08  Assets:Bank:Checking  -40.00 CHF  Lonely out" in out
+    assert "2019-03-09  Assets:Bank:Checking  -50.00 CHF  Split with a transfer" in out
+    assert "Paired" not in out
+    assert "Clearing postings without a partner: 2" in out
+
+
+def test_unpaired_reports_load_errors(tmp_path, capsys):
+    ledger = tmp_path / "main.beancount"
+    ledger.write_text(UNPAIRED_LEDGER.replace("2019-01-01 open Expenses:Food\n", ""), "utf-8")
+
+    ingest.main(["--config", _write(tmp_path, ONE_SECTION), "unpaired", str(ledger)])
+
+    assert "Expenses:Food" in capsys.readouterr().err

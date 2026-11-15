@@ -12,9 +12,13 @@ So only confirmed pairs are booked. `load_answers` reads the answers, which are
 keyed by the import-ids of both legs, and `book` is the beangulp hook that books
 the confirmed pairs. Run it after `transfer_hints.book`, for the same reason
 that one runs after `qif_sidecar.donate`.
+
+`unpaired` reads a whole ledger and returns the clearing postings that nothing
+cancels, which is what keeps the clearing account from zero.
 """
 
 import bisect
+import collections
 import datetime
 import decimal
 import logging
@@ -209,3 +213,38 @@ def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> li
         (filepath, [replaced.get(id(entry), entry) for entry in group], account, importer)
         for filepath, group, account, importer in extracted
     ]
+
+
+def unpaired(entries: Iterable[data.Directive]) -> list[tuple[data.Transaction, data.Posting]]:
+    """Returns the clearing postings that no other clearing posting cancels."""
+    # Two postings cancel when they carry opposite amounts in one currency
+    # within `_WINDOW`. One sweep in date order cancels each posting with the
+    # oldest open one of the other sign. A nearest-first choice can strand two
+    # legs that this pairs. The open ones never mix signs, since any two in
+    # reach of each other would have cancelled.
+    legs = sorted(
+        (
+            (entry, posting)
+            for entry in entries
+            if isinstance(entry, data.Transaction)
+            for posting in entry.postings
+            if posting.account == IN_TRANSIT and posting.units and posting.units.number
+        ),
+        key=lambda leg: leg[0].date,
+    )
+    open_legs: dict[tuple[str, decimal.Decimal], collections.deque] = collections.defaultdict(
+        collections.deque
+    )
+    result = []
+    for entry, posting in legs:
+        units = posting.units
+        queue = open_legs[(units.currency, abs(units.number))]
+        while queue and entry.date - queue[0][0].date > _WINDOW:
+            result.append(queue.popleft())
+        if queue and (queue[0][1].units.number > 0) != (units.number > 0):
+            queue.popleft()
+        else:
+            queue.append((entry, posting))
+    for queue in open_legs.values():
+        result.extend(queue)
+    return sorted(result, key=lambda leg: leg[0].date)
