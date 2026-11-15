@@ -14,8 +14,16 @@ Turn the working importers into a complete, categorized history.
 
 The backfill is in the ledger: About 19000 transactions from 2009 to 2026,
 with the side-car below folded in. It loads with 3 errors, all balance
-assertions: 2 on PostFinance checking, 1 on DKB checking. Whether a
-missing statement or the import causes them is still open.
+assertions: 2 on PostFinance checking, 1 on DKB checking. All 3 are
+missing statement rows, checked against the PDFs:
+
+- PostFinance checking, 2021-05-01 to 2021-06-10: The export for that
+  window is row-capped and starts on 2021-06-10, partway through the day.
+  The QIF ends before it. To do: Re-export the window from e-finance, or
+  parse the two monthly PDFs if the bank no longer has it.
+- DKB checking, from 2026-01-01: The newest export covers the last quarter
+  of 2025, but asserts the balance on the day it was exported. To do:
+  Export 2026 to date.
 
 The 4 errors on the DKB card were import bugs, not missing statements.
 The export dated a few card refunds by their purchase date, weeks away from
