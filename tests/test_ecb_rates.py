@@ -42,7 +42,7 @@ def ecb(monkeypatch):
         ecb.requests.append((url, params))
         return _Response(ecb.text, ecb.status_code)
 
-    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(ecb_rates._SESSION, "get", get)
     return ecb
 
 

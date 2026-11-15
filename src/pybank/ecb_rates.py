@@ -15,8 +15,22 @@ import io
 
 import requests
 from beanprice import source
+from requests import adapters
+from urllib3.util import retry
 
 _URL = "https://data-api.ecb.europa.eu/service/data/EXR/D.{}.EUR.SP00.A"
+
+# bean-price asks once per date, and one failed request ends its whole run.
+# The ECB API may fail with a timeout or a 5xx.
+_SESSION = requests.Session()
+_SESSION.mount(
+    "https://",
+    adapters.HTTPAdapter(
+        max_retries=retry.Retry(
+            backoff_factor=1, status_forcelist=(429, 500, 502, 503, 504), total=6
+        )
+    ),
+)
 
 # Reaches past the longest run of days without a rate, the turn of the year.
 _LOOKBACK = datetime.timedelta(days=14)
@@ -63,7 +77,7 @@ def _euro_rates(currencies: set[str], day: datetime.date) -> dict[str, Rate]:
         "startPeriod": (day - _LOOKBACK).isoformat(),
     }
     url = _URL.format("+".join(sorted(currencies)))
-    response = requests.get(url, params=params, timeout=_TIMEOUT_SECONDS)
+    response = _SESSION.get(url, params=params, timeout=_TIMEOUT_SECONDS)
     response.raise_for_status()
     rates: dict[str, Rate] = {}
     for row in csv.DictReader(io.StringIO(response.text)):
