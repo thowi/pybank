@@ -7,8 +7,9 @@ export worth reading.
 
 Written against SEE Finance, which is the only export it has been tested on.
 QIF fixes neither the date format nor the decimal separator, so `_DATE_FORMAT`
-and `_number` encode one app's choices and another app needs its own. So does
-`_SPLIT_MARKER`, the word the exporter puts in the category field of a split.
+and `_number` encode one app's choices and another app needs its own. So do
+`_SPLIT_MARKER`, the word the exporter puts in the category field of a split,
+and `_OPENING_PAYEE`, the payee it gives an opening balance.
 
 Only bank and credit card accounts are read. QIF carries no lots and no
 prices, so a broker's own export books an investment account better than this
@@ -62,6 +63,9 @@ _DATE_FORMAT = "%d.%m.%Y"
 # What the exporter writes in the category field of a split, in place of a
 # category. It can arrive without any leg, and then the breakdown is gone.
 _SPLIT_MARKER = "Split"
+
+# What the exporter writes as the payee of an account's opening balance.
+_OPENING_PAYEE = "Starting Balance"
 
 _INCOME_ROOT = "Income"
 _EXPENSES_ROOT = "Expenses"
@@ -361,7 +365,7 @@ class Importer(beangulp.Importer):
         for leg in row.legs:
             postings.append(
                 data.Posting(
-                    self._counter_account(leg, income, row.source),
+                    self._counter_account(leg, income, row),
                     amount.Amount(-leg.number, target.currency),
                     None,
                     None,
@@ -384,13 +388,17 @@ class Importer(beangulp.Importer):
             postings,
         )
 
-    def _counter_account(self, leg: _Leg, income: Mapping[str, bool], source: str) -> data.Account:
+    def _counter_account(
+        self, leg: _Leg, income: Mapping[str, bool], row: _Transaction
+    ) -> data.Account:
         if not leg.label:
             return UNCATEGORIZED
         if leg.label in self._categories:
             return self._categories[leg.label]
         # QIF records an opening balance as a transfer from the account itself.
-        if leg.label == f"[{source}]":
+        # The exporter writes that label on plain transfers too, so the payee
+        # decides.
+        if leg.label == f"[{row.source}]" and row.payee == _OPENING_PAYEE:
             return OPENING_BALANCES
         # Both legs of a transfer land here and cancel out, so a nonzero
         # clearing balance is the report of what failed to pair up.

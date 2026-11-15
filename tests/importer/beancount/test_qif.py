@@ -302,12 +302,20 @@ def test_both_legs_of_a_transfer_go_through_the_clearing_account(importer, path)
 
 
 def test_a_transfer_from_the_account_itself_is_its_opening_balance(tmp_path, importer):
-    opening = "!Type:Bank\nD01.01.2026\nT1000.00\nPOpening Balance\nL[Checking]\n^\n"
+    opening = "!Type:Bank\nD01.01.2026\nT1000.00\nPStarting Balance\nL[Checking]\n^\n"
     content = EXPORT_QIF.replace("!Type:Bank\n", opening, 1)
     txns = _txns(importer.extract(_write(tmp_path, "opening.qif", content), []))
 
-    assert txns[0].payee == "Opening Balance"
+    assert txns[0].payee == "Starting Balance"
     assert txns[0].postings[1].account == OPENING_BALANCES
+
+
+def test_any_other_transfer_from_the_account_itself_is_a_transfer(tmp_path, importer):
+    bill = "!Type:Bank\nD10.01.2026\nT-30.00\nMCard bill\nL[Checking]\n^\n"
+    content = EXPORT_QIF.replace("!Type:Bank\n", bill, 1)
+    txns = _by_narration(importer.extract(_write(tmp_path, "bill.qif", content), []))
+
+    assert txns["Card bill"].postings[1].account == IN_TRANSIT
 
 
 def test_the_split_marker_never_becomes_a_category(importer, path):
