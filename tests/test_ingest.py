@@ -318,9 +318,9 @@ CANDIDATES_LEDGER = """\
 """
 
 
-def _confirm(tmp_path, monkeypatch, keys):
+def _confirm(tmp_path, monkeypatch, keys, content=CANDIDATES_LEDGER):
     ledger = tmp_path / "main.beancount"
-    ledger.write_text(CANDIDATES_LEDGER, encoding="utf-8")
+    ledger.write_text(content, encoding="utf-8")
     monkeypatch.setattr("sys.stdin", io.StringIO(keys))
     argv = ["--config", _write(tmp_path, ONE_SECTION), "confirm", str(ledger)]
     assert ingest.main(argv) == 0
@@ -354,5 +354,57 @@ def test_confirm_skips_a_leg_of_a_confirmed_pair(tmp_path, monkeypatch):
     assert answers[frozenset(["out-2", "in-2"])] is False
 
 
+def test_confirm_does_not_ask_about_a_pair_with_a_known_leg(tmp_path, monkeypatch):
+    known = CANDIDATES_LEDGER.replace(
+        "2019-01-01 open Expenses:Uncategorized\n",
+        "2019-01-01 open Expenses:Uncategorized\n2019-01-01 open Assets:Transfers:InTransit\n",
+    ).replace("-100.00 CHF\n  Expenses:Uncategorized", "-100.00 CHF\n  Assets:Transfers:InTransit")
+
+    answers = _confirm(tmp_path, monkeypatch, "n\n", known)
+
+    assert answers == {frozenset(["out-2", "in-2"]): False}
+
+
 def test_confirm_stops_on_quit(tmp_path, monkeypatch):
     assert _confirm(tmp_path, monkeypatch, "q\n") == {}
+
+
+# A transfer out and two arrivals of its amount: No candidate forms.
+CHOICE_LEDGER = """\
+2019-01-01 open Assets:Bank:Checking
+2019-01-01 open Assets:Other:Savings
+2019-01-01 open Assets:Broker:Cash
+2019-01-01 open Assets:Transfers:InTransit
+2019-01-01 open Expenses:Uncategorized
+
+2019-03-04 * "Out"
+  import-id: "out"
+  Assets:Bank:Checking  -100.00 CHF
+  Assets:Transfers:InTransit
+
+2019-03-05 ! "In"
+  import-id: "in"
+  Assets:Other:Savings  100.00 CHF
+  Expenses:Uncategorized
+
+2019-03-06 ! "Also in"
+  import-id: "also-in"
+  Assets:Broker:Cash  100.00 CHF
+  Expenses:Uncategorized
+"""
+
+
+def test_confirm_saves_the_partner_picked_among_several(tmp_path, monkeypatch, capsys):
+    answers = _confirm(tmp_path, monkeypatch, "2\n", CHOICE_LEDGER)
+
+    assert answers == {frozenset(["out", "also-in"]): True}
+    assert "Picked a partner for 1 of 1 transfers." in capsys.readouterr().out
+
+
+def test_confirm_rejects_every_option_on_none_and_asks_no_more(tmp_path, monkeypatch):
+    _confirm(tmp_path, monkeypatch, "n\n", CHOICE_LEDGER)
+
+    # A second question would find no input and abort.
+    answers = _confirm(tmp_path, monkeypatch, "", CHOICE_LEDGER)
+
+    assert answers == {frozenset(["out", "in"]): False, frozenset(["out", "also-in"]): False}

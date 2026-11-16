@@ -72,26 +72,40 @@ A row reaches it in one of three ways:
 
 - A `[[transfers]]` hint in the config names its account and text.
 - The QIF export categorizes it as a transfer.
-- It is one leg of a confirmed pair.
+- It is one leg of a pair, confirmed or sure enough to book unasked.
 
-A *candidate pair* is two uncategorized rows on different accounts with
-opposite amounts within a week, where neither row fits any other row. In two
+A row that reached the clearing account by the first two ways is a *known
+transfer*. A *candidate pair* is two rows on different accounts, each
+uncategorized or a known transfer, with opposite amounts within a week, where
+neither row fits any other row. Two looser fits need one leg to be a known
+transfer, because between two purchases they are mostly chance. In two
 currencies the implied rate has to lie near the market rate. In one currency,
 two rows that match nothing exactly also pair when the receiver got up to
 0.5% less, or up to 10 on a small amount. Booking puts that gap on
-`Expenses:Fees:Bank`. Two unrelated
-rows can carry the same amount, so a candidate books only once it is
-confirmed.
+`Expenses:Fees:Bank`.
+
+Two unrelated rows can have the same amount, so most candidates book only
+once they are confirmed. A candidate books unasked when both legs are known
+transfers, or when one is and the amounts match exactly. A rate or a fee fit
+with one known leg still asks: The known leg can belong to an account with
+no importer. Then its real partner is missing, and a purchase near the
+amount takes its place. A pair booked unasked carries `category-source:
+"pair-auto"` on the leg it categorized, so a query lists them for review. Two
+known legs keep the source that made them known.
 
 ```
 pybank-import --config pybank.toml confirm main.beancount
 ```
 
-`confirm` shows each candidate with no answer yet and asks yes, no or skip.
+`confirm` shows each candidate with no answer yet that does not book unasked,
+and asks yes, no or skip. Then, for each clearing posting that nothing cancels and no candidate
+settles, it shows the legs it fits and asks which one is its partner.
+Answering none rejects every leg shown, so a later run does not ask again.
 It appends each answer to `transfer-pairs.toml` next to the config, keyed by
 the import-ids of both legs. The legs are already in the ledger, so an
 incremental import skips them as duplicates. A rebuild from the sources books
-the confirmed pairs.
+the confirmed pairs. To undo a pair booked unasked, add its two import-ids
+to `transfer-pairs.toml` with `confirmed = false` and rebuild.
 
 ```
 pybank-import --config pybank.toml unpaired main.beancount

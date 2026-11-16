@@ -212,17 +212,26 @@ def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account
 def _confirm(ctx: click.Context, ledger: str) -> None:
     """Ask about each candidate transfer pair in LEDGER that has no answer.
 
-    The answers go to the answers file next to the config, and a rebuild of
-    the ledger from its sources books the confirmed pairs.
+    A candidate sure enough to book unasked is skipped. Then, for each
+    transfer no candidate settles, ask which leg is its partner. The
+    answers go to the answers file next to the config, and a rebuild of the
+    ledger from its sources books the confirmed pairs.
     """
     path = _answers_path(ctx.find_root().params["config"])
     entries = _load_ledger(ledger)
+    price_map = prices.build_price_map(entries)
     answers = transfer_matcher.load_answers(path)
-    found = transfer_matcher.candidates(entries, prices.build_price_map(entries))
     # A leg of a confirmed pair is taken. A fee pair books its receiver beyond
     # what a leg can be, so its sender would otherwise seek a new partner.
     taken = {import_id for key, confirmed in answers.items() if confirmed for import_id in key}
-    pairs = [pair for pair in found if pair.key not in answers and pair.key.isdisjoint(taken)]
+    found = transfer_matcher.candidates(entries, price_map)
+    pairs = [
+        pair
+        for pair in found
+        if pair.key not in answers
+        and pair.key.isdisjoint(taken)
+        and not transfer_matcher.books_unasked(pair)
+    ]
     answered = 0
     for i, pair in enumerate(pairs, start=1):
         click.echo(f"\nPair {i} of {len(pairs)}:")
@@ -234,11 +243,61 @@ def _confirm(ctx: click.Context, ledger: str) -> None:
             show_choices=False,
         )
         if choice == "q":
-            break
+            click.echo(f"Answered {answered} of {len(pairs)} pairs.")
+            return
         if choice != "s":
             transfer_matcher.save_answer(path, pair, choice == "y")
             answered += 1
     click.echo(f"Answered {answered} of {len(pairs)} pairs.")
+    _pick_partners(path, transfer_matcher.choices(entries, price_map), answers, taken)
+
+
+def _pick_partners(
+    path: str,
+    choices: list[transfer_matcher.Choice],
+    answers: transfer_matcher.Answers,
+    taken: set[str],
+) -> None:
+    """Asks for the partner of each transfer no candidate settles."""
+    asked = picked = 0
+    for choice in choices:
+        # A pick earlier in this run can take a leg, or settle every option.
+        options = [
+            option
+            for option in choice.options
+            if option.import_id not in taken
+            and transfer_matcher.pair_of(choice.leg, option).key not in answers
+        ]
+        if choice.leg.import_id in taken or not options:
+            continue
+        asked += 1
+        click.echo("\nWhich leg is the partner of:")
+        _echo_leg(choice.leg.txn, choice.leg.units, choice.leg.txn.postings[0].account)
+        for n, option in enumerate(options, start=1):
+            click.echo(f"  {n}) ", nl=False)
+            _echo_leg(option.txn, option.units, option.txn.postings[0].account)
+        numbers = [str(n) for n in range(1, len(options) + 1)]
+        pick = click.prompt(
+            f"[1-{len(options)}], [n]one, [s]kip, [q]uit",
+            type=click.Choice([*numbers, "n", "s", "q"], case_sensitive=False),
+            show_choices=False,
+        )
+        if pick == "q":
+            break
+        if pick == "s":
+            continue
+        for n, option in enumerate(options, start=1):
+            pair = transfer_matcher.pair_of(choice.leg, option)
+            confirmed = pick == str(n)
+            # [n]one rejects every option, so a rerun does not ask again.
+            if confirmed or pick == "n":
+                transfer_matcher.save_answer(path, pair, confirmed)
+                answers[pair.key] = confirmed
+            if confirmed:
+                taken.update(pair.key)
+                picked += 1
+    if asked:
+        click.echo(f"Picked a partner for {picked} of {asked} transfers.")
 
 
 @click.command("unpaired")

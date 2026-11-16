@@ -22,9 +22,8 @@ BROKER = "Assets:Broker:Cash"
 DAY = datetime.date(2019, 3, 4)
 
 # 1 EUR buys 1.10 CHF.
-PRICES = prices.build_price_map(
-    [data.Price({}, DAY, "EUR", amount.Amount(data.Decimal("1.10"), "CHF"))]
-)
+PRICE = data.Price({}, DAY, "EUR", amount.Amount(data.Decimal("1.10"), "CHF"))
+PRICES = prices.build_price_map([PRICE])
 NO_PRICES = prices.build_price_map([])
 
 
@@ -74,6 +73,31 @@ def test_a_leg_with_two_partners_pairs_with_neither():
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
+def test_a_transfer_with_two_partners_offers_both_nearest_first():
+    out = _leg("out", CHECKING, "-100", contra=IN_TRANSIT)
+    cleared = out.postings[1]._replace(units=amount.Amount(data.Decimal("100"), "CHF"))
+    entries = [
+        out._replace(postings=[out.postings[0], cleared]),
+        _leg("later-in", SAVINGS, "100", days=3),
+        _leg("in", BROKER, "100", days=1),
+    ]
+
+    (choice,) = transfer_matcher.choices(entries, NO_PRICES)
+
+    assert choice.leg.import_id == "out"
+    assert [leg.import_id for leg in choice.options] == ["in", "later-in"]
+
+
+def test_an_uncategorized_row_with_two_partners_offers_nothing():
+    entries = [
+        _leg("out", CHECKING, "-100"),
+        _leg("in", SAVINGS, "100"),
+        _leg("also-in", BROKER, "100"),
+    ]
+
+    assert transfer_matcher.choices(entries, NO_PRICES) == []
+
+
 def test_two_legs_that_already_cancel_out_need_no_answer():
     entries = [
         _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
@@ -90,19 +114,25 @@ def test_a_categorized_row_is_no_leg():
 
 
 def test_currencies_pair_up_at_a_rate_near_the_market():
-    entries = [_leg("out", CHECKING, "-100", "EUR"), _leg("in", SAVINGS, "107.50")]
+    entries = [
+        _leg("out", CHECKING, "-100", "EUR", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "107.50"),
+    ]
 
     assert _ids(transfer_matcher.candidates(entries, PRICES)) == [("out", "in")]
 
 
 def test_currencies_far_off_the_market_rate_do_not_pair():
-    entries = [_leg("out", CHECKING, "-100", "EUR"), _leg("in", SAVINGS, "100")]
+    entries = [_leg("out", CHECKING, "-100", "EUR", contra=IN_TRANSIT), _leg("in", SAVINGS, "100")]
 
     assert transfer_matcher.candidates(entries, PRICES) == []
 
 
 def test_currencies_without_a_market_rate_do_not_pair():
-    entries = [_leg("out", CHECKING, "-100", "EUR"), _leg("in", SAVINGS, "107.50")]
+    entries = [
+        _leg("out", CHECKING, "-100", "EUR", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "107.50"),
+    ]
 
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
@@ -110,7 +140,10 @@ def test_currencies_without_a_market_rate_do_not_pair():
 # The fee limit is 0.5% of the amount, or 10 where that is more.
 @pytest.mark.parametrize(("sent", "received"), [("-4000", "3980"), ("-100", "90")])
 def test_a_leg_that_arrives_short_by_a_fee_pairs(sent, received):
-    entries = [_leg("out", CHECKING, sent), _leg("in", SAVINGS, received, days=1)]
+    entries = [
+        _leg("out", CHECKING, sent, contra=IN_TRANSIT),
+        _leg("in", SAVINGS, received, days=1),
+    ]
 
     assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
 
@@ -119,14 +152,36 @@ def test_a_leg_that_arrives_short_by_a_fee_pairs(sent, received):
     ("sent", "received"), [("-4000", "3979.99"), ("-100", "89.99"), ("-100", "101")]
 )
 def test_a_gap_no_fee_explains_does_not_pair(sent, received):
-    entries = [_leg("out", CHECKING, sent), _leg("in", SAVINGS, received, days=1)]
+    entries = [
+        _leg("out", CHECKING, sent, contra=IN_TRANSIT),
+        _leg("in", SAVINGS, received, days=1),
+    ]
 
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
-def test_an_exact_partner_wins_over_one_a_fee_away():
+@pytest.mark.parametrize(
+    ("sent", "currency", "received"), [("-100", "CHF", "98"), ("-100", "EUR", "107.50")]
+)
+def test_a_loose_fit_between_two_unknown_rows_does_not_pair(sent, currency, received):
+    entries = [_leg("out", CHECKING, sent, currency), _leg("in", SAVINGS, received)]
+
+    assert transfer_matcher.candidates(entries, PRICES) == []
+
+
+def test_a_loose_fit_between_two_unknown_rows_leaves_an_exact_pair_alone():
     entries = [
         _leg("out", CHECKING, "-100"),
+        _leg("in", SAVINGS, "100"),
+        _leg("in-eur", BROKER, "-91", "EUR"),
+    ]
+
+    assert _ids(transfer_matcher.candidates(entries, PRICES)) == [("out", "in")]
+
+
+def test_an_exact_partner_wins_over_one_a_fee_away():
+    entries = [
+        _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
         _leg("in", SAVINGS, "100"),
         _leg("short", BROKER, "98"),
     ]
@@ -136,7 +191,7 @@ def test_an_exact_partner_wins_over_one_a_fee_away():
 
 def test_two_legs_a_fee_away_pair_with_neither():
     entries = [
-        _leg("out", CHECKING, "-100"),
+        _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
         _leg("in", SAVINGS, "98"),
         _leg("also-in", BROKER, "97"),
     ]
@@ -153,9 +208,9 @@ def test_clearing_postings_a_fee_apart_need_an_answer():
     assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
 
 
-def _book(answers, entries):
+def _book(answers, entries, existing=()):
     groups = [("statement.csv", entries, CHECKING, postfinance.CheckingImporter({}))]
-    return transfer_matcher.book(answers, groups, [])[0][1]
+    return transfer_matcher.book(answers, groups, list(existing))[0][1]
 
 
 def test_a_confirmed_pair_books_both_legs_to_the_clearing_account():
@@ -197,6 +252,65 @@ def test_a_rejected_or_unanswered_pair_stays_as_it_was():
 
     assert _book({frozenset(["out", "in"]): False}, entries) == entries
     assert _book({}, entries) == entries
+
+
+def test_an_exact_pair_with_a_known_leg_books_unasked():
+    entries = [_leg("out", CHECKING, "-100", contra=IN_TRANSIT), _leg("in", SAVINGS, "100")]
+
+    sent, received = _book({}, entries)
+
+    assert sent == entries[0]
+    assert received.postings[1].account == IN_TRANSIT
+    assert received.meta[qif.META_CATEGORY_SOURCE] == transfer_matcher.CATEGORY_SOURCE_AUTO
+
+
+def test_a_fee_pair_with_two_known_legs_books_unasked():
+    entries = [
+        _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "98", contra=IN_TRANSIT),
+    ]
+
+    _, received = _book({}, entries)
+
+    assert received.postings[2].account == transfer_matcher.BANK_FEES
+
+
+@pytest.mark.parametrize(
+    ("sent", "currency", "received"), [("-100", "CHF", "98"), ("-100", "EUR", "107.50")]
+)
+def test_a_loose_pair_with_one_known_leg_waits_for_an_answer(sent, currency, received):
+    entries = [_leg("out", CHECKING, sent, currency, IN_TRANSIT), _leg("in", SAVINGS, received)]
+
+    assert _book({}, entries, [PRICE]) == entries
+
+
+def test_a_currency_pair_with_two_known_legs_books_unasked():
+    entries = [
+        _leg("out", CHECKING, "-100", "EUR", IN_TRANSIT),
+        _leg("in", SAVINGS, "107.50", contra=IN_TRANSIT),
+    ]
+
+    _, received = _book({}, entries, [PRICE])
+
+    assert received.postings[1].units == amount.Amount(data.Decimal("-100"), "EUR")
+
+
+def test_a_confirmed_pair_takes_its_legs_from_a_pair_that_books_unasked():
+    entries = [
+        _leg("out", CHECKING, "-100", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "100"),
+        _leg("confirmed-in", BROKER, "80", days=1),
+    ]
+
+    booked = _book({frozenset(["out", "confirmed-in"]): True}, entries)
+
+    assert [txn.postings[1].account for txn in booked] == [IN_TRANSIT, UNCATEGORIZED, IN_TRANSIT]
+
+
+def test_a_rejected_pair_with_a_known_leg_stays_as_it_was():
+    entries = [_leg("out", CHECKING, "-100", contra=IN_TRANSIT), _leg("in", SAVINGS, "100")]
+
+    assert _book({frozenset(["out", "in"]): False}, entries) == entries
 
 
 def test_a_confirmed_pair_books_even_when_a_third_leg_makes_it_ambiguous():
