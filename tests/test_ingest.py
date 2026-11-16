@@ -354,7 +354,7 @@ def test_confirm_skips_a_leg_of_a_confirmed_pair(tmp_path, monkeypatch):
     assert answers[frozenset(["out-2", "in-2"])] is False
 
 
-def test_confirm_does_not_ask_about_a_pair_with_a_known_leg(tmp_path, monkeypatch):
+def test_confirm_does_not_ask_about_an_exact_pair_with_a_known_leg(tmp_path, monkeypatch):
     known = CANDIDATES_LEDGER.replace(
         "2019-01-01 open Expenses:Uncategorized\n",
         "2019-01-01 open Expenses:Uncategorized\n2019-01-01 open Assets:Transfers:InTransit\n",
@@ -363,6 +363,42 @@ def test_confirm_does_not_ask_about_a_pair_with_a_known_leg(tmp_path, monkeypatc
     answers = _confirm(tmp_path, monkeypatch, "n\n", known)
 
     assert answers == {frozenset(["out-2", "in-2"]): False}
+
+
+# Two known legs in two currencies, at a rate near the market.
+CURRENCY_LEDGER = """\
+2019-01-01 open Assets:Bank:Checking
+2019-01-01 open Assets:Other:Savings
+2019-01-01 open Assets:Transfers:InTransit
+
+2019-03-04 price EUR 1.10 CHF
+
+2019-03-04 * "Out"
+  import-id: "out"
+  Assets:Bank:Checking  -100.00 EUR
+  Assets:Transfers:InTransit
+
+2019-03-05 * "In"
+  import-id: "in"
+  Assets:Other:Savings  107.50 CHF
+  Assets:Transfers:InTransit
+"""
+
+
+def test_confirm_asks_about_a_sure_pair_left_unbooked(tmp_path, monkeypatch):
+    assert _confirm(tmp_path, monkeypatch, "y\n", CURRENCY_LEDGER) == {
+        frozenset(["out", "in"]): True
+    }
+
+
+def test_confirm_does_not_ask_about_a_booked_pair(tmp_path, monkeypatch):
+    booked = CURRENCY_LEDGER.replace(
+        "107.50 CHF\n  Assets:Transfers:InTransit",
+        "107.50 CHF\n  Assets:Transfers:InTransit  -100.00 EUR @ 1.075 CHF",
+    )
+
+    # A question would find no input and abort.
+    assert _confirm(tmp_path, monkeypatch, "", booked) == {}
 
 
 def test_confirm_stops_on_quit(tmp_path, monkeypatch):

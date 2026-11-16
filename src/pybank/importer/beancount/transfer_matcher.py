@@ -188,9 +188,7 @@ def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) ->
         if len(matched) != 1 or len(fits[matched[0].import_id]) != 1:
             continue
         pair = Pair(sender, matched[0])
-        # Two legs already in the clearing account with opposite amounts in one
-        # currency cancel out without anyone's say. They only counted above, to
-        # spot ambiguity.
+        # A pair already booked only counted above, to spot ambiguity.
         if _needs_booking(pair):
             result.append(pair)
     return result
@@ -247,9 +245,15 @@ def pair_of(leg: Leg, other: Leg) -> Pair:
 
 
 def _needs_booking(pair: Pair) -> bool:
-    if -pair.sender.units != pair.receiver.units:
+    # Two clearing postings that cancel are booked, also through a rate.
+    if not all(map(_is_transfer, pair)):
         return True
-    return any(leg.txn.postings[1].account == UNCATEGORIZED for leg in pair)
+    return _cleared_units(pair.sender) != -_cleared_units(pair.receiver)
+
+
+def _cleared_units(leg: Leg) -> amount.Amount:
+    # Before the ledger is loaded, the contra posting of a row has no units.
+    return leg.txn.postings[1].units or -leg.units
 
 
 def load_answers(path: str) -> Answers:

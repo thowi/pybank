@@ -212,10 +212,10 @@ def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account
 def _confirm(ctx: click.Context, ledger: str) -> None:
     """Ask about each candidate transfer pair in LEDGER that has no answer.
 
-    A candidate sure enough to book unasked is skipped. Then, for each
-    transfer no candidate settles, ask which leg is its partner. The
-    answers go to the answers file next to the config, and a rebuild of the
-    ledger from its sources books the confirmed pairs.
+    A pair already booked is no candidate, and one a rebuild books unasked is
+    skipped. Then, for each transfer no candidate settles, ask which leg is
+    its partner. The answers go to the answers file next to the config, and a
+    rebuild of the ledger from its sources books the confirmed pairs.
     """
     path = _answers_path(ctx.find_root().params["config"])
     entries = _load_ledger(ledger)
@@ -225,12 +225,17 @@ def _confirm(ctx: click.Context, ledger: str) -> None:
     # what a leg can be, so its sender would otherwise seek a new partner.
     taken = {import_id for key, confirmed in answers.items() if confirmed for import_id in key}
     found = transfer_matcher.candidates(entries, price_map)
+    # A rebuild books a sure pair in one currency. One in two currencies needs
+    # prices, which `extract` may lack.
     pairs = [
         pair
         for pair in found
         if pair.key not in answers
         and pair.key.isdisjoint(taken)
-        and not transfer_matcher.books_unasked(pair)
+        and not (
+            transfer_matcher.books_unasked(pair)
+            and pair.sender.units.currency == pair.receiver.units.currency
+        )
     ]
     answered = 0
     for i, pair in enumerate(pairs, start=1):

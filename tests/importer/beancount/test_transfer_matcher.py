@@ -107,6 +107,19 @@ def test_two_legs_that_already_cancel_out_need_no_answer():
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
+def test_a_currency_pair_booked_through_a_rate_needs_no_answer():
+    received = _leg("in", SAVINGS, "107.50", contra=IN_TRANSIT)
+    sent = amount.Amount(data.Decimal("-100"), "EUR")
+    rate = amount.Amount(data.Decimal("1.075"), "CHF")
+    contra = received.postings[1]._replace(units=sent, price=rate)
+    entries = [
+        _leg("out", CHECKING, "-100", "EUR", IN_TRANSIT),
+        received._replace(postings=[received.postings[0], contra]),
+    ]
+
+    assert transfer_matcher.candidates(entries, PRICES) == []
+
+
 def test_a_categorized_row_is_no_leg():
     entries = [_leg("out", CHECKING, "-100"), _leg("in", SAVINGS, "100", contra="Income:Salary")]
 

@@ -97,15 +97,22 @@ known legs keep the source that made them known.
 pybank-import --config pybank.toml confirm main.beancount
 ```
 
-`confirm` shows each candidate with no answer yet that does not book unasked,
-and asks yes, no or skip. Then, for each clearing posting that nothing cancels and no candidate
-settles, it shows the legs it fits and asks which one is its partner.
+`confirm` shows each candidate that is not booked yet, has no answer, and
+that a rebuild does not book unasked. It asks yes, no or skip. Then, for
+each clearing posting that nothing cancels and no candidate settles, it
+shows the legs it fits and asks which one is its partner.
 Answering none rejects every leg shown, so a later run does not ask again.
 It appends each answer to `transfer-pairs.toml` next to the config, keyed by
 the import-ids of both legs. The legs are already in the ledger, so an
 incremental import skips them as duplicates. A rebuild from the sources books
 the confirmed pairs. To undo a pair booked unasked, add its two import-ids
 to `transfer-pairs.toml` with `confirmed = false` and rebuild.
+
+A pair in two currencies needs the market rate of its day. `extract` reads
+the `price` directives from the file passed with `-e`. In a rebuild, pass a
+file that holds the prices and no transactions, since `extract` marks a row
+already in that file as a duplicate. Without prices, `extract` leaves such
+a pair unbooked, and `confirm` asks about it.
 
 ```
 pybank-import --config pybank.toml unpaired main.beancount
