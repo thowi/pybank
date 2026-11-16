@@ -15,6 +15,12 @@ Order-flexible backlog, pick items as needed.
 - Before starting Revolut or Wise, download fresh exports. The archive holds
   Revolut CSVs only to 2023-10 (PDFs to 2024-10) and Wise CSVs only to
   2021-09. Older data may no longer be available for download.
+- Done 2026-11-16: Fresh exports cover both from account opening. Wise
+  offers two flavors. Use the one with fees split out: Each fee is its own
+  row (ID prefix `FEE-`), and the main row carries the amount the other
+  side sees. So a top-up matches the bank leg exactly, and a conversion
+  matches its rate. The other flavor folds the fee into the amount in a
+  way that differs by transaction type.
 
 ### Three of these were already solved once
 
@@ -39,11 +45,8 @@ and carry no import-id, so the structure ports, not the code.
 - AI fallback (flofi stage 5): Batched, cached in a sidecar, NULL-on-failure
   semantics via `Expenses:Uncategorized` + `!`. Adds API dependency and cost,
   hence deferred.
-- Or evaluate `smart_importer` (ML on ledger history) as an alternative.
-  Viable from day one rather than after years of accumulation, because the
-  Phase 3 QIF backfill lands hand-curated labels in the ledger. Train on
-  `category-source: "qif"` and manually confirmed transactions only, never
-  on rule output, which would just relearn the rules.
+- A model trained on the ledger history moved to phase 3, see
+  [Categorization v1](phase-3-backfill-transfers-categorization.md#categorization-v1).
 
 ## Maybe, if a need appears
 

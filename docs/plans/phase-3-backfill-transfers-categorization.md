@@ -318,7 +318,7 @@ four ways, in the order worth working them:
 - The QIF labels are already carried in, see the mapping above. The rules
   below cover what no label reached: the statement-only years, and the labels
   that were too mixed to name.
-- Rules-based only, modeled on the flofi cascade stages 1 to 3: Exclusions
+- Rules first, modeled on the flofi cascade stages 1 to 3: Exclusions
   are structural (both transfer legs under `Assets:*`), then a rules file
   (contains / startswith / exact / regex on a normalized description).
 - The rules file lives with the ledger, never in this repo. It maps real
@@ -330,7 +330,89 @@ four ways, in the order worth working them:
   confirmations flagged `*`, never overwritten by re-runs. Unmatched stays
   `Expenses:Uncategorized` with `!`. Keeping `qif` distinct is what lets a
   query separate what was actually labelled from what was guessed.
-- No fuzzy matching, no AI fallback yet (Phase 5).
+- Rules alone fall short, so a model suggests the rest (below).
+
+### Rules alone leave most rows open
+
+Measured over the ledger, imported rows with two postings, transfers and
+splits left out:
+
+- 9721 rows carry a category, nearly all from 2011 to 2020. 7356 do not,
+  6085 of them from 2021 to 2025. 38 categories in use.
+- 2552 payees (first words of payee and narration). 242 of them have more
+  than one category, and they hold 41% of the categorized rows. So a payee
+  alone does not decide the category.
+- Only 2661 of the 7356 open rows have a payee seen in history.
+
+So rules cover the deterministic cases only. The rest needs a model that
+learns from the labeled history and suggests, plus a fast approval step.
+
+### Design
+
+- **Rules first.** `[[rules]]` in the config: `text` (regex on payee and
+  narration, case-insensitive), optional `account`, `category`. They run in
+  the rebuild after the transfer pairs, share the match code with
+  `[[transfers]]`, flag `*` and set `category-source: "rule"`.
+- **Then suggestions.** `suggest(ledger)` returns, per open row: `import-id`,
+  the top 3 categories with probabilities, and a payee group. A suggestion
+  never books by itself. It stays pending until approved.
+- **Answers file.** Approve, reject or change, keyed by import-id, next to
+  the config like `transfer-pairs.toml`. A rebuild applies the approved
+  answers with `category-source: "model"`, so a rebuild keeps them.
+- **Review grouped by confidence.** High band first, grouped by payee,
+  approved in bulk after a skim. Low band one by one, with a pick from the
+  top 3. Retrain after each batch, so each answer improves the next round.
+- **UI independent.** `suggest` and the answers file are the interface. A
+  `categorize` CLI command comes first, on the `confirm` pattern. A web UI
+  can replace it later, maybe as a Fava extension (unchecked).
+- **Train only on real labels:** `"qif"` and approved answers. Rule output
+  would only teach the rules back.
+
+### Model candidates, to test before building
+
+Backtest: Train on rows before 2019, test on 2019 and 2020 (2552 rows). Later
+cutoffs mislead, since the few labeled rows after 2021 are the easy ones.
+Goal: The share of rows that can be approved in bulk at 98% right or better,
+then top-3 accuracy on the rest.
+
+Baseline, TF-IDF and logistic regression (scikit-learn):
+
+- Inputs: Payee and narration in lower case, digits replaced, as words and
+  word pairs plus letter groups of 2 to 5. Own account, currency, sign, and
+  a rough size bucket (two per factor of ten). No date, no recurrence.
+- Top 1 69%, top 3 81%.
+
+| Confidence | Share of rows | Right |
+|---|---|---|
+| 0.95 and up | 36% | 99% |
+| 0.80 to 0.95 | 15% | 89% |
+| 0.50 to 0.80 | 22% | 60% |
+| below 0.50 | 28% | 29% |
+
+Below 0.8, 65% of the rows have a payee not seen in training (40% right),
+and 29% have a known payee with several categories (44% right). The lever is
+a model that already knows merchants, then features beyond the text.
+
+To test, in this order:
+
+1. **Embeddings plus logistic regression,** combined with the TF-IDF
+   features. Local, with PyTorch (approved). Candidates:
+   multilingual-e5-large-instruct, BGE-M3, Qwen3-Embedding-0.6B.
+2. **Gradient-boosted trees** (LightGBM, XGBoost or CatBoost) as a second
+   stage. Inputs: The text model's probabilities plus amount, date (day of
+   month, weekday) and recurrence. Aimed at known payees with several
+   categories. A single decision tree overfits and gives poor
+   probabilities.
+3. **An LLM for the low band only,** given the 10 most similar labeled
+   rows as examples. Claude through the API, or a local model through
+   Ollama. Undecided.
+4. **A fine-tuned encoder** (XLM-RoBERTa or e5), if embeddings help.
+5. **Jev** (TypeSafe AI), a hosted classifier with calibrated
+   probabilities, only if the others fall short. Early access, paid.
+
+Ruled out: `smart_importer`. Its linear SVC gives no probabilities and one
+account only, and it fills only rows with a single posting, so it never
+replaces `Expenses:Uncategorized`.
 
 ## Acceptance
 
