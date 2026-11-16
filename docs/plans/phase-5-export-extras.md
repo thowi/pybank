@@ -12,6 +12,9 @@ Order-flexible backlog, pick items as needed.
 - From the statement archive, roughly by activity: Wise, Revolut, Schwab
   (incl. equity awards), VIAC, crypto exchanges, insurance products.
 - Each is just another beangulp importer on the Phase 2 pattern.
+- Before starting Revolut or Wise, download fresh exports. The archive holds
+  Revolut CSVs only to 2023-10 (PDFs to 2024-10) and Wise CSVs only to
+  2021-09. Older data may no longer be available for download.
 
 ### Three of these were already solved once
 
