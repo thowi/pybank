@@ -68,13 +68,15 @@ balance assertion, so duplicates are the direction worth the warning.
 
 A transfer between own accounts arrives as two rows, one per statement. Both
 book to `Assets:Transfers:InTransit` (see [accounting.md](accounting.md)).
-A row reaches it in one of three ways:
+A row reaches it in one of four ways:
 
 - A `[[transfers]]` hint in the config names its account and text.
 - The QIF export categorizes it as a transfer.
+- The statement marks it as a conversion between two own currency balances,
+  as Wise and Revolut do.
 - It is one leg of a pair, confirmed or sure enough to book unasked.
 
-A row that reached the clearing account by the first two ways is a *known
+A row that reached the clearing account by the first three ways is a *known
 transfer*. A *candidate pair* is two rows on different accounts, each
 uncategorized or a known transfer, with opposite amounts within a week, where
 neither row fits any other row. Two looser fits need one leg to be a known

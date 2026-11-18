@@ -13,7 +13,9 @@ from pybank.importer.beancount import (
     ibkr,
     postfinance,
     qif,
+    revolut,
     transfer_matcher,
+    wise,
 )
 
 FULL_CONFIG = """\
@@ -37,6 +39,12 @@ cash = "Assets:Broker:Cash"
 
 [qif.categories]
 "Odd Label" = "Expenses:Other"
+
+[revolut.accounts]
+CHF = "Assets:App:CHF"
+
+[wise.accounts]
+EUR = "Assets:Transfer:EUR"
 
 [[transfers]]
 account = "Liabilities:Other:Card"
@@ -63,7 +71,7 @@ def _of_type(importers, cls):
 def test_a_full_config_builds_every_importer(tmp_path):
     built = ingest._importers(ingest._load_config(_write(tmp_path, FULL_CONFIG)))
 
-    assert len(built) == 6
+    assert len(built) == 8
     for cls in (
         dkb.CheckingImporter,
         dkb.CreditCardImporter,
@@ -71,6 +79,8 @@ def test_a_full_config_builds_every_importer(tmp_path):
         postfinance.CheckingImporter,
         postfinance.CreditCardImporter,
         qif.Importer,
+        revolut.Importer,
+        wise.Importer,
     ):
         assert len(_of_type(built, cls)) == 1
 
@@ -98,6 +108,14 @@ def test_the_card_table_reaches_the_card_importer(tmp_path):
     importer = _of_type(ingest._importers(config), postfinance.CreditCardImporter)[0]
 
     assert importer._router.account_for("XXXX 0000 Visa") == "Liabilities:Bank:Card"
+
+
+@pytest.mark.parametrize("section", ["revolut", "wise"])
+def test_a_currency_app_without_accounts_is_reported(tmp_path, section):
+    config = ingest._load_config(_write(tmp_path, f"[{section}]\n"))
+
+    with pytest.raises(ingest._ConfigError, match=rf"\[{section}\.accounts\]"):
+        ingest._importers(config)
 
 
 def test_a_bare_account_name_where_a_table_belongs_is_reported(tmp_path):

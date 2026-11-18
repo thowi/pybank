@@ -7,6 +7,7 @@ from beancount.core import amount, data, flags, prices
 from beangulp import extract
 
 from pybank.importer.beancount import (
+    BANK_FEES,
     IN_TRANSIT,
     UNCATEGORIZED,
     postfinance,
@@ -256,7 +257,7 @@ def test_a_confirmed_pair_books_the_fee_on_the_receiving_leg():
 
     assert [(p.account, p.units) for p in received.postings[1:]] == [
         (IN_TRANSIT, amount.Amount(data.Decimal("-100"), "CHF")),
-        (transfer_matcher.BANK_FEES, amount.Amount(data.Decimal("2"), "CHF")),
+        (BANK_FEES, amount.Amount(data.Decimal("2"), "CHF")),
     ]
 
 
@@ -285,7 +286,7 @@ def test_a_fee_pair_with_two_known_legs_books_unasked():
 
     _, received = _book({}, entries)
 
-    assert received.postings[2].account == transfer_matcher.BANK_FEES
+    assert received.postings[2].account == BANK_FEES
 
 
 @pytest.mark.parametrize(

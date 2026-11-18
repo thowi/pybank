@@ -23,9 +23,11 @@ from pybank.importer.beancount import (
     postfinance,
     qif,
     qif_sidecar,
+    revolut,
     routing,
     transfer_hints,
     transfer_matcher,
+    wise,
 )
 
 # beangulp reports progress a file at a time and leaves the line open until
@@ -98,6 +100,20 @@ def _qif(section: dict) -> list[beangulp.Importer]:
     return [qif.Importer(targets, section.get("categories", {}))]
 
 
+def _revolut(section: dict) -> list[beangulp.Importer]:
+    accounts = _accounts(section, "accounts", "revolut.accounts")
+    if not accounts:
+        raise _ConfigError("[revolut.accounts] must map at least one currency to an account")
+    return [revolut.Importer(accounts)]
+
+
+def _wise(section: dict) -> list[beangulp.Importer]:
+    accounts = _accounts(section, "accounts", "wise.accounts")
+    if not accounts:
+        raise _ConfigError("[wise.accounts] must map at least one currency to an account")
+    return [wise.Importer(accounts)]
+
+
 def _hints(config: dict) -> list[transfer_hints.Hint]:
     """Returns the `[[transfers]]` hints, or raises `_ConfigError`."""
     hints = []
@@ -132,6 +148,8 @@ _BUILDERS = {
     "ibkr": _ibkr,
     "postfinance": _postfinance,
     "qif": _qif,
+    "revolut": _revolut,
+    "wise": _wise,
 }
 
 

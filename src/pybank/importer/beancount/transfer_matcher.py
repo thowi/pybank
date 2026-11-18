@@ -39,7 +39,7 @@ from typing import NamedTuple
 from beancount.core import amount, data, flags, prices
 from beangulp import extract
 
-from . import IN_TRANSIT, UNCATEGORIZED, identity, qif, routing
+from . import BANK_FEES, IN_TRANSIT, UNCATEGORIZED, identity, qif, routing
 from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_PAIR = "pair"
@@ -57,8 +57,6 @@ _RATE_BAND = decimal.Decimal("0.05")
 # floor, in the transfer's currency.
 _FEE_SHARE = decimal.Decimal("0.005")
 _FEE_FLOOR = decimal.Decimal(10)
-
-BANK_FEES = "Expenses:Fees:Bank"
 
 logger = logging.getLogger(__name__)
 
