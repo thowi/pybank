@@ -338,6 +338,38 @@ booked unasked, each checked by hand. 14 pairs await an answer in `confirm-trans
 What stays open on these accounts: 9 card charges to Revolut that no Revolut
 row matches by amount. The cause is not checked yet.
 
+### Same-amount groups in `unpaired`
+
+`unpaired` cancels by amount and date only, so in a group of 3 or more legs
+with one amount it can list the wrong one. Over the ledger of 2026-11-21,
+4 of 48 unpaired legs sit in such a group. A link between booked pairs would
+have fixed none of them: 3 groups hold no linked leg, and the fourth lists
+its only unlinked leg already. Decided: No link. The report names the other
+legs of the group below the listed one instead.
+
+### The SEE Finance database instead of the QIF
+
+`[see.targets]` and `[see.categories]` take the same values as the `[qif]`
+tables. A standalone extract of the database matches the QIF's: 11,542
+transactions, 9,290 with a QIF category, plus 542 `conversion-id` links.
+Two differences:
+
+- 43 legs booked by a hint, up from 32. Checked by hand: All 11 new ones are
+  real transfers (card bill debits, credits from own accounts). The QIF cuts
+  the memo at 55 characters, the database holds it in full, so the hint text
+  now matches. One of the 11 is the leg the QIF build paired by `pair-auto`.
+- The one confirmed pair is missing: `transfer-pairs.toml` names the QIF
+  import-ids. `see-db/remap_answers.py` rewrote its 4 QIF ids, all 1:1.
+
+beangulp skips any input above 8 MiB, so `ingest.py` raises that limit.
+
+Done 2026-11-21: `pybank.toml` reads `[see]`, `rebuild.sh` passes the
+database to `extract`. The rebuild differs from the QIF build in one booking
+only: The 2012 PostFinance to DKB pair now books its CHF leg at a price, as
+its answer says. Same counts otherwise: Hint, pair and `pair-auto` bookings,
+13 pairs awaiting an answer, 48 unpaired legs, no `bean-check` errors.
+`conversion-id` links went from 52 to 504.
+
 ## Categorization v1
 
 - The QIF labels are already carried in, see the mapping above. The rules
