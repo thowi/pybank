@@ -496,6 +496,22 @@ def test_an_arrival_cancels_only_the_oldest_open_departure():
     assert _unpaired(entries) == [(DAY + datetime.timedelta(days=4), data.Decimal("100"))]
 
 
+def test_alike_lists_the_postings_unpaired_could_have_listed_instead():
+    entries = [
+        _cleared(CHECKING, "-100"),
+        _cleared(CHECKING, "-100", days=4),
+        _cleared(SAVINGS, "100", days=5),
+        _cleared(SAVINGS, "100", days=12),
+        _cleared(SAVINGS, "90", days=5),
+        _cleared(SAVINGS, "100", days=5, currency="EUR"),
+    ]
+    leg = next(leg for leg in transfer_matcher.unpaired(entries) if leg[0] is entries[1])
+
+    others = transfer_matcher.alike(entries, leg)
+
+    assert [txn for txn, _ in others] == [entries[0], entries[2]]
+
+
 def test_crossing_transfers_all_cancel():
     """Pairing each arrival with its nearest departure would strand two legs."""
     entries = [

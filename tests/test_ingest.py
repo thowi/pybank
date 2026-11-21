@@ -300,6 +300,23 @@ def test_unpaired_lists_the_clearing_postings_nothing_cancels(tmp_path, capsys):
     assert "Clearing postings without a partner: 2" in out
 
 
+def test_unpaired_names_the_postings_with_the_same_amount(tmp_path, capsys):
+    ledger = tmp_path / "main.beancount"
+    second = '2019-03-05 * "Second out"\n  Assets:Bank:Checking  -100.00 CHF\n'
+    ledger.write_text(f"{UNPAIRED_LEDGER}\n{second}  Assets:Transfers:InTransit\n", "utf-8")
+
+    ingest.main(["--config", _write(tmp_path, ONE_SECTION), "unpaired", str(ledger)])
+
+    out = capsys.readouterr().out
+    assert (
+        "2019-03-05  Assets:Bank:Checking  -100.00 CHF  Second out\n"
+        "  1 of 3 with this amount. Any may be the one:\n"
+        "    2019-03-04  Assets:Bank:Checking  -100.00 CHF  Paired out\n"
+        "    2019-03-06  Assets:Other:Savings  100.00 CHF  Paired in\n"
+    ) in out
+    assert "Clearing postings without a partner: 3" in out
+
+
 def test_unpaired_reports_load_errors(tmp_path, capsys):
     ledger = tmp_path / "main.beancount"
     ledger.write_text(UNPAIRED_LEDGER.replace("2019-01-01 open Expenses:Food\n", ""), "utf-8")

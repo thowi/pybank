@@ -16,7 +16,7 @@ import tomllib
 import beangulp
 import click
 from beancount import loader
-from beancount.core import amount, data
+from beancount.core import data
 from beancount.parser import printer
 
 from pybank.importer.beancount import (
@@ -230,11 +230,14 @@ def _load_ledger(ledger: str) -> data.Entries:
     return entries
 
 
-def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account) -> None:
+def _echo_clearing(txn: data.Transaction, posting: data.Posting, indent: str = "") -> None:
+    # A QIF split carries the clearing leg next to category legs, so the
+    # amount comes from the clearing posting, seen from the own account.
+    own = next(p for p in txn.postings if p.account != IN_TRANSIT)
     text = " | ".join(filter(None, (txn.payee, txn.narration)))
     counterparty = txn.meta.get(META_COUNTERPARTY_ACCOUNT)
     suffix = f"  [{counterparty}]" if counterparty else ""
-    click.echo(f"{txn.date}  {account}  {units}  {text}{suffix}")
+    click.echo(f"{indent}{txn.date}  {own.account}  {-posting.units}  {text}{suffix}")
 
 
 def _leg_fields(leg: transfer_matcher.Leg) -> dict[str, str]:
@@ -368,12 +371,15 @@ def _pick_partners(session: transfer_review.Session) -> None:
 @click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
 def _unpaired(ledger: str) -> None:
     """List the clearing postings in LEDGER that no other one cancels."""
-    legs = transfer_matcher.unpaired(_load_ledger(ledger))
-    for txn, posting in legs:
-        # A QIF split carries the clearing leg next to category legs, so the
-        # amount comes from the clearing posting, seen from the own account.
-        own = next(p for p in txn.postings if p.account != IN_TRANSIT)
-        _echo_leg(txn, -posting.units, own.account)
+    entries = _load_ledger(ledger)
+    legs = transfer_matcher.unpaired(entries)
+    for leg in legs:
+        _echo_clearing(*leg)
+        others = transfer_matcher.alike(entries, leg)
+        if others:
+            click.echo(f"  1 of {len(others) + 1} with this amount. Any may be the one:")
+            for other in others:
+                _echo_clearing(*other, indent="    ")
     click.echo(f"Clearing postings without a partner: {len(legs)}")
 
 

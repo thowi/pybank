@@ -11,7 +11,8 @@ import-ids of both legs.
 `books_unasked` tells which candidate is sure without an answer.
 `load_answers` reads the answers, and `save_answer` appends one.
 `book` is the beangulp hook that books the pairs.
-`unpaired` lists the clearing postings that nothing cancels.
+`unpaired` lists the clearing postings that nothing cancels, and `alike`
+the others it could have listed instead.
 """
 
 import bisect
@@ -422,6 +423,18 @@ def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> li
     ]
 
 
+def _clearing(
+    entries: Iterable[data.Directive],
+) -> Iterable[tuple[data.Transaction, data.Posting]]:
+    return (
+        (entry, posting)
+        for entry in entries
+        if isinstance(entry, data.Transaction)
+        for posting in entry.postings
+        if posting.account == IN_TRANSIT and posting.units and posting.units.number
+    )
+
+
 def unpaired(entries: Iterable[data.Directive]) -> list[tuple[data.Transaction, data.Posting]]:
     """Returns the clearing postings that no other clearing posting cancels.
 
@@ -432,16 +445,7 @@ def unpaired(entries: Iterable[data.Directive]) -> list[tuple[data.Transaction, 
     # oldest open one of the other sign. A nearest-first choice can strand two
     # legs that this pairs. The open ones never mix signs, since any two in
     # reach of each other would have cancelled.
-    legs = sorted(
-        (
-            (entry, posting)
-            for entry in entries
-            if isinstance(entry, data.Transaction)
-            for posting in entry.postings
-            if posting.account == IN_TRANSIT and posting.units and posting.units.number
-        ),
-        key=lambda leg: leg[0].date,
-    )
+    legs = sorted(_clearing(entries), key=lambda leg: leg[0].date)
     open_legs: dict[tuple[str, decimal.Decimal], collections.deque] = collections.defaultdict(
         collections.deque
     )
@@ -458,3 +462,27 @@ def unpaired(entries: Iterable[data.Directive]) -> list[tuple[data.Transaction, 
     for queue in open_legs.values():
         result.extend(queue)
     return sorted(result, key=lambda leg: leg[0].date)
+
+
+def alike(
+    entries: Iterable[data.Directive], leg: tuple[data.Transaction, data.Posting]
+) -> list[tuple[data.Transaction, data.Posting]]:
+    """Returns the other clearing postings that `unpaired` could have listed.
+
+    These carry the leg's amount, of either sign, within `_WINDOW` of it.
+    `unpaired` cancels by amount and date alone, so where these exist, one of
+    them may be the posting without a partner.
+    """
+    txn, posting = leg
+    units = posting.units
+    return sorted(
+        (
+            (other, other_posting)
+            for other, other_posting in _clearing(entries)
+            if other_posting is not posting
+            and other_posting.units.currency == units.currency
+            and abs(other_posting.units.number) == abs(units.number)
+            and abs(other.date - txn.date) <= _WINDOW
+        ),
+        key=lambda other: other[0].date,
+    )
