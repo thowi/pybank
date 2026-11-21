@@ -370,6 +370,31 @@ its answer says. Same counts otherwise: Hint, pair and `pair-auto` bookings,
 13 pairs awaiting an answer, 48 unpaired legs, no `bean-check` errors.
 `conversion-id` links went from 52 to 504.
 
+### What the `confirm-transfers` answers taught
+
+The answers of 2026-11-22 rejected 9 of 12 pairs. Two kinds of false match:
+
+- **Two cards.** A refund on one card fit a charge on another. Decided: Two
+  legs on `Liabilities` accounts never pair. Top-ups from checking to a card
+  still pair.
+- **A payment from a third party.** A TWINT or bank credit from another
+  person fit an unrelated card purchase, 7 pairs. Matching the sender
+  against one's own accounts would catch them. Decided: Skip it. It costs a
+  sender table and parsing per bank, for about 2 questions a year.
+
+Most rejected pairs are reimbursements, such as postage a buyer pays back.
+They go to the same expense account as the cost, so the two cancel. The
+payee hints for the rules file are in `Ledger-rebuild/categorize-hints.md`,
+outside this repo.
+
+The extract warning counted a pair whose leg a confirmed pair already took,
+which `confirm-transfers` skips. It now skips them too. The rebuild after the
+answers booked the 3 confirmed pairs, changed nothing else, and leaves no
+pair awaiting an answer.
+
+Still open: 3 PostFinance credits of 2024 with an unknown sender, and the 9
+Revolut card charges above.
+
 ## Categorization v1
 
 - The QIF labels are already carried in, see the mapping above. The rules
