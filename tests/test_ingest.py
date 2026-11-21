@@ -340,9 +340,15 @@ def _confirm(tmp_path, monkeypatch, keys, content=CANDIDATES_LEDGER):
     ledger = tmp_path / "main.beancount"
     ledger.write_text(content, encoding="utf-8")
     monkeypatch.setattr("sys.stdin", io.StringIO(keys))
+    monkeypatch.setenv("COLUMNS", "100")
     argv = ["--config", _write(tmp_path, ONE_SECTION), "confirm-transfers", str(ledger)]
     assert ingest.main(argv) == 0
     return transfer_matcher.load_answers(str(tmp_path / "transfer-pairs.toml"))
+
+
+def _rows(out):
+    """Returns each printed row with its column gaps collapsed to one space."""
+    return [" ".join(line.split()) for line in out.splitlines()]
 
 
 def test_confirm_saves_each_answer(tmp_path, monkeypatch, capsys):
@@ -350,7 +356,12 @@ def test_confirm_saves_each_answer(tmp_path, monkeypatch, capsys):
 
     assert answers == {frozenset(["out-1", "in-1"]): True, frozenset(["out-2", "in-2"]): False}
     out = capsys.readouterr().out
-    assert "2019-03-04  Assets:Bank:Checking  -100.00 CHF  First out" in out
+    rows = _rows(out)
+    assert "Sent Received" in rows
+    assert "Date 2019-03-04 2019-03-05" in rows
+    assert "Account Assets:Bank:Checking Assets:Other:Savings" in rows
+    assert "Amount -100.00 CHF 100.00 CHF" in rows
+    assert "Text First out First in" in rows
     assert "Answered 2 of 2 pairs." in out
 
 
@@ -407,6 +418,29 @@ def test_confirm_asks_about_a_sure_pair_left_unbooked(tmp_path, monkeypatch):
     assert _confirm(tmp_path, monkeypatch, "y\n", CURRENCY_LEDGER) == {
         frozenset(["out", "in"]): True
     }
+
+
+def test_confirm_shows_the_rate_a_currency_pair_implies(tmp_path, monkeypatch, capsys):
+    _confirm(tmp_path, monkeypatch, "y\n", CURRENCY_LEDGER)
+
+    rows = _rows(capsys.readouterr().out)
+    assert "Rate 1 EUR = 1.0750 CHF" in rows
+    assert "Market 1 EUR = 1.1000 CHF on 2019-03-04" in rows
+    # 107.50 CHF is worth 97.73 EUR at the market, 2.27 EUR short of what left.
+    assert "Spread 2.27 EUR (2.3%)" in rows
+
+
+def test_confirm_shows_payee_and_counterparty_account(tmp_path, monkeypatch, capsys):
+    detailed = CANDIDATES_LEDGER.replace(
+        '2019-03-05 ! "First in"\n  import-id: "in-1"',
+        '2019-03-05 ! "A Sender" "First in"\n  import-id: "in-1"\n  counterparty-account: "XX00"',
+    )
+
+    _confirm(tmp_path, monkeypatch, "y\nn\n", detailed)
+
+    rows = _rows(capsys.readouterr().out)
+    assert "Payee A Sender" in rows
+    assert "Their acct XX00" in rows
 
 
 def test_confirm_does_not_ask_about_a_booked_pair(tmp_path, monkeypatch):

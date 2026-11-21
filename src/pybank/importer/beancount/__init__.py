@@ -22,3 +22,6 @@ META_BANK_TYPE = "bank-type"
 # The two legs of a currency conversion share it. The transfer matcher pairs
 # them by it.
 META_CONVERSION_ID = "conversion-id"
+
+# The other side's account number. More stable than a payee name.
+META_COUNTERPARTY_ACCOUNT = "counterparty-account"

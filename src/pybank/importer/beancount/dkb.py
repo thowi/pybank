@@ -22,7 +22,7 @@ from beancount.core import data, flags
 from beancount_dkb import CreditImporter, ECImporter
 
 from ... import csvfile, text
-from . import UNCATEGORIZED, identity, routing
+from . import META_COUNTERPARTY_ACCOUNT, UNCATEGORIZED, identity, routing
 
 # Source columns `beancount-dkb` drops, and the metadata key each lands under.
 # Values keep the export's own notation, German decimals included.
@@ -30,7 +30,7 @@ _META_COLS = {
     # On foreign-currency purchases. The transaction itself books EUR amount.
     "original-amount": ["Ursprünglicher Betrag"],
     # More stable than a payee name, which the bank rewrites.
-    "counterparty-account": ["IBAN", "Kontonummer"],
+    META_COUNTERPARTY_ACCOUNT: ["IBAN", "Kontonummer"],
     # The purchase date, which trails `Wertstellung` by a few days.
     "receipt-date": ["Belegdatum"],
 }

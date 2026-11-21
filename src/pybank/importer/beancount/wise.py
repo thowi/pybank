@@ -30,6 +30,7 @@ from . import (
     IN_TRANSIT,
     META_BANK_TYPE,
     META_CONVERSION_ID,
+    META_COUNTERPARTY_ACCOUNT,
     UNCATEGORIZED,
     identity,
     qif,
@@ -53,8 +54,7 @@ _REQUIRED_COLS = (_AMOUNT_COL, _BALANCE_COL, _CURRENCY_COL, _DATE_COL, _ID_COL)
 # Source columns kept as metadata, and the key each lands under.
 _META_COLS = {
     META_BANK_TYPE: "Transaction Details Type",
-    # Same key as the DKB importer. More stable than a payee name.
-    "counterparty-account": "Payee Account Number",
+    META_COUNTERPARTY_ACCOUNT: "Payee Account Number",
     "exchange-rate": "Exchange Rate",
     "note": "Note",
     "payment-reference": "Payment Reference",

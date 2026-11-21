@@ -4,20 +4,24 @@ Accounts are configured in a TOML file passed as `--config`.
 """
 
 import functools
+import itertools
 import logging
 import os
 import re
+import shutil
 import sys
+import textwrap
 import tomllib
 
 import beangulp
 import click
 from beancount import loader
-from beancount.core import amount, data, prices
+from beancount.core import amount, data
 from beancount.parser import printer
 
 from pybank.importer.beancount import (
     IN_TRANSIT,
+    META_COUNTERPARTY_ACCOUNT,
     dkb,
     ibkr,
     postfinance,
@@ -27,6 +31,7 @@ from pybank.importer.beancount import (
     routing,
     transfer_hints,
     transfer_matcher,
+    transfer_review,
     wise,
 )
 
@@ -36,6 +41,11 @@ _LOG_FORMAT = "\n%(message)s"
 
 # The answers on transfer pairs, kept next to the config file.
 _ANSWERS_FILE = "transfer-pairs.toml"
+
+# Below the minimum a transaction column wraps too much to read. Above the
+# maximum the eye loses the row between two columns.
+_MAX_COLUMN_WIDTH = 60
+_MIN_COLUMN_WIDTH = 24
 
 
 # Config that only an importer can find fault with raises the same type. Here
@@ -221,7 +231,59 @@ def _load_ledger(ledger: str) -> data.Entries:
 
 
 def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account) -> None:
-    click.echo(f"{txn.date}  {account}  {units}  {txn.narration}")
+    text = " | ".join(filter(None, (txn.payee, txn.narration)))
+    counterparty = txn.meta.get(META_COUNTERPARTY_ACCOUNT)
+    suffix = f"  [{counterparty}]" if counterparty else ""
+    click.echo(f"{txn.date}  {account}  {units}  {text}{suffix}")
+
+
+def _leg_fields(leg: transfer_matcher.Leg) -> dict[str, str]:
+    txn = leg.txn
+    return {
+        "Date": str(txn.date),
+        "Account": txn.postings[0].account,
+        "Amount": str(leg.units),
+        "Payee": txn.payee or "",
+        "Text": txn.narration or "",
+        "Their acct": txn.meta.get(META_COUNTERPARTY_ACCOUNT, ""),
+    }
+
+
+def _rate_fields(check: transfer_review.RateCheck | None) -> dict[str, str]:
+    if check is None:
+        return {}
+    fields = {"Rate": f"1 {check.base} = {check.implied:.4f} {check.quote}"}
+    if check.market is None:
+        fields["Market"] = "no rate"
+        return fields
+    fields["Market"] = f"1 {check.base} = {check.market:.4f} {check.quote} on {check.market_date}"
+    fields["Spread"] = f"{check.spread} ({check.spread_share:.1%})"
+    return fields
+
+
+def _echo_columns(titles: list[str], columns: list[dict[str, str]]) -> None:
+    """Echoes each column side by side, one field per row, wrapped to fit."""
+    labels = [
+        label
+        for label in dict.fromkeys(label for column in columns for label in column)
+        if any(column.get(label) for column in columns)
+    ]
+    label_width = max(map(len, labels)) + 2
+    gap = 2
+    terminal = shutil.get_terminal_size().columns
+    fit = (terminal - label_width) // len(columns) - gap
+    width = min(_MAX_COLUMN_WIDTH, max(_MIN_COLUMN_WIDTH, fit))
+
+    def row(label: str, cells: list[str]) -> None:
+        click.echo(
+            (label.ljust(label_width) + "".join(c.ljust(width + gap) for c in cells)).rstrip()
+        )
+
+    row("", titles)
+    for label in labels:
+        wrapped = [textwrap.wrap(column.get(label, ""), width) or [""] for column in columns]
+        for i, cells in enumerate(itertools.zip_longest(*wrapped, fillvalue="")):
+            row(label if i == 0 else "", list(cells))
 
 
 @click.command("confirm-transfers")
@@ -235,31 +297,16 @@ def _confirm_transfers(ctx: click.Context, ledger: str) -> None:
     its partner. The answers go to the answers file next to the config, and a
     rebuild of the ledger from its sources books the confirmed pairs.
     """
-    path = _answers_path(ctx.find_root().params["config"])
-    entries = _load_ledger(ledger)
-    price_map = prices.build_price_map(entries)
-    answers = transfer_matcher.load_answers(path)
-    # A leg of a confirmed pair is taken. A fee pair books its receiver beyond
-    # what a leg can be, so its sender would otherwise seek a new partner.
-    taken = {import_id for key, confirmed in answers.items() if confirmed for import_id in key}
-    found = transfer_matcher.candidates(entries, price_map)
-    # A rebuild books a sure pair in one currency. One in two currencies needs
-    # prices, which `extract` may lack.
-    pairs = [
-        pair
-        for pair in found
-        if pair.key not in answers
-        and pair.key.isdisjoint(taken)
-        and not (
-            transfer_matcher.books_unasked(pair)
-            and pair.sender.units.currency == pair.receiver.units.currency
-        )
-    ]
+    session = transfer_review.Session(
+        _answers_path(ctx.find_root().params["config"]), _load_ledger(ledger)
+    )
+    pairs = session.pending_pairs()
     answered = 0
     for i, pair in enumerate(pairs, start=1):
         click.echo(f"\nPair {i} of {len(pairs)}:")
-        for leg in pair:
-            _echo_leg(leg.txn, leg.units, leg.txn.postings[0].account)
+        sent, received = (_leg_fields(leg) for leg in pair)
+        check = transfer_review.rate_check(pair, session.price_map)
+        _echo_columns(["Sent", "Received"], [sent, received | _rate_fields(check)])
         choice = click.prompt(
             "Same transfer? [y]es, [n]o, [s]kip, [q]uit",
             type=click.Choice(["y", "n", "s", "q"], case_sensitive=False),
@@ -269,36 +316,37 @@ def _confirm_transfers(ctx: click.Context, ledger: str) -> None:
             click.echo(f"Answered {answered} of {len(pairs)} pairs.")
             return
         if choice != "s":
-            transfer_matcher.save_answer(path, pair, choice == "y")
+            session.answer_pair(pair, choice == "y")
             answered += 1
     click.echo(f"Answered {answered} of {len(pairs)} pairs.")
-    _pick_partners(path, transfer_matcher.choices(entries, price_map), answers, taken)
+    _pick_partners(session)
 
 
-def _pick_partners(
-    path: str,
-    choices: list[transfer_matcher.Choice],
-    answers: transfer_matcher.Answers,
-    taken: set[str],
-) -> None:
+def _pick_partners(session: transfer_review.Session) -> None:
     """Asks for the partner of each transfer no candidate settles."""
     asked = picked = 0
-    for choice in choices:
-        # A pick earlier in this run can take a leg, or settle every option.
-        options = [
-            option
-            for option in choice.options
-            if option.import_id not in taken
-            and transfer_matcher.pair_of(choice.leg, option).key not in answers
-        ]
-        if choice.leg.import_id in taken or not options:
+    for choice in session.choices():
+        options = session.open_options(choice)
+        if not options:
             continue
         asked += 1
-        click.echo("\nWhich leg is the partner of:")
-        _echo_leg(choice.leg.txn, choice.leg.units, choice.leg.txn.postings[0].account)
-        for n, option in enumerate(options, start=1):
-            click.echo(f"  {n}) ", nl=False)
-            _echo_leg(option.txn, option.units, option.txn.postings[0].account)
+        click.echo("\nWhich leg is the partner of this transfer?")
+        transfer = _leg_fields(choice.leg)
+        columns = [
+            _leg_fields(option)
+            | _rate_fields(
+                transfer_review.rate_check(
+                    transfer_matcher.pair_of(choice.leg, option), session.price_map
+                )
+            )
+            for option in options
+        ]
+        # The transfer repeats in each block, so every option sits next to it.
+        per_block = max(1, shutil.get_terminal_size().columns // (_MIN_COLUMN_WIDTH + 2) - 1)
+        for start in range(0, len(columns), per_block):
+            block = columns[start : start + per_block]
+            titles = [f"{n})" for n in range(start + 1, start + len(block) + 1)]
+            _echo_columns(["Transfer", *titles], [transfer, *block])
         numbers = [str(n) for n in range(1, len(options) + 1)]
         pick = click.prompt(
             f"[1-{len(options)}], [n]one, [s]kip, [q]uit",
@@ -309,16 +357,9 @@ def _pick_partners(
             break
         if pick == "s":
             continue
-        for n, option in enumerate(options, start=1):
-            pair = transfer_matcher.pair_of(choice.leg, option)
-            confirmed = pick == str(n)
-            # [n]one rejects every option, so a rerun does not ask again.
-            if confirmed or pick == "n":
-                transfer_matcher.save_answer(path, pair, confirmed)
-                answers[pair.key] = confirmed
-            if confirmed:
-                taken.update(pair.key)
-                picked += 1
+        partner = None if pick == "n" else options[int(pick) - 1]
+        session.answer_choice(choice.leg, options, partner)
+        picked += partner is not None
     if asked:
         click.echo(f"Picked a partner for {picked} of {asked} transfers.")
 
