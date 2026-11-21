@@ -426,6 +426,18 @@ def test_a_confirmed_pair_books_even_when_a_third_leg_makes_it_ambiguous():
     assert [txn.postings[1].account for txn in booked] == [IN_TRANSIT, IN_TRANSIT, UNCATEGORIZED]
 
 
+def test_a_pair_with_a_leg_of_a_confirmed_pair_awaits_no_answer(caplog):
+    entries = [
+        _leg("out", CHECKING, "-100"),
+        _leg("in", SAVINGS, "100", days=10),
+        _leg("also-out", BROKER, "-100", days=10),
+    ]
+
+    _book({frozenset(["out", "in"]): True}, entries)
+
+    assert "await an answer" not in caplog.text
+
+
 def test_a_confirmed_pair_books_the_row_rather_than_its_duplicate():
     duplicate = _leg("in", SAVINGS, "100")
     duplicate.meta[extract.DUPLICATE] = True

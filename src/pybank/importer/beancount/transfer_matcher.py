@@ -422,7 +422,10 @@ def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> li
     logger.info("Booked %d confirmed transfer pairs.", len(confirmed))
     logger.info("Booked %d transfer pairs unasked.", len(sure))
 
-    unanswered = sum(pair.key not in answers and not books_unasked(pair) for pair in found)
+    unanswered = sum(
+        pair.key not in answers and pair.key.isdisjoint(taken) and not books_unasked(pair)
+        for pair in found
+    )
     if unanswered:
         logger.warning("%d transfer pairs await an answer.", unanswered)
 
