@@ -58,6 +58,16 @@ is a fact about one file that happens to be on this machine.
 - Naming an institution is fine, it is what the importer supports. Naming
   one user's account, category, or archive layout is not.
 
+## Separate business logic from presentation
+
+Another front end, such as a web page, must reuse every rule, not copy it.
+
+- Logic decides and computes. It returns records, numbers and dates, never
+  formatted text.
+- Presentation, such as the CLI, only reads input, formats, and asks.
+- Example: `transfer_review` picks the pairs to ask about and saves the
+  answers. `ingest.py` draws them and asks.
+
 ## Review code changes before committing
 
 Overrides the global auto-commit convention for code changes in this repo.
