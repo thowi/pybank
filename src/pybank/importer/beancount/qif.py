@@ -58,11 +58,13 @@ _SPLIT_CATEGORY = "S"
 _SPLIT_MEMO = "E"
 _SPLIT_AMOUNT = "$"
 
+# QIF fixes neither the date format nor the decimal separator. This and
+# `_number` follow SEE Finance, and another exporting app needs its own.
 _DATE_FORMAT = "%d.%m.%Y"
 
 # What the exporter writes in the category field of a split, in place of a
 # category. It can arrive without any leg, and then the breakdown is gone.
-_SPLIT_MARKER = "Split"
+SPLIT_MARKER = "Split"
 
 # What the exporter writes as the payee of an account's opening balance.
 _OPENING_PAYEE = "Starting Balance"
@@ -104,7 +106,7 @@ class Target(NamedTuple):
     currency: str
 
 
-class _Leg(NamedTuple):
+class Leg(NamedTuple):
     """One counter-posting: A category, a `[transfer]`, or an empty label."""
 
     label: str
@@ -112,9 +114,9 @@ class _Leg(NamedTuple):
     number: decimal.Decimal
 
 
-class _Transaction(NamedTuple):
+class Transaction(NamedTuple):
     date: datetime.date
-    legs: tuple[_Leg, ...]
+    legs: tuple[Leg, ...]
     narration: str | None
     number: decimal.Decimal
     payee: str | None
@@ -173,7 +175,7 @@ def _component(name: str) -> str:
     return first + cleaned[1:]
 
 
-def _leg_meta(leg: _Leg) -> data.Meta | None:
+def _leg_meta(leg: Leg) -> data.Meta | None:
     """Returns what the export said about this leg, in its own words."""
     meta = {}
     if _is_transfer(leg.label):
@@ -208,13 +210,13 @@ def _declared_categories(sections: Sequence[_Section]) -> dict[str, bool]:
     return declared
 
 
-def _legs(record: _Record) -> tuple[_Leg, ...]:
+def _legs(record: _Record) -> tuple[Leg, ...]:
     """Returns the split legs, or one leg carrying the whole amount."""
     total = _number(_first(record, _AMOUNT) or "0")
-    legs: list[_Leg] = []
+    legs: list[Leg] = []
     for code, value in record:
         if code == _SPLIT_CATEGORY:
-            legs.append(_Leg(value, None, decimal.Decimal(0)))
+            legs.append(Leg(value, None, decimal.Decimal(0)))
         elif not legs:
             continue
         elif code == _SPLIT_MEMO:
@@ -229,26 +231,26 @@ def _legs(record: _Record) -> tuple[_Leg, ...]:
                 "The split on %s does not add up to its total. Leaving the rest uncategorized.",
                 _first(record, _DATE),
             )
-            legs.append(_Leg("", None, rest))
+            legs.append(Leg("", None, rest))
         return tuple(legs)
     label = _first(record, _CATEGORY) or ""
-    if label == _SPLIT_MARKER:
+    if label == SPLIT_MARKER:
         logger.warning(
             "The split on %s carries no legs. Leaving it uncategorized.",
             _first(record, _DATE),
         )
         label = ""
-    return (_Leg(label, None, total),)
+    return (Leg(label, None, total),)
 
 
-def _transaction(record: _Record, source: str) -> _Transaction | None:
+def _transaction(record: _Record, source: str) -> Transaction | None:
     """Returns the parsed record, or None if it carries no date or amount."""
     date_str = _first(record, _DATE)
     number_str = _first(record, _AMOUNT)
     if not date_str or number_str is None:
         logger.warning("Skipping a record without a date or an amount.")
         return None
-    return _Transaction(
+    return Transaction(
         date=datetime.datetime.strptime(date_str, _DATE_FORMAT).date(),
         legs=_legs(record),
         narration=text.normalize_text(_first(record, _MEMO)),
@@ -349,7 +351,7 @@ class Importer(beangulp.Importer):
         identity.mark_duplicates(entries, existing)
 
     def _entry(
-        self, row: _Transaction, meta: data.Meta, income: Mapping[str, bool]
+        self, row: Transaction, meta: data.Meta, income: Mapping[str, bool]
     ) -> data.Transaction:
         target = self._targets[row.source]
         postings = [
@@ -389,7 +391,7 @@ class Importer(beangulp.Importer):
         )
 
     def _counter_account(
-        self, leg: _Leg, income: Mapping[str, bool], row: _Transaction
+        self, leg: Leg, income: Mapping[str, bool], row: Transaction
     ) -> data.Account:
         if not leg.label:
             return UNCATEGORIZED
@@ -406,7 +408,7 @@ class Importer(beangulp.Importer):
             return IN_TRANSIT
         return _category_account(leg.label, income)
 
-    def _warn_undeclared(self, parsed: Sequence[_Transaction], income: Mapping[str, bool]) -> None:
+    def _warn_undeclared(self, parsed: Sequence[Transaction], income: Mapping[str, bool]) -> None:
         """Reports labels the export used without declaring them."""
         # An undeclared label has no income flag, so it books as an expense,
         # which is wrong for anything that was really income.
