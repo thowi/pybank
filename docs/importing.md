@@ -79,12 +79,17 @@ A row reaches it in one of four ways:
 A row that reached the clearing account by the first three ways is a *known
 transfer*. A *candidate pair* is two rows on different accounts, each
 uncategorized or a known transfer, with opposite amounts within a week, where
-neither row fits any other row. Two looser fits need one leg to be a known
-transfer, because between two purchases they are mostly chance. In two
-currencies the implied rate has to lie near the market rate. In one currency,
-two rows that match nothing exactly also pair when the receiver got up to
-0.5% less, or up to 10 on a small amount. Booking puts that gap on
+neither row fits any other row. Two looser fits apply only to rows that
+match nothing exactly, and need one leg to be a known transfer, because
+between two purchases they are mostly chance. In two currencies the implied
+rate has to lie near the market rate. In one currency, the receiver may get
+up to 0.5% less, or up to 10 on a small amount. Booking puts that gap on
 `Expenses:Fees:Bank`.
+
+The two legs of a conversion share a `conversion-id`: Wise's transaction ID,
+or the second a Revolut exchange completed. They pair with each other before
+any other fit, and need no market rate. Left to the rate, either leg could
+also fit the transfer that sends the converted money on.
 
 Two unrelated rows can have the same amount, so most candidates book only
 once they are confirmed. A candidate books unasked when both legs are known

@@ -318,6 +318,26 @@ four ways, in the order worth working them:
   for phase 5. Unpaired clearing postings went from 213 to 204. Most of the
   rest are statement legs that have no QIF row.
 
+### Wise and Revolut from their own statements
+
+Wise and Revolut now import from their CSV statements instead of the QIF
+targets. The rebuild of 2026-11-18 first left 149 unpaired clearing postings,
+up from 125. Every conversion was unpaired: Its leg in the bought currency
+fit, through the rate, the transfer that sent that money on, so neither pair
+was sure. And Wise converts between EUR and USD, for which the ledger holds
+no direct price.
+
+Two matcher changes fixed it. The two legs of a conversion share a
+`conversion-id` and pair first. A rate fit applies only to legs that fit
+nothing exactly, as the fee fit already did. The second change alone booked
+a card purchase against an exchange leg of the same amount, so it waited for
+the first. Together they left 91 unpaired postings, none on a Wise or
+Revolut account, `bean-check` clean (it had 3 errors before), and 46 pairs
+booked unasked, each checked by hand. 14 pairs await an answer in `confirm`.
+
+What stays open on these accounts: 9 card charges to Revolut that no Revolut
+row matches by amount. The cause is not checked yet.
+
 ## Categorization v1
 
 - The QIF labels are already carried in, see the mapping above. The rules
