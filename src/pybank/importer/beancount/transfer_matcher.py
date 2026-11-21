@@ -25,7 +25,7 @@ import tomllib
 from collections.abc import Callable, Iterable
 from typing import NamedTuple
 
-from beancount.core import amount, data, flags, prices
+from beancount.core import account_types, amount, data, flags, prices
 from beangulp import extract
 
 from . import BANK_FEES, IN_TRANSIT, META_CONVERSION_ID, UNCATEGORIZED, identity, qif, routing
@@ -126,10 +126,19 @@ def _fit_map(legs: list[Leg], fits: Callable[[Leg, Leg], bool]) -> dict[str, lis
         for receiver in receivers[start:end]:
             if sender.txn.postings[0].account == receiver.txn.postings[0].account:
                 continue
+            # Money does not move from one card or loan to another. A refund
+            # on one and a charge on another match only by chance.
+            if _is_liability(sender) and _is_liability(receiver):
+                continue
             if fits(sender, receiver):
                 result.setdefault(sender.import_id, []).append(receiver)
                 result.setdefault(receiver.import_id, []).append(sender)
     return result
+
+
+def _is_liability(leg: Leg) -> bool:
+    root = account_types.get_account_type(leg.txn.postings[0].account)
+    return root == account_types.DEFAULT_ACCOUNT_TYPES.liabilities
 
 
 def _is_transfer(leg: Leg) -> bool:

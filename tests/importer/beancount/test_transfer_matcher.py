@@ -20,6 +20,8 @@ from pybank.importer.beancount import (
 CHECKING = "Assets:Bank:Checking"
 SAVINGS = "Assets:Other:Savings"
 BROKER = "Assets:Broker:Cash"
+CARD = "Liabilities:Bank:Card"
+OTHER_CARD = "Liabilities:Bank:OtherCard"
 
 DAY = datetime.date(2019, 3, 4)
 
@@ -57,6 +59,18 @@ def test_one_account_does_not_pair_with_itself():
     entries = [_leg("out", CHECKING, "-100"), _leg("in", CHECKING, "100")]
 
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
+def test_a_refund_on_one_card_does_not_pair_with_a_charge_on_another():
+    entries = [_leg("charge", CARD, "-20"), _leg("refund", OTHER_CARD, "20", days=2)]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
+def test_a_card_payment_from_checking_pairs():
+    entries = [_leg("out", CHECKING, "-20"), _leg("in", CARD, "20")]
+
+    assert _ids(transfer_matcher.candidates(entries, NO_PRICES)) == [("out", "in")]
 
 
 def test_legs_too_far_apart_do_not_pair():
