@@ -199,21 +199,60 @@ def _conversion_fits(legs: list[Leg]) -> dict[str, list[Leg]]:
     return result
 
 
-def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Pair]:
-    """Returns every pair of legs that fit each other and nothing else."""
-    legs, fits = _all_fits(entries, price_map)
-    senders = [leg for leg in legs if leg.units.number < 0]
-
+def _pairs(legs: list[Leg], fits: dict[str, list[Leg]]) -> list[Pair]:
+    """Returns each pair of legs that fit only each other, twins included."""
     result = []
-    for sender in senders:
-        matched = fits.get(sender.import_id, [])
-        if len(matched) != 1 or len(fits[matched[0].import_id]) != 1:
+    seen: set[str] = set()
+    for sender in legs:
+        matched = fits.get(sender.import_id)
+        if sender.units.number >= 0 or not matched or sender.import_id in seen:
             continue
-        pair = Pair(sender, matched[0])
-        # A pair already booked only counted above, to spot ambiguity.
-        if _needs_booking(pair):
-            result.append(pair)
+        senders = fits[matched[0].import_id]
+        seen.update(leg.import_id for leg in senders)
+        result.extend(_twins(senders, matched, fits))
     return result
+
+
+def _twins(senders: list[Leg], receivers: list[Leg], fits: dict[str, list[Leg]]) -> list[Pair]:
+    """Pairs twins oldest with oldest. Returns no pair for legs that are not."""
+    # Twins: Each sender fits every receiver and nothing else, and the reverse.
+    # All senders share one account and amount, and so do all receivers. Any
+    # pairing then books the same.
+    sender_ids = {leg.import_id for leg in senders}
+    receiver_ids = {leg.import_id for leg in receivers}
+    if len(senders) != len(receivers):
+        return []
+    if any({leg.import_id for leg in fits[s.import_id]} != receiver_ids for s in senders):
+        return []
+    if any({leg.import_id for leg in fits[r.import_id]} != sender_ids for r in receivers):
+        return []
+    if not (_alike(senders) and _alike(receivers)):
+        return []
+    # Between rows nothing marks, twins are mostly chance: Small purchases and
+    # repayments of one price.
+    if len(senders) > 1 and not any(map(_is_transfer, senders + receivers)):
+        return []
+
+    def age(leg: Leg) -> tuple[datetime.date, str]:
+        return leg.txn.date, leg.import_id
+
+    return [Pair(*legs) for legs in zip(sorted(senders, key=age), sorted(receivers, key=age))]
+
+
+def _alike(legs: list[Leg]) -> bool:
+    return len({(leg.txn.postings[0].account, leg.units) for leg in legs}) == 1
+
+
+def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Pair]:
+    """Returns every pair of legs that fit only each other.
+
+    Several alike legs on each side that fit only each other pair oldest with
+    oldest. A candidate can still be wrong, since two unrelated rows can carry
+    the same amount.
+    """
+    legs, fits = _all_fits(entries, price_map)
+    # A pair already booked only counted above, to spot ambiguity.
+    return [pair for pair in _pairs(legs, fits) if _needs_booking(pair)]
 
 
 def choices(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Choice]:
@@ -232,13 +271,10 @@ def choices(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> li
     def is_open(leg: Leg) -> bool:
         return leg.txn.postings[1].account == UNCATEGORIZED or id(leg.txn) in uncancelled
 
-    def in_candidate(leg: Leg) -> bool:
-        matched = fits.get(leg.import_id, [])
-        return len(matched) == 1 and len(fits[matched[0].import_id]) == 1
-
+    in_candidate = {import_id for pair in _pairs(legs, fits) for import_id in pair.key}
     result = []
     for leg in sorted(legs, key=lambda leg: leg.txn.date):
-        if id(leg.txn) not in uncancelled or in_candidate(leg):
+        if id(leg.txn) not in uncancelled or leg.import_id in in_candidate:
             continue
         options = [option for option in fits.get(leg.import_id, []) if is_open(option)]
         if options:

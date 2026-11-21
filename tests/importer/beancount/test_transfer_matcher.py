@@ -75,6 +75,42 @@ def test_a_leg_with_two_partners_pairs_with_neither():
     assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
+def test_twins_pair_oldest_with_oldest():
+    # Two top-ups of one amount, each charged on the card a day later.
+    entries = [
+        _leg("out-2", CHECKING, "-100", contra=IN_TRANSIT, days=2),
+        _leg("out-1", CHECKING, "-100", contra=IN_TRANSIT, days=1),
+        _leg("in-1", SAVINGS, "100", days=0),
+        _leg("in-2", SAVINGS, "100", days=1),
+    ]
+
+    pairs = transfer_matcher.candidates(entries, NO_PRICES)
+
+    assert _ids(pairs) == [("out-1", "in-1"), ("out-2", "in-2")]
+
+
+def test_twins_between_unknown_rows_do_not_pair():
+    entries = [
+        _leg("out-1", CHECKING, "-100"),
+        _leg("out-2", CHECKING, "-100", days=1),
+        _leg("in-1", SAVINGS, "100"),
+        _leg("in-2", SAVINGS, "100", days=1),
+    ]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
+def test_legs_on_two_accounts_are_no_twins():
+    entries = [
+        _leg("out-1", CHECKING, "-100"),
+        _leg("out-2", CHECKING, "-100"),
+        _leg("in", SAVINGS, "100"),
+        _leg("also-in", BROKER, "100"),
+    ]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
+
+
 def test_a_transfer_with_two_partners_offers_both_nearest_first():
     out = _leg("out", CHECKING, "-100", contra=IN_TRANSIT)
     cleared = out.postings[1]._replace(units=amount.Amount(data.Decimal("100"), "CHF"))
