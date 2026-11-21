@@ -333,7 +333,7 @@ nothing exactly, as the fee fit already did. The second change alone booked
 a card purchase against an exchange leg of the same amount, so it waited for
 the first. Together they left 91 unpaired postings, none on a Wise or
 Revolut account, `bean-check` clean (it had 3 errors before), and 46 pairs
-booked unasked, each checked by hand. 14 pairs await an answer in `confirm`.
+booked unasked, each checked by hand. 14 pairs await an answer in `confirm-transfers`.
 
 What stays open on these accounts: 9 card charges to Revolut that no Revolut
 row matches by amount. The cause is not checked yet.
@@ -388,7 +388,7 @@ learns from the labeled history and suggests, plus a fast approval step.
   approved in bulk after a skim. Low band one by one, with a pick from the
   top 3. Retrain after each batch, so each answer improves the next round.
 - **UI independent.** `suggest` and the answers file are the interface. A
-  `categorize` CLI command comes first, on the `confirm` pattern. A web UI
+  `categorize` CLI command comes first, on the `confirm-transfers` pattern. A web UI
   can replace it later, maybe as a Fava extension (unchecked).
 - **Train only on real labels:** `"qif"` and approved answers. Rule output
   would only teach the rules back.

@@ -101,10 +101,10 @@ amount takes its place. A pair booked unasked carries `category-source:
 known legs keep the source that made them known.
 
 ```
-pybank-import --config pybank.toml confirm main.beancount
+pybank-import --config pybank.toml confirm-transfers main.beancount
 ```
 
-`confirm` shows each candidate that is not booked yet, has no answer, and
+`confirm-transfers` shows each candidate that is not booked yet, has no answer, and
 that a rebuild does not book unasked. It asks yes, no or skip. Then, for
 each clearing posting that nothing cancels and no candidate settles, it
 shows the legs it fits and asks which one is its partner.
@@ -119,7 +119,7 @@ A pair in two currencies needs the market rate of its day. `extract` reads
 the `price` directives from the file passed with `-e`. In a rebuild, pass a
 file that holds the prices and no transactions, since `extract` marks a row
 already in that file as a duplicate. Without prices, `extract` leaves such
-a pair unbooked, and `confirm` asks about it.
+a pair unbooked, and `confirm-transfers` asks about it.
 
 ```
 pybank-import --config pybank.toml unpaired main.beancount

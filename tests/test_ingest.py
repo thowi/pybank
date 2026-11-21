@@ -340,7 +340,7 @@ def _confirm(tmp_path, monkeypatch, keys, content=CANDIDATES_LEDGER):
     ledger = tmp_path / "main.beancount"
     ledger.write_text(content, encoding="utf-8")
     monkeypatch.setattr("sys.stdin", io.StringIO(keys))
-    argv = ["--config", _write(tmp_path, ONE_SECTION), "confirm", str(ledger)]
+    argv = ["--config", _write(tmp_path, ONE_SECTION), "confirm-transfers", str(ledger)]
     assert ingest.main(argv) == 0
     return transfer_matcher.load_answers(str(tmp_path / "transfer-pairs.toml"))
 

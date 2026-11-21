@@ -208,7 +208,7 @@ def _cli() -> click.Group:
             raise click.ClickException(str(err)) from err
 
     group.callback = configure
-    group.add_command(_confirm)
+    group.add_command(_confirm_transfers)
     group.add_command(_unpaired)
     return group
 
@@ -224,10 +224,10 @@ def _echo_leg(txn: data.Transaction, units: amount.Amount, account: data.Account
     click.echo(f"{txn.date}  {account}  {units}  {txn.narration}")
 
 
-@click.command("confirm")
+@click.command("confirm-transfers")
 @click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
 @click.pass_context
-def _confirm(ctx: click.Context, ledger: str) -> None:
+def _confirm_transfers(ctx: click.Context, ledger: str) -> None:
     """Ask about each candidate transfer pair in LEDGER that has no answer.
 
     A pair already booked is no candidate, and one a rebuild books unasked is
