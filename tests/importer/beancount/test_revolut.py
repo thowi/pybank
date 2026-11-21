@@ -206,15 +206,13 @@ def test_an_exchange_is_a_known_transfer(tmp_path, importer, chf_path):
     assert received.meta["bank-type"] == "EXCHANGE", "older spelling, same type"
 
 
-def test_both_exchange_legs_pair_at_the_market_rate(tmp_path, importer, chf_path):
+def test_both_exchange_legs_pair_without_a_market_rate(tmp_path, importer, chf_path):
     entries = [
         *importer.extract(chf_path, []),
         *importer.extract(_write(tmp_path, "eur.csv", EUR_CSV), []),
     ]
-    rate = amount.Amount(decimal.Decimal("1.04"), "EUR")
-    price_map = prices.build_price_map([data.Price({}, datetime.date(2026, 1, 1), "CHF", rate)])
 
-    (pair,) = transfer_matcher.candidates(entries, price_map)
+    (pair,) = transfer_matcher.candidates(entries, prices.build_price_map([]))
 
     assert pair.sender.units.currency == "CHF"
     assert pair.receiver.units.currency == "EUR"

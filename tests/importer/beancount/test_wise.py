@@ -213,13 +213,10 @@ def test_reimport_is_idempotent(importer, eur_path):
     assert all(e.meta.get(extract.DUPLICATE) for e in again)
 
 
-def test_both_conversion_legs_pair_unasked(importer, eur_path, usd_path):
+def test_both_conversion_legs_pair_unasked_without_a_market_rate(importer, eur_path, usd_path):
     entries = importer.extract(eur_path, []) + importer.extract(usd_path, [])
-    price = data.Price(
-        {}, datetime.date(2024, 2, 3), "EUR", amount.Amount(decimal.Decimal("1.08"), "USD")
-    )
 
-    (pair,) = transfer_matcher.candidates(entries, prices.build_price_map([price]))
+    (pair,) = transfer_matcher.candidates(entries, prices.build_price_map([]))
 
     assert {leg.txn.meta[wise.META_WISE_ID] for leg in pair} == {"BALANCE-100"}
     assert transfer_matcher.books_unasked(pair)

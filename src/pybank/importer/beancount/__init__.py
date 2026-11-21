@@ -18,3 +18,7 @@ CATEGORY_SOURCE_STATEMENT = "statement"
 
 # The bank's own type of a row, a hint for categorization.
 META_BANK_TYPE = "bank-type"
+
+# The two legs of a currency conversion share it. The transfer matcher pairs
+# them by it.
+META_CONVERSION_ID = "conversion-id"

@@ -9,6 +9,7 @@ from beangulp import extract
 from pybank.importer.beancount import (
     BANK_FEES,
     IN_TRANSIT,
+    META_CONVERSION_ID,
     UNCATEGORIZED,
     postfinance,
     qif,
@@ -134,6 +135,42 @@ def test_currencies_pair_up_at_a_rate_near_the_market():
     ]
 
     assert _ids(transfer_matcher.candidates(entries, PRICES)) == [("out", "in")]
+
+
+def test_a_conversion_pairs_its_legs_and_leaves_the_transfer_after_it_alone():
+    # Money changed into EUR on one account, then sent on to another.
+    changed = _leg("changed", SAVINGS, "-110", contra=IN_TRANSIT)
+    bought = _leg("bought", BROKER, "100", "EUR", contra=IN_TRANSIT)
+    for txn in (changed, bought):
+        txn.meta[META_CONVERSION_ID] = "c1"
+    entries = [
+        changed,
+        bought,
+        _leg("sent", BROKER, "-100", "EUR"),
+        _leg("arrived", CHECKING, "100", "EUR", contra=IN_TRANSIT, days=1),
+    ]
+
+    pairs = transfer_matcher.candidates(entries, PRICES)
+
+    assert sorted(_ids(pairs)) == [("changed", "bought"), ("sent", "arrived")]
+
+
+def test_an_exact_partner_wins_over_one_a_rate_away():
+    entries = [
+        _leg("out", CHECKING, "-110", contra=IN_TRANSIT),
+        _leg("in", SAVINGS, "110"),
+        _leg("in-eur", BROKER, "100", "EUR", contra=IN_TRANSIT),
+    ]
+
+    assert _ids(transfer_matcher.candidates(entries, PRICES)) == [("out", "in")]
+
+
+def test_a_conversion_id_on_one_leg_only_pairs_nothing_by_it():
+    changed = _leg("changed", SAVINGS, "-110", contra=IN_TRANSIT)
+    changed.meta[META_CONVERSION_ID] = "c1"
+    entries = [changed, _leg("bought", BROKER, "100", "EUR", contra=IN_TRANSIT)]
+
+    assert transfer_matcher.candidates(entries, NO_PRICES) == []
 
 
 def test_currencies_far_off_the_market_rate_do_not_pair():

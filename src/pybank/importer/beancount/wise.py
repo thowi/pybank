@@ -8,8 +8,8 @@ flavor that folds each fee into its main row is refused: Its amounts differ,
 so its rows would import a second time next to the split ones.
 
 A conversion between two balances is one row in each currency's statement,
-both under the same `BALANCE-` ID. Both legs book to `IN_TRANSIT`, where the
-transfer matcher pairs them through the rate.
+both under the same `BALANCE-` ID. Both legs book to `IN_TRANSIT` and carry
+that ID as `conversion-id`, by which the transfer matcher pairs them.
 """
 
 import csv
@@ -29,6 +29,7 @@ from . import (
     FX_FEES,
     IN_TRANSIT,
     META_BANK_TYPE,
+    META_CONVERSION_ID,
     UNCATEGORIZED,
     identity,
     qif,
@@ -148,6 +149,8 @@ def _parse_row(row: dict[str, str], conversions: set[str]) -> _Row:
         contra = UNCATEGORIZED
     payee = next((row[col] for col in _PAYEE_COLS if row.get(col)), None)
     meta = {key: row[col] for key, col in _META_COLS.items() if row.get(col)}
+    if contra == IN_TRANSIT:
+        meta[META_CONVERSION_ID] = wise_id
     return _Row(
         balance=amount.Amount(decimal.Decimal(row[_BALANCE_COL]), currency),
         contra=contra,

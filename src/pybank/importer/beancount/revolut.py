@@ -7,8 +7,9 @@ Only completed rows move money. The balance moves by `Amount` minus `Fee`, so
 a row with a fee yields a second transaction that books the fee, and the row
 itself keeps the gross amount the other side of a transfer sees.
 
-An exchange between two currency balances books to `IN_TRANSIT`, where the
-transfer matcher pairs it with the leg in the other currency.
+An exchange between two currency balances books to `IN_TRANSIT`. Both legs
+complete at the same second, which they carry as `conversion-id`, so the
+transfer matcher pairs them.
 """
 
 import csv
@@ -30,6 +31,7 @@ from . import (
     FX_FEES,
     IN_TRANSIT,
     META_BANK_TYPE,
+    META_CONVERSION_ID,
     UNCATEGORIZED,
     identity,
     qif,
@@ -234,6 +236,7 @@ class Importer(beangulp.Importer):
         # Both sides of an exchange are own balances, so it is a known transfer.
         if row.type == _EXCHANGE:
             meta[qif.META_CATEGORY_SOURCE] = CATEGORY_SOURCE_STATEMENT
+            meta[META_CONVERSION_ID] = str(row.completed)
             flag = flags.FLAG_OKAY
             contra = IN_TRANSIT
         postings = [

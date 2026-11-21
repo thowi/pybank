@@ -4,13 +4,14 @@ A leg is a row on an own account whose other posting is still uncategorized
 or already in the clearing account.
 Two legs are a *candidate pair* when money leaves one account and arrives on
 another within `_WINDOW`, and neither leg fits any other leg.
+Two clearing legs that share a `conversion-id` fit each other.
 Legs in one currency fit when the amounts match.
-The two looser fits below need one leg known to be a transfer, one already in
-the clearing account:
+The two looser fits below apply to legs that match nothing exactly, and need
+one leg known to be a transfer, one already in the clearing account:
 Legs in different currencies fit when their implied rate is within `_RATE_BAND`
 of the market rate the ledger's prices give for that day.
-Two legs in one currency that match nothing exactly also fit when the receiver
-got up to `_FEE_SHARE` or `_FEE_FLOOR` less, the fee a bank on the way kept.
+Two legs in one currency also fit when the receiver got up to `_FEE_SHARE` or
+`_FEE_FLOOR` less, the fee a bank on the way kept.
 Booking puts that fee on `BANK_FEES`.
 
 A candidate can still be wrong: Two unrelated rows can carry the same amount.
@@ -39,7 +40,7 @@ from typing import NamedTuple
 from beancount.core import amount, data, flags, prices
 from beangulp import extract
 
-from . import BANK_FEES, IN_TRANSIT, UNCATEGORIZED, identity, qif, routing
+from . import BANK_FEES, IN_TRANSIT, META_CONVERSION_ID, UNCATEGORIZED, identity, qif, routing
 from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_PAIR = "pair"
@@ -155,24 +156,47 @@ def _all_fits(
     entries: Iterable[data.Directive], price_map: prices.PriceMap
 ) -> tuple[list[Leg], dict[str, list[Leg]]]:
     """Returns every leg, and the legs each one fits, keyed by import-id."""
-    legs = [leg for leg in map(_leg, entries) if leg is not None]
+    all_legs = [leg for leg in map(_leg, entries) if leg is not None]
+    # A conversion's legs are sure of each other. Left to the rate, either can
+    # fit a transfer that sends the converted money on.
+    conversions = _conversion_fits(all_legs)
+    legs = [leg for leg in all_legs if leg.import_id not in conversions]
 
     # A rate or a fee explains a gap only when one leg is known to be a
     # transfer. Between two rows nothing marks, such a fit is mostly chance,
     # two purchases that happen to lie close.
-    def fits(sender: Leg, receiver: Leg) -> bool:
-        if sender.units.currency != receiver.units.currency and not _has_transfer(sender, receiver):
+    def fits_at_rate(sender: Leg, receiver: Leg) -> bool:
+        if sender.units.currency == receiver.units.currency or not _has_transfer(sender, receiver):
             return False
         return _fits(sender, receiver, price_map)
 
     def fits_with_fee(sender: Leg, receiver: Leg) -> bool:
         return _has_transfer(sender, receiver) and _fits_with_fee(sender, receiver)
 
-    fit_map = _fit_map(legs, fits)
-    # A fee only explains a gap for legs that fit nothing exactly. Otherwise a
-    # leg a fee away would make an exact pair ambiguous.
-    fit_map |= _fit_map([leg for leg in legs if leg.import_id not in fit_map], fits_with_fee)
-    return legs, fit_map
+    fit_map = _fit_map(legs, lambda sender, receiver: -sender.units == receiver.units)
+    # A rate or a fee only explains a gap for legs that fit nothing exactly.
+    # Otherwise a leg a rate or a fee away would make an exact pair ambiguous.
+    for fits in (fits_at_rate, fits_with_fee):
+        fit_map |= _fit_map([leg for leg in legs if leg.import_id not in fit_map], fits)
+    return all_legs, fit_map | conversions
+
+
+def _conversion_fits(legs: list[Leg]) -> dict[str, list[Leg]]:
+    """Returns the two legs of each conversion, keyed by import-id."""
+    by_conversion = collections.defaultdict(list)
+    for leg in legs:
+        conversion = leg.txn.meta.get(META_CONVERSION_ID)
+        if conversion is not None and _is_transfer(leg):
+            by_conversion[conversion].append(leg)
+    result = {}
+    for group in by_conversion.values():
+        if len(group) != 2:
+            continue
+        sender, receiver = pair_of(*group)
+        if sender.units.number < 0 < receiver.units.number:
+            result[sender.import_id] = [receiver]
+            result[receiver.import_id] = [sender]
+    return result
 
 
 def candidates(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> list[Pair]:
