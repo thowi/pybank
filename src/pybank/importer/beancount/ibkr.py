@@ -4,23 +4,10 @@ Input is the XML an Activity Flex Query produces, parsed by `ibflex`, not the
 Activity Statement CSVs: Only Flex carries the `Lot` and `TransferLot` elements
 that let a sale name the lots it closes.
 
-The saved query must select Trades with Closed Lots, Cash Transactions,
-Transfers, Corporate Actions, Sales Tax, and Cash Report with a currency
-breakout, with dates as `yyyyMMdd`, times as `HHmmss` and `;` between them.
-
 Instruments are identified by `conid` rather than by symbol, and the ledger
 holds that map. See `Commodities`.
 
-Open the securities account `"FIFO"`. A closing trade names only the currency
-its lot cost, so the ledger's own booking method picks the lot, and the
-default booking rejects a reduction that spans two lots.
-
-Reorgs book flagged, and may need their lots corrected by hand.
-
-Sections this does not read are logged with a reason. Statement of Funds is
-the one to reconcile against: Its running balance ends at the cash report's
-`endingCash` for every currency, so the cash postings this produces have to
-sum to the same.
+Call `Importer`, with `Accounts` to name where each kind of posting books.
 """
 
 import datetime
@@ -92,7 +79,9 @@ _SYMBOL_PREFIX = "X"
 # Sections that restate activity read elsewhere. Importing them would double
 # book: Statement of Funds is the cash ledger every trade and cash transaction
 # already produces, and the Fx sections are the base-currency view of the same
-# currency holdings. Worth keeping in the query as a reconciliation source.
+# currency holdings. Keep Statement of Funds in the query to reconcile
+# against: Its running balance ends at the cash report's `endingCash` for every
+# currency, so the cash postings this produces have to sum to the same.
 _DERIVED = (
     "StmtFunds",
     "FxTransactions",
@@ -447,7 +436,17 @@ def _log_unread(statement: Types.FlexStatement) -> None:
 
 
 class Importer(beangulp.Importer):
-    """Reads one Flex XML file into directives."""
+    """Reads one Flex XML file into directives.
+
+    The saved query must select Trades with Closed Lots, Cash Transactions,
+    Transfers, Corporate Actions, Sales Tax, and Cash Report with a currency
+    breakout, with dates as `yyyyMMdd`, times as `HHmmss` and `;` between them.
+    Sections this does not read are logged with a reason.
+
+    Open the securities account `"FIFO"`. A closing trade names only the
+    currency its lot cost, so the ledger's own booking method picks the lot,
+    and the default booking rejects a reduction that spans two lots.
+    """
 
     def __init__(self, accounts: Accounts = DEFAULT_ACCOUNTS):
         self._accounts = accounts

@@ -1,30 +1,17 @@
 """Pairs transfer legs between own accounts.
 
 A leg is a row on an own account whose other posting is still uncategorized
-or already in the clearing account.
-Two legs are a *candidate pair* when money leaves one account and arrives on
-another within `_WINDOW`, and neither leg fits any other leg.
-Two clearing legs that share a `conversion-id` fit each other.
-Legs in one currency fit when the amounts match.
-The two looser fits below apply to legs that match nothing exactly, and need
-one leg known to be a transfer, one already in the clearing account:
-Legs in different currencies fit when their implied rate is within `_RATE_BAND`
-of the market rate the ledger's prices give for that day.
-Two legs in one currency also fit when the receiver got up to `_FEE_SHARE` or
-`_FEE_FLOOR` less, the fee a bank on the way kept.
-Booking puts that fee on `BANK_FEES`.
+or already in the clearing account. Two legs fit when money leaves one account
+and arrives on another within `_WINDOW`, and the amounts match, or differ by
+an exchange rate or a bank fee. A candidate is a pair of legs that fit only
+each other. An answer is a person's yes or no on a pair, keyed by the
+import-ids of both legs.
 
-A candidate can still be wrong: Two unrelated rows can carry the same amount.
-So a candidate books on its own only when `books_unasked` says it is sure, and
-any other only once a person confirms it. `choices` lists each transfer no
-candidate settles, with the legs it fits, so a person can pick its partner.
-`load_answers` reads the answers, which are keyed by the import-ids of both
-legs, `save_answer` appends one, and `book` is the beangulp hook that books
-the pairs. Run it after `transfer_hints.book`, for the same reason that one
-runs after `qif_sidecar.donate`.
-
-`unpaired` reads a whole ledger and returns the clearing postings that nothing
-cancels, which is what keeps the clearing account from zero.
+`candidates` and `choices` list what a person can confirm or pick, and
+`books_unasked` tells which candidate is sure without an answer.
+`load_answers` reads the answers, and `save_answer` appends one.
+`book` is the beangulp hook that books the pairs.
+`unpaired` lists the clearing postings that nothing cancels.
 """
 
 import bisect
@@ -396,8 +383,12 @@ def _confirmed(answers: Answers, legs: dict[str, Leg]) -> list[Pair]:
 def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> list[Group]:
     """Books every confirmed pair, and every unanswered one `books_unasked`.
 
-    Both go through `IN_TRANSIT`. The `category-source` of a booked leg tells
-    the two apart, so the pairs no one confirmed can be listed for review.
+    Both go through `IN_TRANSIT`, and a bank fee between the legs books to
+    `BANK_FEES`. The `category-source` of a booked leg tells the two apart, so
+    the pairs no one confirmed can be listed for review.
+
+    Run it after `transfer_hints.book`, for the same reason that one runs
+    after `qif_sidecar.donate`.
     """
     entries = [entry for _, group, _, _ in extracted for entry in group]
     legs = {leg.import_id: leg for leg in map(_leg, entries) if leg is not None}
@@ -432,7 +423,10 @@ def book(answers: Answers, extracted: list[Group], existing: data.Entries) -> li
 
 
 def unpaired(entries: Iterable[data.Directive]) -> list[tuple[data.Transaction, data.Posting]]:
-    """Returns the clearing postings that no other clearing posting cancels."""
+    """Returns the clearing postings that no other clearing posting cancels.
+
+    These are what keeps the clearing account from zero.
+    """
     # Two postings cancel when they carry opposite amounts in one currency
     # within `_WINDOW`. One sweep in date order cancels each posting with the
     # oldest open one of the other sign. A nearest-first choice can strand two

@@ -1,15 +1,7 @@
 """Revolut CSV account statement importer for beangulp.
 
-One export covers one currency balance. The caller maps each currency to the
-account it books into.
-
-Only completed rows move money. The balance moves by `Amount` minus `Fee`, so
-a row with a fee yields a second transaction that books the fee, and the row
-itself keeps the gross amount the other side of a transfer sees.
-
-An exchange between two currency balances books to `IN_TRANSIT`. Both legs
-complete at the same second, which they carry as `conversion-id`, so the
-transfer matcher pairs them.
+One export covers one currency balance. Call `Importer` with the account of
+each currency.
 """
 
 import csv
@@ -150,7 +142,16 @@ def _closing_row(rows: list[_Row]) -> _Row | None:
 
 
 class Importer(beangulp.Importer):
-    """Revolut account statements, one currency per file."""
+    """Revolut account statements, one currency per file.
+
+    The caller maps each currency to the account its balance books into.
+
+    Only completed rows book. A row with a fee yields a second transaction
+    that books the fee, and the row itself keeps the gross amount the other
+    side of a transfer sees. An exchange between two currency balances books
+    to `IN_TRANSIT` and carries a `conversion-id`, by which the transfer
+    matcher pairs its legs.
+    """
 
     def __init__(self, accounts: Mapping[str, data.Account]):
         self._accounts = dict(accounts)
@@ -236,6 +237,7 @@ class Importer(beangulp.Importer):
         # Both sides of an exchange are own balances, so it is a known transfer.
         if row.type == _EXCHANGE:
             meta[qif.META_CATEGORY_SOURCE] = CATEGORY_SOURCE_STATEMENT
+            # Both legs of an exchange complete at the same second.
             meta[META_CONVERSION_ID] = str(row.completed)
             flag = flags.FLAG_OKAY
             contra = IN_TRANSIT

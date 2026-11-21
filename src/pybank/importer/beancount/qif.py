@@ -5,22 +5,7 @@ categories included. Those categories were assigned inside the exporting app
 rather than guessed from a bank's own labels, which is what makes such an
 export worth reading.
 
-Written against SEE Finance, which is the only export it has been tested on.
-QIF fixes neither the date format nor the decimal separator, so `_DATE_FORMAT`
-and `_number` encode one app's choices and another app needs its own. So do
-`_SPLIT_MARKER`, the word the exporter puts in the category field of a split,
-and `_OPENING_PAYEE`, the payee it gives an opening balance.
-
-Only bank and credit card accounts are read. QIF carries no lots and no
-prices, so a broker's own export books an investment account better than this
-one can.
-
-The format carries no currency and no running balance, so it yields no
-`balance` assertion. Currency comes from the account mapping, which also
-filters: An account absent from it is skipped.
-
-Category accounts derive themselves, since the export declares each category
-as income or expense. Only the awkward labels need a mapping.
+Call `Importer` with a `Target` for each account in the export to book.
 """
 
 import datetime
@@ -278,7 +263,16 @@ def _walk(sections: Sequence[_Section]) -> Iterator[tuple[str, _Record]]:
 
 
 class Importer(beangulp.Importer):
-    """A QIF export covering every account the app tracked."""
+    """A QIF export covering every account the app tracked.
+
+    Reads bank and credit card accounts only. QIF carries no lots and no
+    prices, so a broker's own export books an investment account better.
+
+    The format carries no currency and no running balance, so the currency
+    comes from `targets` and no `balance` assertion is made. Category
+    accounts derive from the export, which declares each category as income
+    or expense.
+    """
 
     def __init__(
         self,

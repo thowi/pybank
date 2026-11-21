@@ -1,9 +1,7 @@
 """PostFinance CSV importers for beangulp.
 
-Exports differ in their header columns and their encoding, so columns are
-matched by name and the encoding is sniffed.
-
-Only the variants carrying a `Saldo` column yield a balance assertion.
+`CheckingImporter` reads checking account statements, `CreditCardImporter`
+credit card statements.
 """
 
 import csv
@@ -20,6 +18,8 @@ from beancount.core import amount, data, flags
 from ... import csvfile, text
 from . import UNCATEGORIZED, identity, routing
 
+# Exports differ in their header columns, so a field matches by any of its
+# names. `csvfile` sniffs the encoding, which differs too.
 _DATE_COLS = ["Buchungsdatum", "Datum"]
 _MEMO_COLS = [
     "Buchungsdetails",
@@ -114,7 +114,10 @@ def _parse_row(row: dict[str, str]) -> _Row | None:
 
 
 class _PostFinanceImporter(beangulp.Importer):
-    """Shared logic. Checking and card differ only in how they identify."""
+    """Shared logic. Checking and card differ only in how they identify.
+
+    Only exports carrying a `Saldo` column yield a balance assertion.
+    """
 
     # Metadata keys that must all be present for a file to be ours.
     _metadata_keys: tuple[str, ...] = ()

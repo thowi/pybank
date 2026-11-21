@@ -1,14 +1,8 @@
-"""Books the rows that match the hints as transfers to the clearing account.
+"""Books the rows that match a hint as transfers to the clearing account.
 
-Transfers need to be matched by the transaction data/message.
-Hints contain accounts and patterns for the matching.
-A matching row books to `IN_TRANSIT`, where it waits for the other leg.
+A `Hint` names an account and a text pattern that mark a row as a transfer.
 `pybank-import` reads hints from the `[[transfers]]` tables of its `--config`.
-
-The `book` function from this module here is a beangulp hook.
-Run it after the `qif_sidecar.donate` hook. Both hooks change only rows that are
-still uncategorized. If `book` ran first, `donate` would skip a hinted row and
-keep the export's copy of it as a second transaction.
+`book` is the beangulp hook that applies them.
 """
 
 import logging
@@ -56,7 +50,13 @@ def _booked(hints: list[Hint], entry: data.Directive) -> data.Directive | None:
 
 
 def book(hints: list[Hint], extracted: list[Group], existing: data.Entries) -> list[Group]:
-    """Books every uncategorized row that matches a hint to `IN_TRANSIT`."""
+    """Books every uncategorized row that matches a hint to `IN_TRANSIT`.
+
+    There the row waits for the other leg. Run it after `qif_sidecar.donate`:
+    Both hooks change only rows that are still uncategorized, so if `book` ran
+    first, `donate` would skip a hinted row and keep the export's copy of it as
+    a second transaction.
+    """
     if not hints:
         return extracted
     result, count = [], 0

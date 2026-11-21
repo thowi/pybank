@@ -1,13 +1,9 @@
 """Folds a QIF export into the statements that cover the same transactions.
 
-Based on output from an older QIF exporter, whose data we want to leverage.
-
-Used to merge a regular bank statement with data from a QIF export.
-Both sources hold entries for the same transactions. We treat the bank statement
-as source of truth, but augment it with categories and notes from the QIF.
-
-`donate` is a beangulp hook. Use it to import the statements and the QIF
-export in one run.
+Both sources hold entries for the same transactions. The bank statement is
+the source of truth, and the QIF export adds its categories and notes.
+`donate` is the beangulp hook that does this, so the statements and the QIF
+export import in one run.
 """
 
 import datetime

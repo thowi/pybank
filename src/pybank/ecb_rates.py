@@ -1,9 +1,6 @@
 """A bean-price source for the ECB euro reference rates.
 
 A ticker is `BASE-QUOTE`, such as `USD-CHF`: The price of one BASE in QUOTE.
-The ECB quotes every currency against the euro, so a pair without the euro is
-derived through it. A day without a rate, such as a weekend or an ECB holiday,
-takes the newest rate before it.
 
 Declare it on a commodity as `price: "CHF:pybank.ecb_rates/USD-CHF"`.
 """
@@ -44,6 +41,13 @@ Rate = tuple[datetime.date, decimal.Decimal]
 
 
 class Source(source.Source):
+    """Quotes a ticker from the ECB reference rates.
+
+    The ECB quotes every currency against the euro, so a pair without the euro
+    is derived through it. A day without a rate, such as a weekend or an ECB
+    holiday, takes the newest rate before it.
+    """
+
     def get_latest_price(self, ticker: str) -> source.SourcePrice | None:
         return _quote(ticker, datetime.datetime.now(datetime.UTC).date())
 

@@ -1,15 +1,8 @@
 """Wise (formerly TransferWise) CSV importer for beangulp.
 
-Wise writes one statement per currency balance, newest row first. Reads the
-flavor with fees split out: Each fee is a row of its own, and the main row
-carries the amount the other side sees. The older export with a shorter
-header reads the same way, its fee rows just reuse the main row's ID. The
-flavor that folds each fee into its main row is refused: Its amounts differ,
-so its rows would import a second time next to the split ones.
-
-A conversion between two balances is one row in each currency's statement,
-both under the same `BALANCE-` ID. Both legs book to `IN_TRANSIT` and carry
-that ID as `conversion-id`, by which the transfer matcher pairs them.
+Wise writes one statement per currency balance. A conversion between two
+balances is one row in each currency's statement, both under the same
+`BALANCE-` ID. Call `Importer` with the account of each currency.
 """
 
 import csv
@@ -167,6 +160,14 @@ class Importer(beangulp.Importer):
     """Wise balance statements, one file per currency.
 
     The caller maps each currency to the account its balance books into.
+
+    Reads the export with fees split out: Each fee is a row of its own, and
+    the main row carries the amount the other side sees. The older export
+    with a shorter header reads the same way. The export that folds each fee
+    into its main row is refused.
+
+    Both legs of a conversion book to `IN_TRANSIT` and carry its ID as
+    `conversion-id`, by which the transfer matcher pairs them.
     """
 
     def __init__(self, accounts: Mapping[str, data.Account]):
@@ -188,6 +189,8 @@ class Importer(beangulp.Importer):
     def extract(self, filepath: str, existing: data.Entries) -> data.Entries:
         rows = _read(filepath)
         account = self._account_for(_currency(rows))
+        # The export that folds fees in has other amounts, so its rows would
+        # import a second time next to the split ones.
         _check_fees_split(rows)
         conversions = {row[_ID_COL] for row in rows if _is_conversion(row)}
         parsed = [_parse_row(row, conversions) for row in rows]

@@ -1,15 +1,9 @@
 """DKB CSV importers for beangulp.
 
-Covers the pre-2023 Girokonto export, the current one, and the pre-2023 Visa
-export.
-
-The account or card number is read from the file itself and routed to a ledger
-account by `routing.AccountRouter`.
-
-Parsing is delegated to the `beancount-dkb` package, which builds transactions
-from date, amount, payee and purpose alone. The columns it drops ride along as
-metadata, and payee and narration are normalized before the import-id is taken
-off them.
+`CheckingImporter` reads the pre-2023 Girokonto export and the current one,
+`CreditCardImporter` the pre-2023 Visa export. Each reads the account or card
+number from the file itself and routes it to a ledger account by
+`routing.AccountRouter`.
 """
 
 import logging
@@ -120,6 +114,8 @@ class _DkbImporter(beangulp.Importer):
         source_id = self._require_source_id(filepath)
         account = self._router.account_for(source_id)
 
+        # `beancount-dkb` builds transactions from date, amount, payee and
+        # purpose alone. `_complete` adds the columns it drops as metadata.
         entries = self._delegate(source_id, account).extract(filepath, existing)
         transactions = [_normalize(e) for e in entries if isinstance(e, data.Transaction)]
         rows = _aligned_rows(filepath, len(transactions))
