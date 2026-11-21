@@ -14,6 +14,7 @@ from pybank.importer.beancount import (
     postfinance,
     qif,
     revolut,
+    see,
     transfer_matcher,
     wise,
 )
@@ -43,6 +44,9 @@ cash = "Assets:Broker:Cash"
 [revolut.accounts]
 CHF = "Assets:App:CHF"
 
+[see.targets]
+"Old Savings" = { account = "Assets:Bank:Savings", currency = "EUR" }
+
 [wise.accounts]
 EUR = "Assets:Transfer:EUR"
 
@@ -65,13 +69,14 @@ def _write(tmp_path, content):
 
 
 def _of_type(importers, cls):
-    return [importer for importer in importers if isinstance(importer, cls)]
+    # Exact, since `see.Importer` is a `qif.Importer` too.
+    return [importer for importer in importers if type(importer) is cls]
 
 
 def test_a_full_config_builds_every_importer(tmp_path):
     built = ingest._importers(ingest._load_config(_write(tmp_path, FULL_CONFIG)))
 
-    assert len(built) == 8
+    assert len(built) == 9
     for cls in (
         dkb.CheckingImporter,
         dkb.CreditCardImporter,
@@ -80,6 +85,7 @@ def test_a_full_config_builds_every_importer(tmp_path):
         postfinance.CreditCardImporter,
         qif.Importer,
         revolut.Importer,
+        see.Importer,
         wise.Importer,
     ):
         assert len(_of_type(built, cls)) == 1
@@ -224,6 +230,14 @@ def test_a_misspelled_section_is_reported_rather_than_ignored(tmp_path):
 
     with pytest.raises(ingest._ConfigError, match="postfinanace"):
         ingest._importers(config)
+
+
+def test_see_targets_become_account_and_currency(tmp_path):
+    config = ingest._load_config(_write(tmp_path, FULL_CONFIG))
+
+    (importer,) = _of_type(ingest._importers(config), see.Importer)
+
+    assert importer._targets == {"Old Savings": qif.Target("Assets:Bank:Savings", "EUR")}
 
 
 def test_a_qif_target_missing_its_currency_names_the_target(tmp_path):

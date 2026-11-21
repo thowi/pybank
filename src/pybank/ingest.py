@@ -29,6 +29,7 @@ from pybank.importer.beancount import (
     qif_sidecar,
     revolut,
     routing,
+    see,
     transfer_hints,
     transfer_matcher,
     transfer_review,
@@ -46,6 +47,10 @@ _ANSWERS_FILE = "transfer-pairs.toml"
 # maximum the eye loses the row between two columns.
 _MAX_COLUMN_WIDTH = 60
 _MIN_COLUMN_WIDTH = 24
+
+# beangulp skips any input above 8 MiB before an importer sees it. A SEE
+# Finance database passes that after a few years of use.
+_MAX_FILE_SIZE = 1024 * 1024 * 1024
 
 
 # Config that only an importer can find fault with raises the same type. Here
@@ -98,16 +103,20 @@ def _postfinance(section: dict) -> list[beangulp.Importer]:
     return importers
 
 
-def _qif(section: dict) -> list[beangulp.Importer]:
+def _qif_targets(section: dict, table: str) -> dict[str, qif.Target]:
     targets = {}
     for name, target in section.get("targets", {}).items():
         try:
             targets[name] = qif.Target(target["account"], target["currency"])
         except (KeyError, TypeError) as err:
-            raise _ConfigError(f"[qif.targets] {name!r} needs account and currency") from err
+            raise _ConfigError(f"[{table}.targets] {name!r} needs account and currency") from err
     if not targets:
-        raise _ConfigError("[qif] needs at least one target, or the export imports nothing")
-    return [qif.Importer(targets, section.get("categories", {}))]
+        raise _ConfigError(f"[{table}] needs at least one target, or the export imports nothing")
+    return targets
+
+
+def _qif(section: dict) -> list[beangulp.Importer]:
+    return [qif.Importer(_qif_targets(section, "qif"), section.get("categories", {}))]
 
 
 def _revolut(section: dict) -> list[beangulp.Importer]:
@@ -115,6 +124,11 @@ def _revolut(section: dict) -> list[beangulp.Importer]:
     if not accounts:
         raise _ConfigError("[revolut.accounts] must map at least one currency to an account")
     return [revolut.Importer(accounts)]
+
+
+def _see(section: dict) -> list[beangulp.Importer]:
+    # The database holds what the QIF export holds, so the config is the same.
+    return [see.Importer(_qif_targets(section, "see"), section.get("categories", {}))]
 
 
 def _wise(section: dict) -> list[beangulp.Importer]:
@@ -159,6 +173,7 @@ _BUILDERS = {
     "postfinance": _postfinance,
     "qif": _qif,
     "revolut": _revolut,
+    "see": _see,
     "wise": _wise,
 }
 
@@ -385,6 +400,7 @@ def _unpaired(ledger: str) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     logging.basicConfig(format=_LOG_FORMAT, level=logging.WARNING)
+    beangulp.identify.FILE_TOO_LARGE_THRESHOLD = _MAX_FILE_SIZE
     # click exits rather than returning, and that is what prints usage errors.
     try:
         _cli().main(args=argv)
