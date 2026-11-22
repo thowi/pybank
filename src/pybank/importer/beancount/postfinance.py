@@ -39,6 +39,7 @@ _BALANCE_PREFIX = "Saldo in "
 _DATE_FORMAT_ISO = "%Y-%m-%d"
 _DATE_FORMAT_DE = "%d.%m.%Y"
 
+_MARKER_MEMO = "[Next billing cycle]"
 _TOTAL_MEMO = "Total"
 
 # Only the recent exports carry these, and they are the bank's guess, not a
@@ -102,6 +103,11 @@ def _parse_row(row: dict[str, str]) -> _Row | None:
         units = credit
     else:
         units = amount.Amount(-abs(debit.number), debit.currency)
+    # pybank's legacy card scraper wrote this row at each page break. A zero
+    # row from the bank, such as a waived fee, stays.
+    if memo == _MARKER_MEMO and not units.number:
+        logger.debug("Skipping a billing cycle marker row.")
+        return None
     return _Row(
         _parse_date(date_str),
         memo,

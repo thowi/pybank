@@ -76,6 +76,7 @@ Karteninhaber:;A Person
 
 Datum;Bezeichnung;Gutschrift in CHF;Lastschrift in CHF;Betrag in CHF
 2019-02-14;BÜCHER;;18.00
+2019-02-14;[Next billing cycle];;0.00
 2019-02-16;RETURN BOOKSHOP;18.00;
 2019-02-16;Total;;;-18.00
 
@@ -321,7 +322,7 @@ def test_extracted_directives_load(tmp_path, checking, balance_path):
 
 
 def test_terse_card_variant(tmp_path, card):
-    """ISO dates, cp1252, and a wide Total row."""
+    """ISO dates, cp1252, a zero-amount marker and a wide Total row."""
     path = _write(tmp_path, "terse.csv", CARD_TERSE_CSV, "cp1252")
     assert card.identify(path)
 
