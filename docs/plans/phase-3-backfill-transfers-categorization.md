@@ -558,6 +558,15 @@ Ruled out: `smart_importer`. Its linear SVC gives no probabilities and one
 account only, and it fills only rows with a single posting, so it never
 replaces `Expenses:Uncategorized`.
 
+### Next steps, in order
+
+1. **Category review with the user.** Show the expense tree with row
+   counts, the old SEE labels per account, and the rows from 2021 on.
+2. **The `rules.toml` hook and the first rules,** from
+   `categorize-hints.md` and the refund rule above.
+3. **The model backtest on the SEE data.**
+4. **The user answers the open pairs in `confirm-transfers`.**
+
 ## Later, not a priority
 
 - **Receivables.** The 3 receivable accounts stop in 2020 with balances
