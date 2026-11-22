@@ -463,6 +463,25 @@ learns from the labeled history and suggests, plus a fast approval step.
 - **Rules are written together.** The agent proposes each rule with its
   matching rows as examples. The user approves it.
 - **Cashback goes to `Income:Cashback`,** see [accounting.md](../accounting.md).
+- **Rule format:** One `text` regex over payee and narration, like
+  `[[transfers]]`. An optional `account` filter, more filters only when a
+  real rule needs one. Rules live in their own `rules.toml` next to
+  `pybank.toml`. The first matching rule wins, and the rebuild reports
+  rules that match no row.
+- **The expense categories get one review before the first rule,** then
+  stay fixed. Rules and model answers name accounts, so a rename later
+  touches all of them.
+- **Payees seen once or twice get no rule.** The model suggests a category,
+  the user approves it, the answer is saved next to the config.
+- **The model only suggests.** Every row it touches is approved before it
+  is booked.
+- **The memo counts as much as the payee.** Generic payees (a payment app,
+  a bank transfer) carry their meaning in the memo, so rule proposals group
+  rows on payee and memo together.
+
+The labels end in early 2021, when SEE Finance stopped being used. After the
+rebuild of 2026-11-22, about 1700 rows up to 2020 and about 9200 rows from
+2021 on are uncategorized.
 
 ### Model candidates, to test before building
 
