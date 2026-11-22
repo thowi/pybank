@@ -119,7 +119,8 @@ Long-term interesting, not actionable this month. Tracked, not budgeted.
 | `Income:Salary:Stocks` | RSU and ESPP vesting                                                                                 |
 | `Income:Dividends`     |                                                                                                      |
 | `Income:Interest`      |                                                                                                      |
-| `Income:Refunds`       | Cashback and untraceable rebates only. A refund of an expense goes back to that expense, see Refunds |
+| `Income:Cashback`      | Card and payment app cashback                                                                        |
+| `Income:Refunds`       | Untraceable rebates only. A refund of an expense goes back to that expense, see Refunds              |
 | `Income:CapitalGains`  | Segregated so taxable income can exclude it                                                          |
 | `Income:Other`         |                                                                                                      |
 
@@ -495,9 +496,10 @@ longer lag, and they recur.
   Expenses:Living:Health             -640.00 CHF
 ```
 
-`Income:Refunds` is left for money in that reverses no specific expense:
-cashback, referral bonuses, an untraceable rebate. It should stay nearly
-empty.
+Cashback is not a refund either. It is a reward for spending in general, not
+money back on one purchase, so it goes to `Income:Cashback`. `Income:Refunds` is left for money in that reverses no
+specific expense: Referral bonuses, an untraceable rebate. It should stay
+nearly empty.
 
 ### Reclaimable tax is not a refund
 
