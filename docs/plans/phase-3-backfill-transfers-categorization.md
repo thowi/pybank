@@ -558,13 +558,67 @@ Ruled out: `smart_importer`. Its linear SVC gives no probabilities and one
 account only, and it fills only rows with a single posting, so it never
 replaces `Expenses:Uncategorized`.
 
+### The category review, decided 2026-11-23
+
+The review used a local page next to the rebuild tooling
+(`category-review/build.py`, outside the repo). Scope: The tree only.
+Category gaps show up during the actual categorization, so new categories
+come then. Payee answers are in `categorize-hints.md` (outside the repo).
+
+Tree changes, agreed, not yet applied:
+
+- Remove `Insurance:Life` and `Leisure:Travel:Flights`.
+- Add `Insurance:Travel`.
+- Rename `Telecom:Internet` to `Telecom:Broadband`.
+- Map `Retoure Income` and `Bills:Reimbursed` to `Expenses:Uncategorized`,
+  so the refund rule books them. Then close `Income:Refunds`.
+- Map the SEE labels `Dining` and `Going Out` both to `Leisure:Dining`.
+  Payee rules override the few exceptions.
+- Keep `Housing:AdditionalCosts`. Each monthly rent payment splits into
+  rent and the advance for additional costs, with both amounts from the
+  lease per date range in the config. The yearly settlement books there
+  too.
+
+Food follows the reason for being away from home:
+
+- `Living:Meals`: Everyday life, so eating at home was not possible. A
+  workday lunch, a break on a long drive outside a trip.
+- The activity's account: Food on a trip goes to `Leisure:Travel`, like
+  half board in a hotel bill. This includes the drive there and back,
+  since those days fall in the trip's date range. Food on a ski day
+  goes to `Leisure:Sport:Ski`. A day with a row in that account is a ski
+  day.
+- `Leisure:Dining`: Eating at home was possible. Dinners, weekends,
+  delivery to home, also to the home office.
+- Meal kits go to `Living:Groceries`.
+
+Trips:
+
+- A trip needs at least one night away.
+- A trip list in the config (start, end, name) drives a rule. Food in the
+  date range books to `Leisure:Travel`. Every row in the range gets
+  `#trip`, so a query can leave trip rows out, plus a tag per trip.
+- The list covers 2021 on. Rows up to 2020 keep their SEE labels.
+- Finding the trips: A script proposes date ranges from the ledger
+  (lodging, airline and rental payees, foreign currency, resort places,
+  no local shopping). An LLM then searches calendar and mail near each
+  range for bookings to fix the dates, or asks the user. The user
+  confirms the list once.
+- Each monthly import later: The user may add a trip line when booking.
+  The same detection runs on the new rows before the rules, looks a few
+  days past the import window, and asks only about trips not yet on the
+  list.
+
 ### Next steps, in order
 
-1. **Category review with the user.** Show the expense tree with row
-   counts, the old SEE labels per account, and the rows from 2021 on.
+1. **Apply the tree changes** above to `accounts.beancount` and
+   `[see.categories]` in `pybank.toml`. Show the diff to the user first.
 2. **The `rules.toml` hook and the first rules,** from
    `categorize-hints.md` and the refund rule above.
-3. **The model backtest on the SEE data.**
+3. **The model backtest on the SEE data.** Compare a local model with an
+   LLM on the same SEE rows. The user prefers the LLM if it is clearly
+   better: The cost is low, and the goal is to save the user's time.
+   The user approves suggestions per group, never row by row.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
@@ -582,6 +636,13 @@ replaces `Expenses:Uncategorized`.
   with the marker rows. Add a check to the workflow: Each billing period's
   rows sum to the bill's total. Phase 4 plans the same check after each
   fetch, so build it once for both.
+- **IBKR capital gains.** The yearly totals look wrong, 2025 most of all.
+  Hypothesis: Cash and shares moved into IBKR count as gains. Check
+  against the IBKR realized P&L report.
+- **Payments in lieu of dividends.** IBKR lends the shares (Stock Yield
+  Enhancement Program) and pays a substitute instead of the dividend. Give
+  these payments and their withholding their own category, so the tax
+  return can tell them from real dividends.
 
 ## Acceptance
 
