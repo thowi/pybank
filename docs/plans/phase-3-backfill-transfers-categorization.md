@@ -450,6 +450,20 @@ learns from the labeled history and suggests, plus a fast approval step.
 - **Train only on real labels:** `"qif"` and approved answers. Rule output
   would only teach the rules back.
 
+### Decided 2026-11-22
+
+- **The SEE Finance database is the source of the hand-assigned labels,**
+  not the QIF. Its rows keep `category-source: "qif"`.
+- **Backtest again on the SEE data.** The numbers below come from the QIF,
+  which cuts memos at 55 characters.
+- **The rules hook comes before the model.**
+- **A rule books only rows that are still uncategorized.** A label, a
+  statement booking or a transfer wins. Letting a rule override a label
+  can come later, if a mixed label needs it.
+- **Rules are written together.** The agent proposes each rule with its
+  matching rows as examples. The user approves it.
+- **Cashback goes to `Income:Cashback`,** see [accounting.md](../accounting.md).
+
 ### Model candidates, to test before building
 
 Backtest: Train on rows before 2019, test on 2019 and 2020 (2552 rows). Later
