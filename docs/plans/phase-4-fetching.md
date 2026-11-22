@@ -17,6 +17,9 @@ research docs (`../research/`).
    row count that lands exactly on it as a truncated file, not a full one.
 3. DKB: API if viable, else Playwright.
 4. Scheduling: launchd or cron, downloads land next to the statement archive.
+5. VIAC (pillar 3a): Fetch the yearly certificate for the pad and balance
+   assertion (see `../accounting.md`). Add a transfer hint, so the yearly
+   payment from checking books to the pension account.
 
 ## Overlap and late bookings
 

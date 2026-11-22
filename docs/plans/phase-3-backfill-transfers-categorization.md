@@ -483,6 +483,28 @@ The labels end in early 2021, when SEE Finance stopped being used. After the
 rebuild of 2026-11-22, about 1700 rows up to 2020 and about 9200 rows from
 2021 on are uncategorized.
 
+Where the rows up to 2020 come from, checked against the SEE database:
+
+- About 690 carry an old label that maps to `Expenses:Uncategorized` on
+  purpose (`Bills`, `Cash`, `Services`, `Retoure Expense`). The rules split
+  them by text. `Cash` stays a true-up.
+- About 800 have no category in SEE itself. The database has about 680 such
+  bank and card rows up to 2020, most on the cards. About 290 are money in:
+  Refunds from online shops, tax-free refunds, rewards, payment-app
+  receipts, deposits. The rest are online shops, payment services, foreign
+  card purchases and bank transfers. 89 more are the unlabeled part of a
+  split purchase in SEE (the part sent back later). Only 17 refunds match
+  such a part to the cent, so a refund rule cannot pair them by amount.
+- About 115 rows are not gaps. Each is a zero-amount `[Next billing cycle]`
+  marker that the legacy card scraper wrote into its CSVs
+  (`download/postfinance.py`). They book nothing.
+- About 20 lost a label: The CSV row won the overlap and its QIF twin is
+  ambiguous.
+
+So the old labels need no new mapping pass. `[see.categories]` already maps
+every label, and rule proposals cite the mapped labels as evidence. Rows
+up to 2020 keep their labels, only the open ones get rules.
+
 ### Model candidates, to test before building
 
 Backtest: Train on rows before 2019, test on 2019 and 2020 (2552 rows). Later
@@ -528,6 +550,14 @@ To test, in this order:
 Ruled out: `smart_importer`. Its linear SVC gives no probabilities and one
 account only, and it fills only rows with a single posting, so it never
 replaces `Expenses:Uncategorized`.
+
+## Later, not a priority
+
+- **Receivables.** The 3 receivable accounts stop in 2020 with balances
+  that are not zero. One holds costs that will not be repaid, so close it
+  to zero. Check the other two for gaps, then close them too.
+- **VIAC.** The yearly payments since 2021 are transfers, not expenses.
+  The transfer hint and the yearly certificates move to phase 4.
 
 ## Acceptance
 
