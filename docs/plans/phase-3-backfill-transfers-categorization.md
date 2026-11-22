@@ -478,6 +478,11 @@ learns from the labeled history and suggests, plus a fast approval step.
 - **The memo counts as much as the payee.** Generic payees (a payment app,
   a bank transfer) carry their meaning in the memo, so rule proposals group
   rows on payee and memo together.
+- **A refund books to the account of its purchase,** so the two cancel.
+  It gets the tag `#refund`. When its purchase is clear (same merchant,
+  earlier date, larger or equal amount), both get one shared `^link`. With
+  no clear purchase, the refund gets only the tag. No split transactions:
+  A partial refund nets out in the account total.
 
 The labels end in early 2021, when SEE Finance stopped being used. After the
 rebuild of 2026-11-22, about 1700 rows up to 2020 and about 9200 rows from
@@ -497,7 +502,9 @@ Where the rows up to 2020 come from, checked against the SEE database:
   such a part to the cent, so a refund rule cannot pair them by amount.
 - About 115 rows are not gaps. Each is a zero-amount `[Next billing cycle]`
   marker that the legacy card scraper wrote into its CSVs
-  (`download/postfinance.py`). They book nothing.
+  (`download/postfinance.py`). They book nothing. The PostFinance importer
+  now skips zero-amount rows with this memo. Other zero rows stay, since a
+  statement can carry one (the QIF holds a 0.00 account fee).
 - About 20 lost a label: The CSV row won the overlap and its QIF twin is
   ambiguous.
 
@@ -558,6 +565,14 @@ replaces `Expenses:Uncategorized`.
   to zero. Check the other two for gaps, then close them too.
 - **VIAC.** The yearly payments since 2021 are transfers, not expenses.
   The transfer hint and the yearly certificates move to phase 4.
+- **Odd rows up to 2020.** Costs paid for others, top-ups booked as
+  purchases and similar rows stay as they are for now. Once all rows have
+  a category, look for odd account totals per year and correct those.
+  Older years may stay as they are.
+- **Card balances against the bill PDFs.** SEE Finance did this by hand
+  with the marker rows. Add a check to the workflow: Each billing period's
+  rows sum to the bill's total. Phase 4 plans the same check after each
+  fetch, so build it once for both.
 
 ## Acceptance
 
