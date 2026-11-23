@@ -652,6 +652,48 @@ equal amount in the same currency.
 - A card refund of a foreign purchase converts at a new rate, so it can be
   a little larger than its purchase in CHF. Unmeasured.
 
+Alternatives to the first word, on all 501 refunds. "Wrong direction" runs
+the same search on purchases after the refund, where no link can be right:
+
+| Match                         | Linked | Wrong direction |
+| ----------------------------- | ------ | --------------- |
+| First word                    | 206    | 62              |
+| First word, same amount only  | 86     | 6               |
+| First word, then whole text   | 224    | 73              |
+| First two words               | 218    | 68              |
+| Whole text equal              | 169    | 54              |
+| Any shared word               | 161    | 68              |
+| Text similarity 0.8           | 211    | 69              |
+| No name, same amount only     | 107    | 20              |
+
+- The weak part is the amount, not the word: 56 of the 62 wrong-direction
+  links have a different amount. 3 linked pairs differ in the second word.
+- Unlinked: 213 have several purchases, 82 have none.
+- Of the 15 booked refunds, 12 have a different amount than their purchase.
+
+Scored against the SEE labels `Retoure Expense` (the purchase, or the
+returned part of a split one) and `Retoure Income` (the refund). SEE holds no
+refund links. 38 pairs are unique by amount and date, 19 of them partial
+returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
+
+| Match                                     | Full, of 19 | Partial, of 19 | Wrong | Links | Wrong direction |
+| ----------------------------------------- | ----------- | -------------- | ----- | ----- | --------------- |
+| The hook                                  | 14          | 0              | 2     | 206   | 62              |
+| Plus split purchases                      | 14          | 6              | 0     | 216   | 71              |
+| Plus a split part of the same amount      | 14          | 18             | 0     | 234   | 71              |
+| Plus a same amount within 0.50            | 17          | 18             | 0     | 254   | 85              |
+
+- The hook skips split purchases (more than 2 postings). Both wrong links
+  come from that.
+- The part rule and the pairs both use the amount, so its 18 is optimistic.
+- Decided: Add split purchases, the part rule, and a tolerance for "the same
+  amount". A same-amount refund claims its purchase first. Book only
+  same-amount refunds (or the same amount as one part). A partial refund is
+  linked and stays open.
+- The tolerance is 1%, not the 3% of the exchange rates: On the 38 pairs 1%
+  and 0.50 are equally right (17 and 18). 3% links one pair wrong. In the
+  wrong direction, same-amount links are 13 at 1%, 22 at 0.50, 29 at 3%.
+
 ### Next steps, in order
 
 1. **Apply the tree changes** above to `accounts.beancount` and
@@ -680,18 +722,25 @@ equal amount in the same currency.
    Status later 2026-11-23: The user merged the two postage proposals into
    one rule for payments and refunds (`Expenses:Living:Postage`, above the
    rental rule). The marketplace rule is in. The transfer pair named in
-   `categorize-hints.md` gets no rule: It is a one-off loan, to settle as a
-   confirmed pair or by hand (proposal pending). The refund hook is built
+   `categorize-hints.md` gets no rule: It is a one-off loan, booked on
+   both rows to `Assets:Receivable:Friends` with the answers file, once that
+   exists (decided). The refund hook is built
    (`refunds.py`, `[refunds]` in `rules.toml`) and went through
-   `/ship-change`, waiting for the user's review. Fixed from the review:
+   `/ship-change` and the user's review. Not committed yet. Extended
+   after that review (split purchases, part amounts, 1% tolerance, claims,
+   no category for other amounts). The extension went through its own
+   `/ship-change`, and waits for the user's review. Fixed from the first
+   review:
    - A row an earlier hook dropped no longer counts as a second purchase.
      It stays in beangulp's `existing`.
    - A transfer out is no purchase.
    - A duplicate is no purchase.
    - A row with no merchant word has no purchase.
 
-   The rebuild: No `bean-check` errors, 500 refunds tagged, 204 linked, 15
-   booked (before the fixes: 501, 155, 8). Limits, in the docstring:
+   The prefixes are config (`[refunds] prefixes`). The rebuild: No
+   `bean-check` errors, 501 refunds tagged, 255 linked, 3 booked (before the
+   extension: 501, 196, 15, before the fixes: 501, 155, 8). Open: Two refunds
+   of the amount of one part both book to that part. Limits, in the docstring:
    - A purchase already in the ledger gets no link.
    - A row a rule booked is no refund.
 
@@ -704,6 +753,10 @@ equal amount in the same currency.
 
 ## Later, not a priority
 
+- **Embeddings for the refund match.** Expected gain: Small, since most
+  unlinked refunds have several purchases from the same shop. Test on the
+  38 pairs of `Ledger-rebuild/refund-match/`. Compare with an order number
+  that both texts hold.
 - **Receivables.** The 3 receivable accounts stop in 2020 with balances
   that are not zero. One holds costs that will not be repaid, so close it
   to zero. Check the other two for gaps, then close them too.
