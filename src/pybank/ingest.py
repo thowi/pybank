@@ -3,6 +3,7 @@
 Accounts are configured in a TOML file passed as `--config`.
 """
 
+import datetime
 import functools
 import itertools
 import logging
@@ -29,6 +30,7 @@ from pybank.importer.beancount import (
     qif_sidecar,
     revolut,
     routing,
+    rules,
     see,
     transfer_hints,
     transfer_matcher,
@@ -42,6 +44,11 @@ _LOG_FORMAT = "\n%(message)s"
 
 # The answers on transfer pairs, kept next to the config file.
 _ANSWERS_FILE = "transfer-pairs.toml"
+
+# The categorization rules, kept next to the config file. Optional.
+_RULES_FILE = "rules.toml"
+
+_RULE_KEYS = {"account", "book", "from", "labels", "text", "until"}
 
 # Below the minimum a transaction column wraps too much to read. Above the
 # maximum the eye loses the row between two columns.
@@ -153,15 +160,61 @@ def _hints(config: dict) -> list[transfer_hints.Hint]:
     return hints
 
 
-def _hooks(config: dict, answers: transfer_matcher.Answers) -> list:
+def _rule(i: int, entry: dict) -> rules.Rule:
+    where = f"{_RULES_FILE} rule #{i + 1}"
+    unknown = sorted(set(entry) - _RULE_KEYS)
+    if unknown:
+        raise _ConfigError(f"{where}: Unknown keys: {', '.join(unknown)}")
+    if "book" not in entry or "text" not in entry:
+        raise _ConfigError(f"{where} needs book and text")
+    try:
+        text = re.compile(entry["text"], re.IGNORECASE)
+    except TypeError as err:
+        raise _ConfigError(f"{where}: text must be a string") from err
+    except re.error as err:
+        raise _ConfigError(f"{where}: Bad text pattern: {err}") from err
+    if not isinstance(entry.get("labels", []), list):
+        raise _ConfigError(f"{where}: labels must be a list")
+    # A quoted date loads as a string, and a datetime never compares to a date.
+    if any(
+        type(entry.get(key, datetime.date.min)) is not datetime.date for key in ("from", "until")
+    ):
+        raise _ConfigError(f"{where}: from and until must be dates")
+    return rules.Rule(
+        account=entry.get("account"),
+        book=entry["book"],
+        end=entry.get("until"),
+        labels=frozenset(entry.get("labels", [])),
+        start=entry.get("from"),
+        text=text,
+    )
+
+
+def _rules(path: str) -> list[rules.Rule]:
+    """Returns the rules in `path`, none if absent, or raises `_ConfigError`."""
+    if not os.path.exists(path):
+        return []
+    loaded = _load_config(path)
+    unknown = sorted(set(loaded) - {"rules"})
+    if unknown:
+        raise _ConfigError(f"Unknown {_RULES_FILE} sections: {', '.join(unknown)}")
+    return [_rule(i, entry) for i, entry in enumerate(loaded.get("rules", []))]
+
+
+def _hooks(
+    config: dict, answers: transfer_matcher.Answers, categorization: list[rules.Rule]
+) -> list:
     """Returns the beangulp hooks, in the order they must run."""
     # `donate` and the hints change only rows that are still uncategorized.
     # A row hinted first would hide from `donate`, which then keeps the export's
-    # copy of it as a second transaction.
+    # copy of it as a second transaction. The rules run last, so a transfer is
+    # booked before a rule sees it. A pair that still waits for an answer is
+    # not booked yet, so a rule that matches one of its legs takes it.
     return [
         qif_sidecar.donate,
         functools.partial(transfer_hints.book, _hints(config)),
         functools.partial(transfer_matcher.book, answers),
+        functools.partial(rules.book, categorization),
     ]
 
 
@@ -180,6 +233,10 @@ _BUILDERS = {
 
 def _answers_path(config: str) -> str:
     return os.path.join(os.path.dirname(config), _ANSWERS_FILE)
+
+
+def _rules_path(config: str) -> str:
+    return os.path.join(os.path.dirname(config), _RULES_FILE)
 
 
 def _load_config(path: str) -> dict:
@@ -228,7 +285,8 @@ def _cli() -> click.Group:
         try:
             loaded = _load_config(config)
             answers = transfer_matcher.load_answers(_answers_path(config))
-            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=_hooks(loaded, answers))
+            hooks = _hooks(loaded, answers, _rules(_rules_path(config)))
+            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=hooks)
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 

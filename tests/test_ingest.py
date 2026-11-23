@@ -210,7 +210,7 @@ def test_the_hooks_keep_one_copy_of_a_hinted_row_the_export_also_holds(tmp_path)
         ),
     ]
 
-    for hook in ingest._hooks(config, {}):
+    for hook in ingest._hooks(config, {}, []):
         groups = hook(groups, [])
 
     statements, exported = groups[0][1], groups[1][1]
@@ -527,3 +527,63 @@ def test_confirm_rejects_every_option_on_none_and_asks_no_more(tmp_path, monkeyp
     answers = _confirm(tmp_path, monkeypatch, "", CHOICE_LEDGER)
 
     assert answers == {frozenset(["out", "in"]): False, frozenset(["out", "also-in"]): False}
+
+
+def test_rules_load_with_their_filters(tmp_path):
+    content = """\
+[[rules]]
+account = "Assets:Bank"
+book = "Expenses:Living:Groceries"
+from = 2025-01-01
+labels = ["Dining"]
+text = "meal box"
+until = 2025-12-31
+"""
+    (rule,) = ingest._rules(_write(tmp_path, content))
+
+    assert rule.account == "Assets:Bank"
+    assert rule.book == "Expenses:Living:Groceries"
+    assert rule.end == datetime.date(2025, 12, 31)
+    assert rule.labels == frozenset({"Dining"})
+    assert rule.start == datetime.date(2025, 1, 1)
+    assert rule.text.search("MEAL BOX")
+
+
+def test_no_rules_file_means_no_rules(tmp_path):
+    assert ingest._rules(str(tmp_path / "rules.toml")) == []
+
+
+def test_a_misspelled_rule_key_is_reported(tmp_path):
+    content = '[[rules]]\nbook = "Expenses:A"\ntext = "a"\nlabel = ["Dining"]\n'
+
+    with pytest.raises(ingest._ConfigError, match="Unknown keys: label"):
+        ingest._rules(_write(tmp_path, content))
+
+
+def test_a_rule_missing_its_target_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="needs book and text"):
+        ingest._rules(_write(tmp_path, '[[rules]]\ntext = "a"\n'))
+
+
+@pytest.mark.parametrize(
+    ("line", "error"),
+    [
+        ('text = "a("', "Bad text pattern"),
+        ("text = 5", "text must be a string"),
+        ('labels = "Dining"', "labels must be a list"),
+        ('from = "2025-01-01"', "from and until must be dates"),
+        ("until = 2025-01-01T00:00:00", "from and until must be dates"),
+    ],
+)
+def test_a_rule_value_of_the_wrong_type_is_reported(tmp_path, line, error):
+    defaults = {"book": 'book = "Expenses:A"', "text": 'text = "a"'}
+    defaults[line.split(" ")[0]] = line
+    content = "[[rules]]\n" + "\n".join(defaults.values()) + "\n"
+
+    with pytest.raises(ingest._ConfigError, match=error):
+        ingest._rules(_write(tmp_path, content))
+
+
+def test_a_misspelled_rules_section_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="Unknown rules.toml sections: rule"):
+        ingest._rules(_write(tmp_path, '[[rule]]\nbook = "Expenses:A"\ntext = "a"\n'))
