@@ -2,6 +2,7 @@
 
 import datetime
 import io
+import re
 
 import pytest
 from beancount.core import amount, data, flags
@@ -13,6 +14,7 @@ from pybank.importer.beancount import (
     ibkr,
     postfinance,
     qif,
+    refunds,
     revolut,
     see,
     transfer_matcher,
@@ -210,7 +212,7 @@ def test_the_hooks_keep_one_copy_of_a_hinted_row_the_export_also_holds(tmp_path)
         ),
     ]
 
-    for hook in ingest._hooks(config, {}, []):
+    for hook in ingest._hooks(config, {}, [], refunds.Config()):
         groups = hook(groups, [])
 
     statements, exported = groups[0][1], groups[1][1]
@@ -587,3 +589,47 @@ def test_a_rule_value_of_the_wrong_type_is_reported(tmp_path, line, error):
 def test_a_misspelled_rules_section_is_reported(tmp_path):
     with pytest.raises(ingest._ConfigError, match="Unknown rules.toml sections: rule"):
         ingest._rules(_write(tmp_path, '[[rule]]\nbook = "Expenses:A"\ntext = "a"\n'))
+
+
+def test_the_refunds_table_is_read(tmp_path):
+    content = (
+        '[refunds]\naccounts = ["Liabilities:Card"]\nlabels = ["Returns"]\n'
+        "prefixes = ['return\\b']\n"
+    )
+
+    config = ingest._refunds(_write(tmp_path, content))
+
+    assert config == refunds.Config(
+        accounts=("Liabilities:Card",),
+        labels=frozenset({"Returns"}),
+        prefixes=(re.compile(r"return\b", re.IGNORECASE),),
+    )
+
+
+def test_no_rules_file_means_no_refunds(tmp_path):
+    assert ingest._refunds(str(tmp_path / "rules.toml")) == refunds.Config()
+
+
+def test_a_misspelled_refunds_key_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="Unknown keys: account"):
+        ingest._refunds(_write(tmp_path, '[refunds]\naccount = ["Liabilities:Card"]\n'))
+
+
+def test_a_refunds_value_that_is_no_list_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="must be lists"):
+        ingest._refunds(_write(tmp_path, '[refunds]\nlabels = "Returns"\n'))
+
+
+def test_a_refunds_value_that_is_no_table_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="must be a table"):
+        ingest._refunds(_write(tmp_path, "refunds = 1\n"))
+
+
+def test_a_bad_refunds_prefix_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="Bad prefix pattern"):
+        ingest._refunds(_write(tmp_path, '[refunds]\nprefixes = ["("]\n'))
+
+
+def test_a_refunds_prefix_that_is_no_string_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="must be strings"):
+        ingest._refunds(_write(tmp_path, "[refunds]\nprefixes = [1]\n"))

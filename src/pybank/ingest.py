@@ -28,6 +28,7 @@ from pybank.importer.beancount import (
     postfinance,
     qif,
     qif_sidecar,
+    refunds,
     revolut,
     routing,
     rules,
@@ -195,26 +196,56 @@ def _rules(path: str) -> list[rules.Rule]:
     if not os.path.exists(path):
         return []
     loaded = _load_config(path)
-    unknown = sorted(set(loaded) - {"rules"})
+    unknown = sorted(set(loaded) - {"refunds", "rules"})
     if unknown:
         raise _ConfigError(f"Unknown {_RULES_FILE} sections: {', '.join(unknown)}")
     return [_rule(i, entry) for i, entry in enumerate(loaded.get("rules", []))]
 
 
+def _refunds(path: str) -> refunds.Config:
+    """Returns the `[refunds]` table in `path`, or raises `_ConfigError`."""
+    if not os.path.exists(path):
+        return refunds.Config()
+    table = _load_config(path).get("refunds", {})
+    if not isinstance(table, dict):
+        raise _ConfigError(f"{_RULES_FILE} [refunds] must be a table")
+    unknown = sorted(set(table) - {"accounts", "labels", "prefixes"})
+    if unknown:
+        raise _ConfigError(f"{_RULES_FILE} [refunds]: Unknown keys: {', '.join(unknown)}")
+    if not all(isinstance(table.get(key, []), list) for key in ("accounts", "labels", "prefixes")):
+        raise _ConfigError(f"{_RULES_FILE} [refunds]: accounts, labels and prefixes must be lists")
+    try:
+        prefixes = tuple(re.compile(p, re.IGNORECASE) for p in table.get("prefixes", []))
+    except TypeError as err:
+        raise _ConfigError(f"{_RULES_FILE} [refunds]: prefixes must be strings") from err
+    except re.error as err:
+        raise _ConfigError(f"{_RULES_FILE} [refunds]: Bad prefix pattern: {err}") from err
+    return refunds.Config(
+        accounts=tuple(table.get("accounts", [])),
+        labels=frozenset(table.get("labels", [])),
+        prefixes=prefixes,
+    )
+
+
 def _hooks(
-    config: dict, answers: transfer_matcher.Answers, categorization: list[rules.Rule]
+    config: dict,
+    answers: transfer_matcher.Answers,
+    categorization: list[rules.Rule],
+    refund: refunds.Config,
 ) -> list:
     """Returns the beangulp hooks, in the order they must run."""
     # `donate` and the hints change only rows that are still uncategorized.
     # A row hinted first would hide from `donate`, which then keeps the export's
     # copy of it as a second transaction. The rules run last, so a transfer is
     # booked before a rule sees it. A pair that still waits for an answer is
-    # not booked yet, so a rule that matches one of its legs takes it.
+    # not booked yet, so a rule that matches one of its legs takes it. The
+    # refunds run after the rules, so a refund follows its purchase's account.
     return [
         qif_sidecar.donate,
         functools.partial(transfer_hints.book, _hints(config)),
         functools.partial(transfer_matcher.book, answers),
         functools.partial(rules.book, categorization),
+        functools.partial(refunds.book, refund),
     ]
 
 
@@ -285,7 +316,8 @@ def _cli() -> click.Group:
         try:
             loaded = _load_config(config)
             answers = transfer_matcher.load_answers(_answers_path(config))
-            hooks = _hooks(loaded, answers, _rules(_rules_path(config)))
+            path = _rules_path(config)
+            hooks = _hooks(loaded, answers, _rules(path), _refunds(path))
             ctx.obj = beangulp.Ingest(_importers(loaded), hooks=hooks)
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
