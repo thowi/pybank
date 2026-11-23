@@ -73,6 +73,9 @@ Another front end, such as a web page, must reuse every rule, not copy it.
 Overrides the global auto-commit convention for code changes in this repo.
 
 - Leave code changes **unstaged**. Do not run `git add` on code.
+- A unit of work larger than about 50 lines of code (tests included) goes
+  through `/ship-change` before it is ready. Run it before the review prompt,
+  and put its report in that prompt.
 - When a unit of work is ready, stop and prompt for review. Summarize what
   changed and list the files.
 - Wait. Review happens hunk by hunk, staging selectively.

@@ -459,7 +459,8 @@ learns from the labeled history and suggests, plus a fast approval step.
 - **The rules hook comes before the model.**
 - **A rule books only rows that are still uncategorized.** A label, a
   statement booking or a transfer wins. Letting a rule override a label
-  can come later, if a mixed label needs it.
+  can come later, if a mixed label needs it. Superseded 2026-11-23: A rule
+  may override the labels it names, see the rule mechanics below.
 - **Rules are written together.** The agent proposes each rule with its
   matching rows as examples. The user approves it.
 - **Cashback goes to `Income:Cashback`,** see [accounting.md](../accounting.md).
@@ -609,12 +610,73 @@ Trips:
   days past the import window, and asks only about trips not yet on the
   list.
 
+### Rule mechanics, decided 2026-11-23
+
+Some SEE labels are wrong for a few payees: A meal kit labeled `Dining`
+belongs in `Living:Groceries`. So a rule may override a label, but only a
+label it names.
+
+- **Keys:** `text` (regex over payee and narration), `book` (the target
+  account), and the optional filters `account` (the bank account, as in
+  `[[transfers]]`), `from`, `until` and `labels`.
+- **Which rows a rule may book:** A row on `Expenses:Uncategorized` is open
+  to every rule. A row with a label (`qif-category`) is open only to rules
+  that list that label in `labels`. Every other row is closed.
+- **Order:** The rules run top to bottom, and the first match books the
+  row. An exception is a narrower rule above the broader one, or a rule
+  that names the label it overrides. There is no other exception syntax.
+- **Booking:** The posting moves to `book`, with `category-source:
+  "rule"`. `qif-category` stays, so the old label remains visible.
+- **The trip rule goes first,** with `labels = ["Dining"]`, so trip dates
+  win over the payee rules.
+- **A rule may book to `Expenses:Uncategorized`.** This sends a labeled
+  row back to review, for a payee whose rows need a pick one by one.
+
+### The refund rule, measured 2026-11-23
+
+A prototype (scratchpad, not in the repo) looked for the purchase of each
+open money-in row on a card, plus the rows labeled `Retoure Income` and
+`Bills:Reimbursed`. Merchant key: The first word of payee and narration,
+after prefixes like `Retour.` and `PayPal *` are cut. A purchase is a
+money-out row with the same key, up to 120 days earlier, with a larger or
+equal amount in the same currency.
+
+- 501 rows. 85 have one purchase with the same amount, 80 have one
+  purchase with a larger amount, 84 have none, 235 have several.
+- Of the 182 rows with one clear purchase, only 17 purchases carry a
+  category. Most purchases are open too, so the refund hook mostly links.
+  The booking follows when the purchase gets its category.
+- Of the 235 with several purchases, 143 have purchases that all share one
+  account.
+- The first word is a weak key: It also pairs bank giro rows and fee rows.
+- A card refund of a foreign purchase converts at a new rate, so it can be
+  a little larger than its purchase in CHF. Unmeasured.
+
 ### Next steps, in order
 
 1. **Apply the tree changes** above to `accounts.beancount` and
-   `[see.categories]` in `pybank.toml`. Show the diff to the user first.
+   `[see.categories]` in `pybank.toml`. Done 2026-11-23: Rebuilt, no
+   `bean-check` errors, no posting left on a removed account.
 2. **The `rules.toml` hook and the first rules,** from
-   `categorize-hints.md` and the refund rule above.
+   `categorize-hints.md` and the refund rule above. Status 2026-11-23:
+   The hook is built (`rules.py`, wired in `ingest.py`) and went through
+   `/ship-change`, reviewed and committed. Fixed from the review: Type
+   checks for `from`, `until`, `labels` and `text`, an unknown top-level
+   key in `rules.toml` is an error, duplicates are skipped, the shape check
+   reuses `hooks.open_slot`. Measured: A rule can book one leg of a pair
+   that waits for an answer, so `confirm-transfers` would not ask about it.
+   With today's rules no pair is lost (4 pending pairs and 3 choices with
+   and without the rule rows), so a comment in `_hooks` notes it. Recheck
+   with a broad rule, for example a P2P app's name. The first 8 rules are
+   approved and in `rules.toml`. The rebuild books 226 rows by rule, with
+   no `bean-check` errors and no rule that matches nothing. Open, each a
+   unit of its own: Marketplace sales, TWINT postage (needs a postage
+   account), the transfer pair named in `categorize-hints.md`, the refund
+   rule, trips, the ski-day rule, the rent split. The first three are rule
+   proposals in `rules.toml` only, waiting for the user's approval
+   (2026-11-23). Found then: The approved rental-income rule also books 4
+   postage receipts whose memo names the rental platform. The postage rule
+   must go above it.
 3. **The model backtest on the SEE data.** Compare a local model with an
    LLM on the same SEE rows. The user prefers the LLM if it is clearly
    better: The cost is low, and the goal is to save the user's time.
