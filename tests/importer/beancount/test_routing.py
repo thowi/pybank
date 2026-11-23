@@ -1,5 +1,3 @@
-"""All values here are invented. Never derive a fixture from a real config."""
-
 import pytest
 from beangulp import exceptions
 

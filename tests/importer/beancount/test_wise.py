@@ -1,8 +1,3 @@
-"""Tests for the Wise importer.
-
-All values here are invented. Never derive a fixture from a real export.
-"""
-
 import datetime
 import decimal
 

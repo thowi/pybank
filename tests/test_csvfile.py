@@ -1,5 +1,3 @@
-"""All values here are invented."""
-
 import codecs
 import io
 

@@ -1,7 +1,6 @@
-"""All values here are invented. Never derive a fixture from a real database.
+"""Covers reading the database into the rows that `qif.Importer` books.
 
-Booking is `qif.Importer`'s and tested there. These tests cover reading the
-database into the same rows.
+`test_qif` covers the booking rules.
 """
 
 import datetime

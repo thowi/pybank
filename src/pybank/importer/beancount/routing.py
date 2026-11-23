@@ -1,5 +1,3 @@
-"""Routing from statement account -> beancount account."""
-
 from collections.abc import Mapping
 
 from beancount.core import data

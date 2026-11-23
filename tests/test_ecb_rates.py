@@ -1,5 +1,3 @@
-"""All rates here are invented."""
-
 import datetime
 import decimal
 import types

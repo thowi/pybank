@@ -1,8 +1,3 @@
-"""Tests for the DKB importers.
-
-All values are invented.
-"""
-
 import datetime
 import decimal
 

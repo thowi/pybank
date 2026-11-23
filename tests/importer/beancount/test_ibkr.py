@@ -1,8 +1,5 @@
-"""Tests for the IBKR Flex importer.
+"""The fixtures mirror these shapes of the Flex format.
 
-All values are invented.
-
-The shapes are not invented. Each one mirrors something a real export does:
 `netCash` is zero on a currency conversion, a closed lot states a positive
 quantity against the sale that consumed it and carries no id back to it, a
 short sale is a negative quantity marked open, and an option is priced per

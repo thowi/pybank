@@ -1,4 +1,4 @@
-"""Bank account model."""
+"""The records `pybank.download` returns and `pybank.qif` serializes."""
 
 import datetime
 

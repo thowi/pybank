@@ -1,6 +1,7 @@
 """Serialization to QIF (Quicken Interchange Format).
 
-Not complete.
+Call `serialize_account` with an account that holds its transactions. Not
+complete.
 
 See http://www.respmech.com/mym2qifw/qif_new.htm for the spec.
 """

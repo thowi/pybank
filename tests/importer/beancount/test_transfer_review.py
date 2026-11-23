@@ -1,5 +1,3 @@
-"""All values here are invented. Never derive a fixture from a real export."""
-
 import datetime
 
 from beancount.core import amount, data, flags, prices

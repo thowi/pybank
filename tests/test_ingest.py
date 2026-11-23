@@ -1,5 +1,3 @@
-"""All values here are invented. Never derive a fixture from a real config."""
-
 import datetime
 import io
 import re
@@ -172,7 +170,7 @@ def test_a_bad_transfer_pattern_is_reported(tmp_path):
         ingest._hints(ingest._load_config(_write(tmp_path, content)))
 
 
-# The card's statement and an old export both cover one repayment.
+# The card's statement and a QIF export both cover one repayment.
 # A hint classifies that repayment as a transfer.
 OVERLAP_CONFIG = """\
 [postfinance.card]

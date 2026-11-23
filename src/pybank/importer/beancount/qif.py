@@ -1,9 +1,7 @@
 """QIF importer for beangulp.
 
 Reads a Quicken Interchange Format export covering many accounts at once,
-categories included. Those categories were assigned inside the exporting app
-rather than guessed from a bank's own labels, which is what makes such an
-export worth reading.
+categories included.
 
 Call `Importer` with a `Target` for each account in the export to book.
 """

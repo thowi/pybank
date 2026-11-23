@@ -1,4 +1,9 @@
-"""Import identity. See docs/importing.md for the reasoning."""
+"""Import identity, which keeps a source row from booking twice.
+
+An import-id identifies a source row across imports. Call `import_ids` to
+assign it, and `mark_duplicates` to find what the ledger already holds. See
+docs/importing.md for the reasoning.
+"""
 
 import decimal
 import hashlib

@@ -1,14 +1,9 @@
 """Books rows to the account a categorization rule names.
 
-A `Rule` names a target account and the tests a row must pass. `pybank-import`
-reads rules from `rules.toml` next to its `--config`. `book` is the beangulp
-hook that applies them.
-
-Which rules may book a row depends on its counter posting:
-
-- On `UNCATEGORIZED`: Every rule.
-- With a label from the old export: Only the rules that name this label.
-- Any other, a transfer for example: No rule.
+A `Rule` names a target account and the tests a row must pass. A label is the
+category an export carries for a row. `pybank-import` reads rules from
+`rules.toml` next to its `--config`. `book` is the beangulp hook that applies
+them.
 """
 
 import datetime
@@ -33,8 +28,8 @@ class Rule(NamedTuple):
     A row that matches the rule books to `book`. `text` searches the payee and
     the narration, joined by a space. The optional filters narrow the match:
     `account` is the statement's own account or one above it, `start` and
-    `end` bound the date (both inclusive), and `labels` names the old
-    export's labels this rule may override.
+    `end` bound the date (both inclusive), and `labels` lists the labels this
+    rule may override.
     """
 
     book: data.Account
@@ -85,6 +80,12 @@ def _first_match(rules: list[Rule], entry: data.Directive) -> int | None:
 
 def book(rules: list[Rule], extracted: list[Group], existing: data.Entries) -> list[Group]:
     """Books every open row to the account of the first rule it matches.
+
+    Which rules may book a row depends on its counter posting:
+
+    - On `UNCATEGORIZED`: Every rule.
+    - With a label: Only the rules that name this label.
+    - Any other, a transfer for example: No rule.
 
     Run it after the transfer hooks, so a transfer is booked before any rule
     sees it. Logs a warning for each rule that matched no row.
