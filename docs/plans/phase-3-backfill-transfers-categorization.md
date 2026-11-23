@@ -677,6 +677,25 @@ equal amount in the same currency.
    (2026-11-23). Found then: The approved rental-income rule also books 4
    postage receipts whose memo names the rental platform. The postage rule
    must go above it.
+   Status later 2026-11-23: The user merged the two postage proposals into
+   one rule for payments and refunds (`Expenses:Living:Postage`, above the
+   rental rule). The marketplace rule is in. The transfer pair named in
+   `categorize-hints.md` gets no rule: It is a one-off loan, to settle as a
+   confirmed pair or by hand (proposal pending). The refund hook is built
+   (`refunds.py`, `[refunds]` in `rules.toml`) and went through
+   `/ship-change`, waiting for the user's review. Fixed from the review:
+   - A row an earlier hook dropped no longer counts as a second purchase.
+     It stays in beangulp's `existing`.
+   - A transfer out is no purchase.
+   - A duplicate is no purchase.
+   - A row with no merchant word has no purchase.
+
+   The rebuild: No `bean-check` errors, 500 refunds tagged, 204 linked, 15
+   booked (before the fixes: 501, 155, 8). Limits, in the docstring:
+   - A purchase already in the ledger gets no link.
+   - A row a rule booked is no refund.
+
+   Later: Book a linked refund when its purchase gets approved.
 3. **The model backtest on the SEE data.** Compare a local model with an
    LLM on the same SEE rows. The user prefers the LLM if it is clearly
    better: The cost is low, and the goal is to save the user's time.
