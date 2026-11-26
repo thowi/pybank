@@ -941,6 +941,32 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    field-doc cleanup, test embeddings as one more backtest variant. Cost
    is not the reason: The prompts call a model anyway, and embeddings are
    cheap. Switch only if the test shows a gain.
+
+   Decided 2026-11-26, the review workflow:
+   - Review one year at a time, from 2021 on. `categorize --year N` asks
+     and reviews only the open rows of year N. The examples come from every
+     year, so each year learns from the approvals of the years before.
+   - The rebuild books each open row without an answer to its top
+     suggestion, flagged `!` with `category-source: "suggested"`. Approval
+     books `*` with "model". A suggested row stays open for review and is
+     never an example.
+   - The ledger holds only the top suggestion. A UI of our own reads the
+     other choices from `categorize.suggest` and the cache, and saves a
+     pick with `save_answers`. A cache-only call for it comes later, since
+     `suggest` also asks the model about new rows.
+   - The OpenAI key lives in the macOS Keychain, read into
+     `OPENAI_API_KEY` per run, never in a `.env` in the synced folder.
+   - Per year: `categorize --year N` (the paid step), rebuild, review in as
+     many sittings as needed (no new calls), rebuild.
+
+   A row on a suggestion counts as open in `hooks.open_slot`, so a
+   pending transfer leg stays in the `transfers` review, and a refund
+   never books to an unapproved purchase account (decided 2026-11-26).
+
+   Open: On `extract -e` without a rebuild, a sure pair of a new leg and
+   an open ledger row asks nothing until the next rebuild. The `book`
+   hook sees only new rows, and the review hides pairs that a rebuild
+   would book. This held before for rows on `UNCATEGORIZED` too.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
