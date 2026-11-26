@@ -1,12 +1,12 @@
 """Tags refunds and links them to the original purchase.
 
-A row is open while its counter posting is on `UNCATEGORIZED`. A refund is
-money in on an open row, either on one of the configured accounts (cards,
-where money in is nearly always a refund) or with one of the configured
-labels, the categories an export carries. Its purchase is money out on the
-same account, from the same merchant, a little earlier, for at least as
-much. It can be split over several accounts, its parts. `book` is the
-beangulp hook that finds them.
+A row is open while its counter posting is on `UNCATEGORIZED` or on a
+suggestion that no person approved yet. A refund is money in on an open row,
+either on one of the configured accounts (cards, where money in is nearly
+always a refund) or with one of the configured labels, the categories an
+export carries. Its purchase is money out on the same account, from the same
+merchant, a little earlier, for at least as much. It can be split over several
+accounts, its parts. `book` is the beangulp hook that finds them.
 """
 
 import datetime
@@ -201,7 +201,7 @@ def _booked(refund: data.Transaction, purchase: data.Transaction | None) -> data
         return txn
     txn = txn._replace(links=txn.links | {_link(purchase)})
     accounts = set(_parts(refund, purchase))
-    if len(accounts) != 1 or UNCATEGORIZED in accounts:
+    if len(accounts) != 1 or UNCATEGORIZED in accounts or open_slot(purchase) is not None:
         return txn
     booked, counter = txn.postings
     meta = {**txn.meta, qif.META_CATEGORY_SOURCE: CATEGORY_SOURCE_REFUND}

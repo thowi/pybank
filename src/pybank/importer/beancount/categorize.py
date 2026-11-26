@@ -29,11 +29,10 @@ from typing import NamedTuple
 from beancount.core import amount, data, flags
 from beangulp import extract
 
-from . import UNCATEGORIZED, identity, qif, routing
+from . import CATEGORY_SOURCE_SUGGESTED, UNCATEGORIZED, identity, qif, routing
 from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_MODEL = "model"
-CATEGORY_SOURCE_SUGGESTED = "suggested"
 
 # Takes a prompt and a JSON schema, returns the model's answer in that schema.
 Ask = Callable[[str, dict], dict]
@@ -256,12 +255,10 @@ def _rows(entries: Iterable[data.Directive]) -> list[_Row]:
         booked = open_slot(entry, None)
         if booked is None:
             continue
-        counter = entry.postings[1].account
-        source = entry.meta.get(qif.META_CATEGORY_SOURCE)
-        if counter == UNCATEGORIZED or source == CATEGORY_SOURCE_SUGGESTED:
+        if open_slot(entry) is not None:
             label = None
-        elif source in _LABEL_SOURCES:
-            label = counter
+        elif entry.meta.get(qif.META_CATEGORY_SOURCE) in _LABEL_SOURCES:
+            label = entry.postings[1].account
         else:
             continue
         result.append(

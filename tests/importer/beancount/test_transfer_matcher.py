@@ -6,6 +6,7 @@ from beangulp import extract
 
 from pybank.importer.beancount import (
     BANK_FEES,
+    CATEGORY_SOURCE_SUGGESTED,
     IN_TRANSIT,
     META_CONVERSION_ID,
     UNCATEGORIZED,
@@ -135,6 +136,22 @@ def test_a_transfer_with_two_partners_offers_both_nearest_first():
     (choice,) = transfer_matcher.choices(entries, NO_PRICES)
 
     assert choice.leg.import_id == "out"
+    assert [leg.import_id for leg in choice.options] == ["in", "later-in"]
+
+
+def test_a_partner_on_a_suggestion_is_still_offered():
+    out = _leg("out", CHECKING, "-100", contra=IN_TRANSIT)
+    cleared = out.postings[1]._replace(units=amount.Amount(data.Decimal("100"), "CHF"))
+    suggested = _leg("in", BROKER, "100", contra="Expenses:Living:Groceries", days=1)
+    meta = {**suggested.meta, qif.META_CATEGORY_SOURCE: CATEGORY_SOURCE_SUGGESTED}
+    entries = [
+        out._replace(postings=[out.postings[0], cleared]),
+        _leg("later-in", SAVINGS, "100", days=3),
+        suggested._replace(meta=meta),
+    ]
+
+    (choice,) = transfer_matcher.choices(entries, NO_PRICES)
+
     assert [leg.import_id for leg in choice.options] == ["in", "later-in"]
 
 

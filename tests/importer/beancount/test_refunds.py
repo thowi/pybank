@@ -4,7 +4,15 @@ import re
 from beancount.core import amount, data, flags
 from beangulp import extract
 
-from pybank.importer.beancount import IN_TRANSIT, UNCATEGORIZED, identity, postfinance, qif, refunds
+from pybank.importer.beancount import (
+    CATEGORY_SOURCE_SUGGESTED,
+    IN_TRANSIT,
+    UNCATEGORIZED,
+    identity,
+    postfinance,
+    qif,
+    refunds,
+)
 
 CARD = "Liabilities:Bank:Card"
 CHECKING = "Assets:Bank:Checking"
@@ -70,6 +78,16 @@ def test_an_open_purchase_stays_open_and_linked():
     assert back.postings[1].account == UNCATEGORIZED
     assert back.flag == flags.FLAG_WARNING
     assert back.links == buy.links and back.links
+
+
+def test_the_refund_of_a_purchase_on_a_suggestion_stays_open():
+    buy = _txn("-80", "Bike Shop", contra=SPORT, file=LEDGER)
+    buy = buy._replace(meta={**buy.meta, qif.META_CATEGORY_SOURCE: CATEGORY_SOURCE_SUGGESTED})
+
+    (back,) = _book([_txn("80", "Bike Shop", days=3)], existing=[buy])
+
+    assert back.postings[1].account == UNCATEGORIZED
+    assert back.links
 
 
 def test_a_refund_with_no_purchase_only_gets_the_tag():

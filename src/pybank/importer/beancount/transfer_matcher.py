@@ -1,11 +1,11 @@
 """Pairs transfer legs between own accounts.
 
-A leg is a row on an own account whose other posting is still uncategorized
-or already in the clearing account. Two legs fit when money leaves one account
-and arrives on another within `_WINDOW`, and the amounts match, or differ by
-an exchange rate or a bank fee. A candidate is a pair of legs that fit only
-each other. An answer is a person's yes or no on a pair, keyed by the
-import-ids of both legs.
+A leg is a row on an own account whose other posting is still open
+(uncategorized or on a suggestion) or already in the clearing account. Two
+legs fit when money leaves one account and arrives on another within
+`_WINDOW`, and the amounts match, or differ by an exchange rate or a bank
+fee. A candidate is a pair of legs that fit only each other. An answer is a
+person's yes or no on a pair, keyed by the import-ids of both legs.
 
 `candidates` and `choices` list what a person can confirm or pick, and
 `books_unasked` tells which candidate is sure without an answer.
@@ -256,8 +256,8 @@ def choices(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> li
     """Returns the transfers no candidate settles, with the legs they fit.
 
     A transfer is a clearing posting that nothing cancels. Its options are
-    the legs it fits that are uncategorized or uncancelled too, nearest in
-    date first. Oldest transfer first.
+    the legs it fits that are open or uncancelled too, nearest in date
+    first. Oldest transfer first.
     """
     # Only a known transfer asks. An uncategorized row fits many others by
     # chance, and most of those are purchases.
@@ -266,7 +266,7 @@ def choices(entries: Iterable[data.Directive], price_map: prices.PriceMap) -> li
     uncancelled = {id(txn) for txn, _ in unpaired(entries)}
 
     def is_open(leg: Leg) -> bool:
-        return leg.txn.postings[1].account == UNCATEGORIZED or id(leg.txn) in uncancelled
+        return open_slot(leg.txn) is not None or id(leg.txn) in uncancelled
 
     in_candidate = {import_id for pair in _pairs(legs, fits) for import_id in pair.key}
     result = []

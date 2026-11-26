@@ -6,7 +6,14 @@ from beancount import loader
 from beancount.core import amount, data, flags
 from beangulp import extract
 
-from pybank.importer.beancount import UNCATEGORIZED, categorize, postfinance, qif, routing
+from pybank.importer.beancount import (
+    CATEGORY_SOURCE_SUGGESTED,
+    UNCATEGORIZED,
+    categorize,
+    postfinance,
+    qif,
+    routing,
+)
 
 CHECKING = "Assets:Bank:Checking"
 GROCERIES = "Expenses:Living:Groceries"
@@ -154,7 +161,7 @@ def test_a_cache_line_that_is_no_json_is_reported(tmp_path):
 def test_a_suggested_row_is_open_and_no_example(tmp_path):
     entries = _ledger(
         *LABELED,
-        _row("open-1", "Corner Shop Booked", GROCERIES, categorize.CATEGORY_SOURCE_SUGGESTED),
+        _row("open-1", "Corner Shop Booked", GROCERIES, CATEGORY_SOURCE_SUGGESTED),
         _row("open-2", "Corner Shop"),
     )
 
@@ -300,7 +307,7 @@ def test_the_hook_books_a_row_without_an_answer_to_its_suggestion_for_review():
 
     assert booked.postings[1].account == TRANSIT
     assert booked.flag == flags.FLAG_WARNING
-    assert booked.meta[qif.META_CATEGORY_SOURCE] == categorize.CATEGORY_SOURCE_SUGGESTED
+    assert booked.meta[qif.META_CATEGORY_SOURCE] == CATEGORY_SOURCE_SUGGESTED
 
 
 def test_the_hook_leaves_booked_rows_duplicates_and_rows_without_an_answer():

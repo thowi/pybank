@@ -16,6 +16,9 @@ UNCATEGORIZED = "Expenses:Uncategorized"
 # The statement's own columns decided where a row went, not a person or a hint.
 CATEGORY_SOURCE_STATEMENT = "statement"
 
+# A model suggested the category, and no person approved it yet.
+CATEGORY_SOURCE_SUGGESTED = "suggested"
+
 # The bank's own type of a row, a hint for categorization.
 META_BANK_TYPE = "bank-type"
 
