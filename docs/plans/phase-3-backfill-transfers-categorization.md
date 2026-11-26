@@ -942,6 +942,25 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    is not the reason: The prompts call a model anyway, and embeddings are
    cheap. Switch only if the test shows a gain.
 
+   The embeddings test, 2026-11-26 (`see_embed.py 600`, cache
+   `out/embed/<model>.jsonl`, under $0.01): Same 600 val rows, same
+   training rows. The search embeds the masked, cleaned prompt text. No
+   Luna calls yet, so this scores only the examples a prompt gets:
+
+   | Search                   | Nearest 1 | Vote 12 | Vote 50 | Label in 12 |
+   |--------------------------|-----------|---------|---------|-------------|
+   | TF-IDF (current)         | 65.2%     | 64.5%   | 58.5%   | 87.3%       |
+   | `text-embedding-3-small` | 70.3%     | 65.2%   | 62.0%   | 89.3%       |
+   | `text-embedding-3-large` | 72.2%     | 70.2%   | 66.2%   | 90.3%       |
+
+   Next: The $0.20 run of Luna with the `-large` examples, against the
+   82.3% top 1 of the numbered check. Switch only if Luna gains.
+
+   The OpenAI key is the Keychain item "OpenAI API key (pybank)". The
+   hidden prompt of `security add-generic-password -w` cut the pasted key
+   at 128 characters, likely a limit of that prompt. Store a key with
+   Keychain Access, or with `-w "$(pbpaste)"`.
+
    Decided 2026-11-26, the review workflow:
    - Review one year at a time, from 2021 on. `categorize --year N` asks
      and reviews only the open rows of year N. The examples come from every
