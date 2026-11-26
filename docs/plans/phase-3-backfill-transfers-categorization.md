@@ -872,11 +872,32 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    the country a config value, or drop it. Noise words for the payee key
    are learned from the user's data, never hardcoded.
 
-   Next: The user picks the model for the open rows (10218). Estimates by
-   the tokens per row: The tuned Luna about $3, with Argon for unsure
-   rows about $10 to 20, Argon alone about $26 to 51. The run needs the
-   new tree's categories (more than 26, so the letter labels must change)
-   and a review by group.
+   Round 7, the tuned prompt on other models (approved 2026-11-26, cap
+   $19.50 counted): Script `run_round7.sh`, analysis `see_round7.py`, logs
+   `out/tune/round7.log` and `round7-analysis.log`. Gemini counts 2860
+   input tokens per row for this prompt, Hydrogen thinks for 570 output
+   tokens per row. So the cap stopped Argon alone 19 rows short of the 500
+   test rows, and the Luna run on 2000 test rows did not start.
+
+   - Luna, and Argon with the tuned prompt where Luna is below 0.90 (31 to
+     36% of rows): Val top 1 85.0% (z +2.1 against Luna alone), test 84.0%
+     (z +1.5), new payee top 1 80.1% on test. Sure rows stay at 59 to 63%
+     with 98% right. About $0.0127 per Argon call, counted.
+   - Hydrogen in the same place: No gain (z +0.8 on val, 0.0 on test), and
+     below the Argon cascade.
+   - Argon alone, 481 test rows: Top 1 83.8% (z +1.9 against tuned Luna),
+     but only 47% sure rows (at 99.6%). On Argon, the tuned prompt gains
+     z +1.3 against the plain one, not proven.
+
+   Estimates for the open rows (10218), by the tokens per row, counted at
+   full price: The tuned Luna about $3, with Argon for unsure rows about
+   $45 (half at the promo price), Argon alone about $130. At about 150 new
+   rows a month, the cascade costs about $0.75 a month.
+
+   Decided 2026-11-26: The tuned Luna only. The cascade costs more than
+   10 times as much for about 1.5 points of top 1, and that gain is not
+   proven on test. The run needs the new tree's categories (more than 26,
+   so the letter labels must change) and a review by group.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
