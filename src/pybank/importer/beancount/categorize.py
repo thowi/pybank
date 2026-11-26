@@ -2,15 +2,17 @@
 
 A row is a transaction with an import-id and two postings: Its own posting
 first, then its counter posting. It is open while the counter posting is on
-`UNCATEGORIZED`. It is labeled when a person chose its category: A label from an
-export (`category-source` "qif"), or an approved answer.
-Rule output is no label, it would only teach the rules back.
+`UNCATEGORIZED`, or on a suggestion that no person approved yet
+(`category-source` "suggested"). It is labeled when a person chose its
+category: A label from an export (`category-source` "qif"), or an approved
+answer. Rule output is no label, it would only teach the rules back.
 
 An answer is a person's approved category for one open row, keyed by its
 import-id. `suggest` asks a model for the likely categories of each open row
 without an answer, and `bands` splits the suggestions for review.
-`load_answers` reads the answers, and `save_answers` appends some. `book` is
-the beangulp hook that books them. `openai_ask` makes the model call.
+`load_answers` reads the answers, and `save_answers` appends some.
+`load_suggested` reads the top suggestion of each row. `book` is the beangulp
+hook that books both. `openai_ask` makes the model call.
 """
 
 import collections
@@ -31,6 +33,7 @@ from . import UNCATEGORIZED, identity, qif, routing
 from .hooks import Group, open_slot
 
 CATEGORY_SOURCE_MODEL = "model"
+CATEGORY_SOURCE_SUGGESTED = "suggested"
 
 # Takes a prompt and a JSON schema, returns the model's answer in that schema.
 Ask = Callable[[str, dict], dict]
@@ -254,9 +257,10 @@ def _rows(entries: Iterable[data.Directive]) -> list[_Row]:
         if booked is None:
             continue
         counter = entry.postings[1].account
-        if counter == UNCATEGORIZED:
+        source = entry.meta.get(qif.META_CATEGORY_SOURCE)
+        if counter == UNCATEGORIZED or source == CATEGORY_SOURCE_SUGGESTED:
             label = None
-        elif entry.meta.get(qif.META_CATEGORY_SOURCE) in _LABEL_SOURCES:
+        elif source in _LABEL_SOURCES:
             label = counter
         else:
             continue
@@ -321,21 +325,30 @@ def _choices(answer: dict, labels: _Labels) -> tuple[Choice, ...]:
     return tuple(Choice(account, p / total) for account, p in ranked)
 
 
-def _load_cache(path: str, categories: list[data.Account]) -> dict[str, tuple[Choice, ...]]:
-    """Reads the cached choices, without the accounts no longer open."""
+def _load_cache(path: str, categories: list[data.Account] | None) -> dict[str, tuple[Choice, ...]]:
+    """Reads the cached choices, without the accounts no longer open.
+
+    `None` for `categories` keeps every account.
+    """
     try:
         with open(path, encoding="utf-8") as f:
             lines = f.readlines()
     except FileNotFoundError:
         return {}
-    known = set(categories)
+    known = None if categories is None else set(categories)
     cache = {}
     for line in lines:
-        cached = json.loads(line)
-        choices = tuple(Choice(a, p) for a, p in cached["choices"] if a in known)
+        try:
+            cached = json.loads(line)
+            choices = tuple(
+                Choice(a, p) for a, p in cached["choices"] if known is None or a in known
+            )
+            import_id = cached["import-id"]
+        except (KeyError, TypeError, ValueError) as err:
+            raise routing.ConfigError(f"Cannot read {path}: {err}") from err
         # A row whose choices are all closed now is asked again.
         if choices:
-            cache[cached["import-id"]] = choices
+            cache[import_id] = choices
     return cache
 
 
@@ -346,12 +359,14 @@ def suggest(
     cache_path: str,
     settings: Settings,
     progress: Callable[[int, int], None] | None = None,
+    year: int | None = None,
 ) -> list[Suggestion]:
     """Returns a suggestion per open row without an answer, in ledger order.
 
-    The model learns from the labeled rows and the answers. Each prompt shows
-    it the `settings.examples` labeled rows with the most similar text. The
-    categories are the expense and income accounts that the ledger keeps open.
+    Only rows dated in `year`, if given. The model learns from the labeled rows
+    of every year and from the answers. Each prompt shows it the
+    `settings.examples` labeled rows with the most similar text. The categories
+    are the expense and income accounts that the ledger keeps open.
 
     Asks `ask` only about rows that the cache file at `cache_path` lacks, and
     appends each answer there, so a rerun pays for new rows only. Calls
@@ -364,7 +379,8 @@ def suggest(
     for row in _rows(entries):
         label = row.label or answers.get(row.import_id)
         if label is None:
-            pending.append(row)
+            if year is None or row.txn.date.year == year:
+                pending.append(row)
         # An example whose account is closed cannot be shown by its label.
         elif label in labels.label:
             labeled.append(row._replace(label=label))
@@ -477,23 +493,35 @@ def save_answers(path: str, answers: dict[str, data.Account]) -> None:
         )
 
 
-def _booked(txn: data.Transaction, account: data.Account) -> data.Transaction:
+def load_suggested(cache_path: str) -> dict[str, data.Account]:
+    """Returns the top cached suggestion of each row, keyed by import-id."""
+    return {i: choices[0].account for i, choices in _load_cache(cache_path, None).items()}
+
+
+def _booked(txn: data.Transaction, account: data.Account, approved: bool) -> data.Transaction:
     booked, counter = txn.postings
-    meta = {**txn.meta, qif.META_CATEGORY_SOURCE: CATEGORY_SOURCE_MODEL}
+    source = CATEGORY_SOURCE_MODEL if approved else CATEGORY_SOURCE_SUGGESTED
+    meta = {**txn.meta, qif.META_CATEGORY_SOURCE: source}
+    flag = flags.FLAG_OKAY if approved else flags.FLAG_WARNING
     postings = [booked, counter._replace(account=account)]
-    return txn._replace(meta=meta, flag=flags.FLAG_OKAY, postings=postings)
+    return txn._replace(meta=meta, flag=flag, postings=postings)
 
 
 def book(
-    answers: dict[str, data.Account], extracted: list[Group], existing: data.Entries
+    answers: dict[str, data.Account],
+    suggested: dict[str, data.Account],
+    extracted: list[Group],
+    existing: data.Entries,
 ) -> list[Group]:
-    """Books each open row that has an answer to the answer's account.
+    """Books each open row to its answer, else to its top suggestion.
 
-    Run it last, so a transfer, a rule or a refund wins over an answer.
+    `suggested` maps an import-id to its top suggestion, as `load_suggested`
+    reads it. A suggestion keeps the row flagged `!` for review.
+    Run it last, so a transfer, a rule or a refund wins over both.
     """
-    if not answers:
+    if not (answers or suggested):
         return extracted
-    count = 0
+    approved = unapproved = 0
     result = []
     for filepath, entries, account, importer in extracted:
         kept = []
@@ -502,14 +530,18 @@ def book(
             if (
                 isinstance(entry, data.Transaction)
                 and not entry.meta.get(extract.DUPLICATE)
-                and entry.meta.get(identity.META_KEY) in answers
                 and open_slot(entry) is not None
             ):
-                entry = _booked(entry, answers[entry.meta[identity.META_KEY]])
-                count += 1
+                import_id = entry.meta.get(identity.META_KEY)
+                if import_id in answers:
+                    entry = _booked(entry, answers[import_id], approved=True)
+                    approved += 1
+                elif import_id in suggested:
+                    entry = _booked(entry, suggested[import_id], approved=False)
+                    unapproved += 1
             kept.append(entry)
         result.append((filepath, kept, account, importer))
-    logger.info("Booked %d rows by approved category.", count)
+    logger.info("Booked %d rows by approved category, %d by suggestion.", approved, unapproved)
     return result
 
 

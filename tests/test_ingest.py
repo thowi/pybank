@@ -211,7 +211,7 @@ def test_the_hooks_keep_one_copy_of_a_hinted_row_the_export_also_holds(tmp_path)
         ),
     ]
 
-    for hook in ingest._hooks(config, {}, [], refunds.Config(), {}):
+    for hook in ingest._hooks(config, {}, [], refunds.Config(), {}, {}):
         groups = hook(groups, [])
 
     statements, exported = groups[0][1], groups[1][1]

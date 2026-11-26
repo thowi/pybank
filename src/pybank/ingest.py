@@ -260,6 +260,7 @@ def _hooks(
     categorization: list[rules.Rule],
     refund: refunds.Config,
     categories: dict[str, str],
+    suggested: dict[str, str],
 ) -> list:
     """Returns the beangulp hooks, in the order they must run."""
     # `donate` and the hints change only rows that are still uncategorized.
@@ -268,14 +269,15 @@ def _hooks(
     # booked before a rule sees it. A pair that still waits for an answer is
     # not booked yet, so a rule that matches one of its legs takes it. The
     # refunds run after the rules, so a refund follows its purchase's account.
-    # The approved categories run last, so they book only what is still open.
+    # The approved and suggested categories run last, so they book only what
+    # is still open.
     return [
         qif_sidecar.donate,
         functools.partial(transfer_hints.book, _hints(config)),
         functools.partial(transfer_matcher.book, answers),
         functools.partial(rules.book, categorization),
         functools.partial(refunds.book, refund),
-        functools.partial(categorize.book, categories),
+        functools.partial(categorize.book, categories, suggested),
     ]
 
 
@@ -356,7 +358,8 @@ def _cli() -> click.Group:
             answers = transfer_matcher.load_answers(_answers_path(config))
             path = _rules_path(config)
             categories = categorize.load_answers(_category_answers_path(config))
-            hooks = _hooks(loaded, answers, _rules(path), _refunds(path), categories)
+            suggested = categorize.load_suggested(_suggestions_path(config))
+            hooks = _hooks(loaded, answers, _rules(path), _refunds(path), categories, suggested)
             ctx.obj = beangulp.Ingest(_importers(loaded), hooks=hooks)
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
@@ -513,8 +516,9 @@ def _pick_partners(session: transfer_review.Session) -> None:
 
 @click.command("categorize")
 @click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
+@click.option("--year", type=int, help="Ask and review only the rows of this year.")
 @click.pass_context
-def _categorize(ctx: click.Context, ledger: str) -> None:
+def _categorize(ctx: click.Context, ledger: str, year: int | None) -> None:
     """Suggest a category for each open row in LEDGER, and ask which to book.
 
     The model of `[categorize]` in the config suggests. First come the sure
@@ -522,7 +526,8 @@ def _categorize(ctx: click.Context, ledger: str) -> None:
     rest come one by one, with a pick from the top 3. The answers go to the
     answers file next to the config, and a rebuild of the ledger books them.
     The model's suggestions are cached next to the config, so a rerun asks
-    only about new rows.
+    only about new rows. A rebuild books each row without an answer to its
+    top suggestion, flagged `!` for review.
     """
     config = ctx.find_root().params["config"]
     answers_path = _category_answers_path(config)
@@ -545,6 +550,7 @@ def _categorize(ctx: click.Context, ledger: str) -> None:
             _suggestions_path(config),
             settings,
             progress,
+            year,
         )
     except ImportError as err:
         raise click.ClickException(f"{err}. Install the extra: uv sync --extra categorize") from err

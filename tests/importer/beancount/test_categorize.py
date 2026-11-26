@@ -128,6 +128,51 @@ def test_a_rerun_asks_only_about_new_rows(tmp_path):
     assert len(prompts) == 1
 
 
+def test_a_year_asks_and_returns_only_its_rows(tmp_path):
+    entries = _ledger(
+        *LABELED, _row("open-1", "Corner Shop"), _row("open-2", "Rail Co", day="2021-02-03")
+    )
+    picks = {"Corner": [(GROCERIES, 1.0)], "Rail": [(TRANSIT, 1.0)]}
+    ask, prompts = _fake(picks)
+    cache = str(tmp_path / "suggestions.jsonl")
+
+    suggestions = categorize.suggest(entries, {}, ask, cache, categorize.Settings(), year=2021)
+
+    assert [s.import_id for s in suggestions] == ["open-2"]
+    assert len(prompts) == 1
+    assert "Rail Co Ticket" in prompts[0]
+
+
+def test_a_cache_line_that_is_no_json_is_reported(tmp_path):
+    path = tmp_path / "suggestions.jsonl"
+    path.write_text('{"import-id": "a", "choi\n', encoding="utf-8")
+
+    with pytest.raises(routing.ConfigError, match="Cannot read"):
+        categorize.load_suggested(str(path))
+
+
+def test_a_suggested_row_is_open_and_no_example(tmp_path):
+    entries = _ledger(
+        *LABELED,
+        _row("open-1", "Corner Shop Booked", GROCERIES, categorize.CATEGORY_SOURCE_SUGGESTED),
+        _row("open-2", "Corner Shop"),
+    )
+
+    suggestions, prompts = _suggest(tmp_path, entries, {"Corner": [(GROCERIES, 1.0)]})
+
+    assert [s.import_id for s in suggestions] == ["open-1", "open-2"]
+    assert all("Corner Shop Booked |" not in p.split("Transaction:")[0] for p in prompts)
+
+
+def test_load_suggested_reads_the_top_choice(tmp_path):
+    entries = _ledger(*LABELED, _row("open-1", "Corner Shop"))
+    _suggest(tmp_path, entries, {"Corner": [(TRANSIT, 0.2), (GROCERIES, 0.8)]})
+
+    suggested = categorize.load_suggested(str(tmp_path / "suggestions.jsonl"))
+
+    assert suggested == {"open-1": GROCERIES}
+
+
 def test_an_answer_that_names_no_category_gives_no_suggestion(tmp_path):
     entries = _ledger(*LABELED, _row("open-1", "Corner Shop"))
 
@@ -237,20 +282,28 @@ def _txn(import_id, contra=UNCATEGORIZED, duplicate=False):
     )
 
 
-def _book(answers, entries):
+def _book(answers, entries, suggested=None):
     groups = [("statement.csv", entries, CHECKING, postfinance.CheckingImporter({}))]
-    return categorize.book(answers, groups, [])[0][1]
+    return categorize.book(answers, suggested or {}, groups, [])[0][1]
 
 
 def test_the_hook_books_an_open_row_to_its_answer():
-    (booked,) = _book({"a": GROCERIES}, [_txn("a")])
+    (booked,) = _book({"a": GROCERIES}, [_txn("a")], {"a": TRANSIT})
 
     assert booked.postings[1].account == GROCERIES
     assert booked.flag == flags.FLAG_OKAY
     assert booked.meta[qif.META_CATEGORY_SOURCE] == categorize.CATEGORY_SOURCE_MODEL
 
 
+def test_the_hook_books_a_row_without_an_answer_to_its_suggestion_for_review():
+    (booked,) = _book({}, [_txn("a")], {"a": TRANSIT})
+
+    assert booked.postings[1].account == TRANSIT
+    assert booked.flag == flags.FLAG_WARNING
+    assert booked.meta[qif.META_CATEGORY_SOURCE] == categorize.CATEGORY_SOURCE_SUGGESTED
+
+
 def test_the_hook_leaves_booked_rows_duplicates_and_rows_without_an_answer():
     rows = [_txn("a", contra=TRANSIT), _txn("b", duplicate=True), _txn("c")]
 
-    assert _book({"a": GROCERIES, "b": GROCERIES}, rows) == rows
+    assert _book({"a": GROCERIES, "b": GROCERIES}, rows, {"b": GROCERIES}) == rows

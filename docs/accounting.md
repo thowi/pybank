@@ -538,6 +538,16 @@ select date, payee, narration, position
 Left alone it grows. In the bank's own categorization roughly a third of
 checking rows land in a catch-all or in nothing at all.
 
+After a `categorize` run, a rebuild books each open row to the model's top
+suggestion instead. Such a row is flagged `!` and carries
+`category-source: "suggested"` until a person approves it. Report those
+rows too:
+
+```
+select date, payee, narration, account, position
+  where entry_meta('category-source') = 'suggested' and account ~ '^(Expenses|Income):'
+```
+
 `Expenses:Uncategorized:Cash` is different and stays. It is the wallet
 true-up and is expected to carry a balance.
 
