@@ -726,11 +726,11 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    both rows to `Assets:Receivable:Friends` with the answers file, once that
    exists (decided). The refund hook is built
    (`refunds.py`, `[refunds]` in `rules.toml`) and went through
-   `/ship-change` and the user's review. Not committed yet. Extended
+   `/ship-change` and the user's review. Extended
    after that review (split purchases, part amounts, 1% tolerance, claims,
    no category for other amounts). The extension went through its own
-   `/ship-change`, and waits for the user's review. Fixed from the first
-   review:
+   `/ship-change` and the user's review. All committed (2026-11-23). Fixed
+   from the first review:
    - A row an earlier hook dropped no longer counts as a second purchase.
      It stays in beangulp's `existing`.
    - A transfer out is no purchase.
@@ -739,8 +739,9 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
 
    The prefixes are config (`[refunds] prefixes`). The rebuild: No
    `bean-check` errors, 501 refunds tagged, 255 linked, 3 booked (before the
-   extension: 501, 196, 15, before the fixes: 501, 155, 8). Open: Two refunds
-   of the amount of one part both book to that part. Limits, in the docstring:
+   extension: 501, 196, 15, before the fixes: 501, 155, 8). Two refunds
+   of the amount of one part both book to that part. Decided: Leave it, no
+   row in the ledger has this. Limits, in the docstring:
    - A purchase already in the ledger gets no link.
    - A row a rule booked is no refund.
 
@@ -749,6 +750,133 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    LLM on the same SEE rows. The user prefers the LLM if it is clearly
    better: The cost is low, and the goal is to save the user's time.
    The user approves suggestions per group, never row by row.
+
+   Setup: Train before 2019, test on 2019 and 2020 (5611 and 2145 rows).
+   The confidence cutoff for bulk approval comes from 2018, at 98% right.
+   Scripts: `Ledger-rebuild/categorize-backtest/see_*.py`. Run from there:
+   `uv run --no-project --python 3.13 --with scikit-learn --with beancount
+   python see_baseline.py`.
+
+   Baseline (TF-IDF and logistic regression, light, local): Top 1 69.2%,
+   top 3 83.1%. Bulk: 42.9% of rows, 98.4% right, top 3 on the rest 71.2%.
+   New payees are 45% of rows: Top 1 53.9%. Known payees: 81.8%. 5.3% of
+   the test rows have a category that training never saw. The old labels
+   are coarser than today's tree, so this cannot score the finer accounts.
+
+   Local LLMs are ruled out on this machine (M3, 16 GB, 1.5 GB free at
+   load, no free swap). `deepseek-r1:8b`: 8 rows, first call 4m54s, then 4
+   to 23 s each. Then the machine rebooted. Memory pressure is the likely
+   cause, unproven: No panic report. Do not run `see_llm.py` against
+   Ollama again, and run no PyTorch embeddings here either.
+
+   Hosted LLM, 2026-11-24 (approved: OpenAI only, cap $5): `gpt-6-luna`, low
+   effort, on 300 rows of 2018 and 500 of 2019 and 2020. 12 similar labeled
+   rows per prompt, digits masked, no account names, `store=False`. 800
+   calls, 5.5 minutes, $0.09 at `whatwasapp`'s price table. Same 500 test
+   rows for all three, cutoff from 2018 at 98% right:
+
+   | | Top 1 | Top 3 | Bulk rows | Bulk right | Rest, top 3 | New payee, top 1 |
+   |---|---|---|---|---|---|---|
+   | TF-IDF | 70.2% | 84.8% | 38.0% | 99.5% | 75.8% | 54.5% |
+   | `gpt-6-luna` | 79.2% | 93.2% | 53.2% | 97.0% | 85.9% | 72.3% |
+   | Mix, LLM weight 0.40 | 77.8% | 91.6% | 55.6% | 97.1% | 81.5% | 70.6% |
+
+   The LLM is clearly better. Bulk right is 97%, below the 98% target: The
+   cutoff comes from only 300 rows. The mix at a stated confidence of 0.95+
+   holds 44% of rows at 99% right. This measures the old, coarser labels.
+   Script: `see_api.py` (run command in its docstring, `openai` came from
+   `whatwasapp`'s venv via `PYTHONPATH`, no download). Answers:
+   `out/gpt-6-luna-low.json`.
+
+   Tuning, 2026-11-26 (approved: OpenAI and Google, $10 in all). Script
+   `see_tune.py` (variants and run command in its docstring), answers and
+   logs in `out/tune/`, spend in `out/tune/spend.json`. Paired counts:
+   `see_pair.py`. Error kinds: `see_errors.py`.
+
+   - Errors of the first run (104 of 500): 64 new payee, 35 known payee
+     whose label differs from the payee's usual one (18 never used for it),
+     5 clear model errors. Label noise caps what a prompt can gain.
+   - Prompt, on `gpt-6-luna` low, 600 rows of 2018, one change at a time.
+     The same prompt run twice flips 22 rows and moves top 1 by 0.7
+     points, so most changes are noise. Every example text is cut to 120
+     characters. Kept: `clean` (drop FX boilerplate, card and reference
+     numbers, bank tails) and `details` (exact amount, month, weekday, day
+     of month). Together: Top 1 81.7%, top 3 94.5%, log loss 0.80 against
+     0.88 to 0.93 for base. No gain: Foreign-currency rows nearby,
+     category notes, the nearest example of every category, medium effort.
+     Worse: 30 varied examples instead of the 12 nearest (78.0%).
+   - Models, `clean+details` at low effort, same 500 test rows:
+
+     | | Top 1 | Top 3 | 0.95+ rows | 0.95+ right | New payee, top 1 | Per row |
+     |---|---|---|---|---|---|---|
+     | TF-IDF, local | 70.2% | 84.8% | 34% | 100% | 54.5% | $0 |
+     | `gpt-6-luna` | 80.4% | 93.4% | 52% | 98% | 72.3% | $0.0001 |
+     | `gpt-6.2-sol` | 81.2% | 95.4% | 63% | 97% | 74.5% | $0.002 |
+     | `gemini-4-argon` | 83.0% | 95.2% | 55% | 99% | 78.4% | $0.005 |
+     | Cascade, below | 82.6% | 95.0% | 54% | 98% | 77.5% | $0.002 |
+
+     Paired against Luna on test: Sol +23 -19 (noise), Argon +26 -13 (z
+     2.1). Argon is 4 times slower (1300 s for 800 rows, 4 workers). Its
+     cost counts the post-promo $4 / $20, the promo until 2026-11-30 is
+     half. Prices come from third-party pages, unverified on the vendors'.
+   - Cascade, from the cached answers: Luna, and Argon where Luna is below
+     0.90 (39% of rows). Top 1 82.6%, 0.95+ on 54% of rows at 98% right.
+   - The mix with TF-IDF no longer helps top 1 with these prompts.
+   - Spend: $6.79 counted, about $4.8 at the promo price.
+
+   Ideas to try, ranked by likely success (approved 2026-11-26: Try until
+   done or the $10 counted spend). Status in brackets.
+
+   1. Agreement of two models as the condition for a sure row (free, from
+      the cache). [done: Higher accuracy (99.6%), no more rows. A single
+      model at 0.95+ still gives the most rows at 98% right]
+   2. Fix the payee key. It is the first 3 words, so every card row of
+      one bank reads as the same payee. Drop words common across many
+      labels, then take the first words left. (free) [done: 65 noise
+      words learned from the data. 2 words change little, 1 word isolates
+      a harder new-payee group (21% of rows, top 1 64%)]
+   3. Payee history line: The user's past labels for this payee, with
+      counts and typical amounts. [done, no gain: By key z -0.3, by text
+      similarity 0.6 z +0.8]
+   4. Full date on the examples, so the model sees habits change. [kept:
+      Z +2.2 on val]
+   5. Cutoff per category, or calibrated probabilities (free). [done, no
+      gain: 56% of rows at 97.1%. Luna's confidence sits at 0.95 to 0.99]
+   6. Cascade with Sol instead of Argon (free, from the cache). [done:
+      Worse than with Argon, top 1 81.2%]
+   7. Example search on the cleaned text. [kept: Z +2.1 on val]
+   8. Several rows per call, sharing the instructions and categories.
+      Saves tokens, may cost accuracy. [done: 42% fewer input tokens, 3.6
+      times faster, 1 to 2 points less top 1]
+   9. `gemini-4-hydrogen`, price to check first. [skipped: $1.50 / $7.50
+      per 1M, about $3.5 for 800 rows, over the budget left]
+   10. Web search for new payees (paid per search). [later]
+   11. Fine-tuning a hosted model on the labels. [later]
+   12. Order details from mail for Amazon, PayPal, TWINT. [later, needs
+       new data]
+   13. Learn from each review, always ask for split payees, test on the
+       new tree's labels. [process, at build time]
+   14. More nearest examples (25, 50) and no cut of the row text. [kept:
+       50 examples z +1.5, full text not worse]
+
+   Result, same 500 test rows. Luna with `clean+details+date+cleansearch
+   +nocut+k50`: Top 1 82.4%, top 3 93.8%, 58% of rows at 0.95+ with
+   97.9% right, new payee top 1 76.2%, about $0.0003 per row. With Argon
+   where it is below 0.90 (36% of rows): 83.2%, 95.2%, 59% at 97.6%,
+   78.8%. A rerun of the unchanged prompt moved top 1 by 1 point, so
+   single gains under about 2 points are not proven. Spend $7.96 counted.
+   Scripts: `see_tune.py` flags, `see_offline.py` for the free analyses,
+   `run_round3.sh`, logs in `out/tune/round3.log` to `round6.log`.
+
+   At build time in the repo: The prompt names the user's country. Make
+   the country a config value, or drop it. Noise words for the payee key
+   are learned from the user's data, never hardcoded.
+
+   Next: The user picks the model for the open rows (10218). Estimates by
+   the tokens per row: The tuned Luna about $3, with Argon for unsure
+   rows about $10 to 20, Argon alone about $26 to 51. The run needs the
+   new tree's categories (more than 26, so the letter labels must change)
+   and a review by group.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
