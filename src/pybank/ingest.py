@@ -23,6 +23,7 @@ from beancount.parser import printer
 from pybank.importer.beancount import (
     IN_TRANSIT,
     META_COUNTERPARTY_ACCOUNT,
+    categorize,
     dkb,
     ibkr,
     postfinance,
@@ -46,6 +47,15 @@ _LOG_FORMAT = "\n%(message)s"
 # The answers on transfer pairs, kept next to the config file.
 _ANSWERS_FILE = "transfer-pairs.toml"
 
+# The approved categories of open rows, kept next to the config file.
+_CATEGORY_ANSWERS_FILE = "categories.toml"
+
+# The model's suggestions, kept next to the config file so a rerun does not pay
+# for them again.
+_SUGGESTIONS_FILE = "category-suggestions.jsonl"
+
+_CATEGORIZE_KEYS = {"country", "cutoff", "effort", "examples", "model"}
+
 # The categorization rules, kept next to the config file. Optional.
 _RULES_FILE = "rules.toml"
 
@@ -55,6 +65,9 @@ _RULE_KEYS = {"account", "book", "from", "labels", "text", "until"}
 # maximum the eye loses the row between two columns.
 _MAX_COLUMN_WIDTH = 60
 _MIN_COLUMN_WIDTH = 24
+
+# The rows of a group of suggestions shown before it is approved in bulk.
+_GROUP_SHOWN = 5
 
 # beangulp skips any input above 8 MiB before an importer sees it. A SEE
 # Finance database passes that after a few years of use.
@@ -227,11 +240,26 @@ def _refunds(path: str) -> refunds.Config:
     )
 
 
+def _categorize_settings(config: dict) -> categorize.Settings:
+    """Returns the `[categorize]` settings, or raises `_ConfigError`."""
+    table = config.get("categorize", {})
+    if not isinstance(table, dict):
+        raise _ConfigError("[categorize] must be a table")
+    unknown = sorted(set(table) - _CATEGORIZE_KEYS)
+    if unknown:
+        raise _ConfigError(f"[categorize]: Unknown keys: {', '.join(unknown)}")
+    settings = categorize.Settings(**table)
+    if not isinstance(settings.cutoff, int | float) or not isinstance(settings.examples, int):
+        raise _ConfigError("[categorize]: cutoff must be a number, examples a whole number")
+    return settings
+
+
 def _hooks(
     config: dict,
     answers: transfer_matcher.Answers,
     categorization: list[rules.Rule],
     refund: refunds.Config,
+    categories: dict[str, str],
 ) -> list:
     """Returns the beangulp hooks, in the order they must run."""
     # `donate` and the hints change only rows that are still uncategorized.
@@ -240,12 +268,14 @@ def _hooks(
     # booked before a rule sees it. A pair that still waits for an answer is
     # not booked yet, so a rule that matches one of its legs takes it. The
     # refunds run after the rules, so a refund follows its purchase's account.
+    # The approved categories run last, so they book only what is still open.
     return [
         qif_sidecar.donate,
         functools.partial(transfer_hints.book, _hints(config)),
         functools.partial(transfer_matcher.book, answers),
         functools.partial(rules.book, categorization),
         functools.partial(refunds.book, refund),
+        functools.partial(categorize.book, categories),
     ]
 
 
@@ -270,6 +300,14 @@ def _rules_path(config: str) -> str:
     return os.path.join(os.path.dirname(config), _RULES_FILE)
 
 
+def _category_answers_path(config: str) -> str:
+    return os.path.join(os.path.dirname(config), _CATEGORY_ANSWERS_FILE)
+
+
+def _suggestions_path(config: str) -> str:
+    return os.path.join(os.path.dirname(config), _SUGGESTIONS_FILE)
+
+
 def _load_config(path: str) -> dict:
     """Reads the config file, or raises `_ConfigError`."""
     try:
@@ -283,7 +321,7 @@ def _load_config(path: str) -> dict:
 
 def _importers(config: dict) -> list[beangulp.Importer]:
     """Returns one importer per configured source, or raises `_ConfigError`."""
-    unknown = sorted(set(config) - set(_BUILDERS) - {"transfers"})
+    unknown = sorted(set(config) - set(_BUILDERS) - {"categorize", "transfers"})
     if unknown:
         raise _ConfigError(f"Unknown config sections: {', '.join(unknown)}")
     result = []
@@ -317,12 +355,14 @@ def _cli() -> click.Group:
             loaded = _load_config(config)
             answers = transfer_matcher.load_answers(_answers_path(config))
             path = _rules_path(config)
-            hooks = _hooks(loaded, answers, _rules(path), _refunds(path))
+            categories = categorize.load_answers(_category_answers_path(config))
+            hooks = _hooks(loaded, answers, _rules(path), _refunds(path), categories)
             ctx.obj = beangulp.Ingest(_importers(loaded), hooks=hooks)
         except _ConfigError as err:
             raise click.ClickException(str(err)) from err
 
     group.callback = configure
+    group.add_command(_categorize)
     group.add_command(_confirm_transfers)
     group.add_command(_unpaired)
     return group
@@ -345,12 +385,11 @@ def _echo_clearing(txn: data.Transaction, posting: data.Posting, indent: str = "
     click.echo(f"{indent}{txn.date}  {own.account}  {-posting.units}  {text}{suffix}")
 
 
-def _leg_fields(leg: transfer_matcher.Leg) -> dict[str, str]:
-    txn = leg.txn
+def _txn_fields(txn: data.Transaction) -> dict[str, str]:
     return {
         "Date": str(txn.date),
         "Account": txn.postings[0].account,
-        "Amount": str(leg.units),
+        "Amount": str(txn.postings[0].units),
         "Payee": txn.payee or "",
         "Text": txn.narration or "",
         "Their acct": txn.meta.get(META_COUNTERPARTY_ACCOUNT, ""),
@@ -412,7 +451,7 @@ def _confirm_transfers(ctx: click.Context, ledger: str) -> None:
     answered = 0
     for i, pair in enumerate(pairs, start=1):
         click.echo(f"\nPair {i} of {len(pairs)}:")
-        sent, received = (_leg_fields(leg) for leg in pair)
+        sent, received = (_txn_fields(leg.txn) for leg in pair)
         check = transfer_review.rate_check(pair, session.price_map)
         _echo_columns(["Sent", "Received"], [sent, received | _rate_fields(check)])
         choice = click.prompt(
@@ -439,9 +478,9 @@ def _pick_partners(session: transfer_review.Session) -> None:
             continue
         asked += 1
         click.echo("\nWhich leg is the partner of this transfer?")
-        transfer = _leg_fields(choice.leg)
+        transfer = _txn_fields(choice.leg.txn)
         columns = [
-            _leg_fields(option)
+            _txn_fields(option.txn)
             | _rate_fields(
                 transfer_review.rate_check(
                     transfer_matcher.pair_of(choice.leg, option), session.price_map
@@ -470,6 +509,108 @@ def _pick_partners(session: transfer_review.Session) -> None:
         picked += partner is not None
     if asked:
         click.echo(f"Picked a partner for {picked} of {asked} transfers.")
+
+
+@click.command("categorize")
+@click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
+@click.pass_context
+def _categorize(ctx: click.Context, ledger: str) -> None:
+    """Suggest a category for each open row in LEDGER, and ask which to book.
+
+    The model of `[categorize]` in the config suggests. First come the sure
+    suggestions, grouped by payee. Each group is approved as a whole. Then the
+    rest come one by one, with a pick from the top 3. The answers go to the
+    answers file next to the config, and a rebuild of the ledger books them.
+    The model's suggestions are cached next to the config, so a rerun asks
+    only about new rows.
+    """
+    config = ctx.find_root().params["config"]
+    answers_path = _category_answers_path(config)
+    try:
+        settings = _categorize_settings(_load_config(config))
+        answers = categorize.load_answers(answers_path)
+    except _ConfigError as err:
+        raise click.ClickException(str(err)) from err
+    if not settings.model:
+        raise click.ClickException("[categorize] needs a model")
+
+    def progress(done: int, total: int) -> None:
+        click.echo(f"\rAsked the model about {done} of {total} rows.", nl=done == total)
+
+    try:
+        suggestions = categorize.suggest(
+            _load_ledger(ledger),
+            answers,
+            categorize.openai_ask(settings.model, settings.effort),
+            _suggestions_path(config),
+            settings,
+            progress,
+        )
+    except ImportError as err:
+        raise click.ClickException(f"{err}. Install the extra: uv sync --extra categorize") from err
+    except _ConfigError as err:
+        raise click.ClickException(str(err)) from err
+    sure, unsure = categorize.bands(suggestions, settings.cutoff)
+    approved, quit = _approve_groups(answers_path, sure, unsure)
+    if not quit:
+        approved += _pick_categories(answers_path, unsure)
+    click.echo(f"Approved {approved} of {len(suggestions)} rows. A rebuild books them.")
+
+
+def _approve_groups(
+    path: str, groups: list[list[categorize.Suggestion]], unsure: list[categorize.Suggestion]
+) -> tuple[int, bool]:
+    """Asks to approve each group, adds the declined ones to `unsure`.
+
+    Returns how many rows were approved, and whether the person quit.
+    """
+    approved = 0
+    for i, group in enumerate(groups, start=1):
+        account = group[0].choices[0].account
+        click.echo(f"\nGroup {i} of {len(groups)}: {len(group)} rows of {group[0].payee!r}")
+        click.echo(f"Suggested: {account}")
+        for suggestion in group[:_GROUP_SHOWN]:
+            txn = suggestion.txn
+            text = " | ".join(filter(None, (txn.payee, txn.narration)))
+            click.echo(f"  {txn.date}  {txn.postings[0].units}  {text}")
+        if len(group) > _GROUP_SHOWN:
+            click.echo(f"  and {len(group) - _GROUP_SHOWN} more")
+        choice = click.prompt(
+            "Book all to it? [y]es, [n]o (ask one by one), [s]kip, [q]uit",
+            type=click.Choice(["y", "n", "s", "q"], case_sensitive=False),
+            show_choices=False,
+        )
+        if choice == "q":
+            return approved, True
+        if choice == "y":
+            categorize.save_answers(path, {s.import_id: account for s in group})
+            approved += len(group)
+        elif choice == "n":
+            unsure.extend(group)
+    return approved, False
+
+
+def _pick_categories(path: str, suggestions: list[categorize.Suggestion]) -> int:
+    """Asks for the category of each row, from its top choices."""
+    picked = 0
+    for i, suggestion in enumerate(suggestions, start=1):
+        click.echo()
+        _echo_columns([f"Row {i} of {len(suggestions)}"], [_txn_fields(suggestion.txn)])
+        for n, choice in enumerate(suggestion.choices, start=1):
+            click.echo(f"  {n}) {choice.account}  {choice.probability:.0%}")
+        numbers = [str(n) for n in range(1, len(suggestion.choices) + 1)]
+        pick = click.prompt(
+            f"[1-{len(numbers)}], [s]kip, [q]uit",
+            type=click.Choice([*numbers, "s", "q"], case_sensitive=False),
+            show_choices=False,
+        )
+        if pick == "q":
+            break
+        if pick != "s":
+            account = suggestion.choices[int(pick) - 1].account
+            categorize.save_answers(path, {suggestion.import_id: account})
+            picked += 1
+    return picked
 
 
 @click.command("unpaired")

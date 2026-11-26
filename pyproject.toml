@@ -26,6 +26,11 @@ dependencies = [
 pybank-fetch = "pybank.fetch:main"
 pybank-import = "pybank.ingest:main"
 
+[project.optional-dependencies]
+categorize = [
+    "openai>=3.7",
+]
+
 [dependency-groups]
 dev = [
     "pre-commit>=4.0",

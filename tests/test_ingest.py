@@ -8,6 +8,7 @@ from beancount.core import amount, data, flags
 from pybank import ingest
 from pybank.importer.beancount import (
     UNCATEGORIZED,
+    categorize,
     dkb,
     ibkr,
     postfinance,
@@ -210,7 +211,7 @@ def test_the_hooks_keep_one_copy_of_a_hinted_row_the_export_also_holds(tmp_path)
         ),
     ]
 
-    for hook in ingest._hooks(config, {}, [], refunds.Config()):
+    for hook in ingest._hooks(config, {}, [], refunds.Config(), {}):
         groups = hook(groups, [])
 
     statements, exported = groups[0][1], groups[1][1]
@@ -631,3 +632,91 @@ def test_a_bad_refunds_prefix_is_reported(tmp_path):
 def test_a_refunds_prefix_that_is_no_string_is_reported(tmp_path):
     with pytest.raises(ingest._ConfigError, match="must be strings"):
         ingest._refunds(_write(tmp_path, "[refunds]\nprefixes = [1]\n"))
+
+
+CATEGORIZE_LEDGER = """\
+2019-01-01 open Assets:Bank:Checking
+2019-01-01 open Expenses:Living:Groceries
+2019-01-01 open Expenses:Mobility:Transit
+2019-01-01 open Expenses:Uncategorized
+
+2019-03-01 * "Corner Shop"
+  import-id: "shop-1"
+  category-source: "qif"
+  Assets:Bank:Checking  -20.00 CHF
+  Expenses:Living:Groceries
+
+2019-03-02 * "Corner Shop"
+  import-id: "shop-2"
+  category-source: "qif"
+  Assets:Bank:Checking  -20.00 CHF
+  Expenses:Living:Groceries
+
+2019-03-03 ! "Corner Shop"
+  import-id: "open-1"
+  Assets:Bank:Checking  -20.00 CHF
+  Expenses:Uncategorized
+
+2019-03-04 ! "Corner Shop"
+  import-id: "open-2"
+  Assets:Bank:Checking  -20.00 CHF
+  Expenses:Uncategorized
+
+2019-03-05 ! "Rail Co"
+  import-id: "open-3"
+  Assets:Bank:Checking  -20.00 CHF
+  Expenses:Uncategorized
+"""
+
+
+def _fake_ask(model, effort):
+    def ask(prompt, schema):
+        row = prompt.split("Transaction:\n")[1]
+        if row.startswith("Corner"):
+            return {"choices": [{"label": "1", "probability": 0.99}]}
+        return {"choices": [{"label": "2", "probability": 0.6}, {"label": "1", "probability": 0.3}]}
+
+    return ask
+
+
+def _categorize(tmp_path, monkeypatch, keys, config=ONE_SECTION + '[categorize]\nmodel = "m"\n'):
+    ledger = tmp_path / "main.beancount"
+    ledger.write_text(CATEGORIZE_LEDGER, encoding="utf-8")
+    monkeypatch.setattr(categorize, "openai_ask", _fake_ask)
+    monkeypatch.setattr("sys.stdin", io.StringIO(keys))
+    monkeypatch.setenv("COLUMNS", "100")
+    return ingest.main(["--config", _write(tmp_path, config), "categorize", str(ledger)])
+
+
+def test_categorize_approves_a_sure_group_then_asks_one_by_one(tmp_path, monkeypatch, capsys):
+    assert _categorize(tmp_path, monkeypatch, "y\n2\n") == 0
+
+    answers = categorize.load_answers(str(tmp_path / "categories.toml"))
+    assert answers == {
+        "open-1": "Expenses:Living:Groceries",
+        "open-2": "Expenses:Living:Groceries",
+        "open-3": "Expenses:Living:Groceries",
+    }
+    out = capsys.readouterr().out
+    assert "Group 1 of 1: 2 rows of 'corner shop'" in out
+    assert "  1) Expenses:Mobility:Transit  67%" in out
+    assert "Approved 3 of 3 rows." in out
+
+
+def test_categorize_asks_one_by_one_about_a_declined_group(tmp_path, monkeypatch, capsys):
+    assert _categorize(tmp_path, monkeypatch, "n\ns\n1\nq\n") == 0
+
+    answers = categorize.load_answers(str(tmp_path / "categories.toml"))
+    assert answers == {"open-1": "Expenses:Living:Groceries"}
+    assert "Approved 1 of 3 rows." in capsys.readouterr().out
+
+
+def test_categorize_needs_a_model(tmp_path, monkeypatch, capsys):
+    assert _categorize(tmp_path, monkeypatch, "", config=ONE_SECTION) == 1
+
+    assert "[categorize] needs a model" in capsys.readouterr().err
+
+
+def test_a_misspelled_categorize_key_is_reported(tmp_path):
+    with pytest.raises(ingest._ConfigError, match="Unknown keys: modle"):
+        ingest._categorize_settings({"categorize": {"modle": "m"}})

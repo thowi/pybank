@@ -898,6 +898,49 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    10 times as much for about 1.5 points of top 1, and that gain is not
    proven on test. The run needs the new tree's categories (more than 26,
    so the letter labels must change) and a review by group.
+
+   Status 2026-11-26: Categorization v1 is built, unreviewed, no real call
+   made. `categorize.py` ports the tuned prompt: Numbered labels (in
+   `_Labels`, one place to switch to names), the 50 nearest labeled rows by
+   a pure-Python TF-IDF on the cleaned text, noise words learned from the
+   labels. It trains on `qif` labels and approved answers only. Country,
+   model, effort and cutoff come from `[categorize]` in `pybank.toml`. The
+   `categorize` command (`ingest.py`) asks the high band by payee group,
+   then the rest one by one. Answers go to `categories.toml`, suggestions
+   are cached in `category-suggestions.jsonl`, both next to the config. The
+   rebuild books answers last, with `category-source: "model"`. `openai` is
+   the optional extra `categorize`, and `uv.lock` holds it.
+   Next: The $0.20 check of numbered labels on the 600 val rows, then the
+   full run.
+
+   Decided 2026-11-26: No hand-written boilerplate patterns. The FX notes
+   and the German reference words fit only some banks and one language.
+   `_clean` now cuts only lone masked numbers and stray dots. A free check
+   (`categorize-backtest/see_boilerplate.py`, no model calls) scored the
+   nearest labeled rows on the 2018 rows:
+
+   | Cleaning                     | Nearest 1, 600 val | Nearest 1, all 2018 |
+   |------------------------------|--------------------|---------------------|
+   | Hand-written patterns        | 64.7%              | 63.1%               |
+   | No patterns                  | 65.2%              | 63.3%               |
+   | No patterns, no noise words  | 65.5%              | 63.8%               |
+
+   The prompt text grows from 45 to 50 characters per row. The $0.20 check
+   now also confirms the prompt without the patterns. Dropping the learned
+   noise words from the search text is a further option, not built.
+
+   The $0.20 check, 2026-11-26 (`see_numbered.py 600`, cache
+   `out/numbered/gpt-6-luna-low.jsonl`): The repo module on the same 600
+   val rows, with numbered labels, the new tree and no boilerplate
+   patterns. Top 1 82.3%, top 3 93.5%, 60.8% of rows at 0.95+ with 98.6%
+   right. The tuned Luna in Round 7, with letters and the patterns: 83.0%,
+   94.0%, 62% at 97.9%. The gap is about 4 rows, under the 1 point that a
+   rerun moves. So the module holds the tuned result. Next: The full run.
+
+   Decided 2026-11-26: Keep TF-IDF for v1. After this commit and the
+   field-doc cleanup, test embeddings as one more backtest variant. Cost
+   is not the reason: The prompts call a model anyway, and embeddings are
+   cheap. Switch only if the test shows a gain.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
