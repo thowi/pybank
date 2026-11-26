@@ -953,8 +953,16 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    | `text-embedding-3-small` | 70.3%     | 65.2%   | 62.0%   | 89.3%       |
    | `text-embedding-3-large` | 72.2%     | 70.2%   | 66.2%   | 90.3%       |
 
-   Next: The $0.20 run of Luna with the `-large` examples, against the
-   82.3% top 1 of the numbered check. Switch only if Luna gains.
+   Luna with the `-large` examples (`see_numbered_embed.py 600`, cache
+   `out/numbered/gpt-6-luna-low-embed-large.jsonl`): Top 1 80.8%, top 3
+   92.3%, 60.2% of rows at 0.95+ with 98.6% right. TF-IDF had 82.3%,
+   93.5% and 60.8% with 98.6% right. Better examples did not make Luna
+   better. The 1.5 points are 9 of 600 rows, likely noise. A hypothesis:
+   Luna reads the text itself and needs the examples only for the label
+   habits.
+
+   Decided 2026-11-26: Keep TF-IDF. Embeddings add a paid call per new
+   text and a vector cache, for no gain.
 
    The OpenAI key is the Keychain item "OpenAI API key (pybank)". The
    hidden prompt of `security add-generic-password -w` cut the pasted key
