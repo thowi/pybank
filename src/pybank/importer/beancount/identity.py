@@ -34,14 +34,12 @@ logger = logging.getLogger(__name__)
 # import, and so a collision needs all three parts to match. Both are already
 # visible in the postings anyway.
 class IdFields(NamedTuple):
-    """The identifying fields of one source row.
+    """The identifying fields of one source row."""
 
-    Date and amount are carried in the clear. Account and card numbers are
-    not, and belong in `hashed`.
-    """
-
+    # Date and amount are carried in the clear.
     date: str
     amount: str
+    # Account and card numbers belong here, not in the clear fields.
     hashed: Sequence[str]
 
 

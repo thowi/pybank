@@ -93,14 +93,12 @@ class Choice(NamedTuple):
 
 
 class Suggestion(NamedTuple):
-    """The likely categories of one open row. The most likely comes first.
+    """The likely categories of one open row."""
 
-    `payee` groups the rows of one payee for review, from the first words of
-    the row's text.
-    """
-
+    # The most likely comes first.
     choices: tuple[Choice, ...]
     import_id: str
+    # The row's first words, which group one payee's rows for review.
     payee: str
     txn: data.Transaction
 

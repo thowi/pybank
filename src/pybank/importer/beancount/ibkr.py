@@ -115,14 +115,9 @@ logger = logging.getLogger(__name__)
 
 
 class Accounts(NamedTuple):
-    """An account where transactions book.
+    """An account where transactions book."""
 
-    `cash` is a prefix: The currency is appended, since IBKR holds one balance
-    per currency and the ledger mirrors that.
-
-    `rounding` takes the sub-cent residual of a conversion, and nothing else.
-    """
-
+    # A prefix: The ledger appends the currency, like IBKR's balances.
     cash: str = "Assets:IBKR:Cash"
     securities: str = "Assets:IBKR:Securities"
     dividends: str = "Income:IBKR:Dividends"
@@ -134,6 +129,7 @@ class Accounts(NamedTuple):
     transaction_tax: str = "Expenses:IBKR:TransactionTax"
     sales_tax: str = "Expenses:IBKR:SalesTax"
     withholding_tax: str = "Expenses:Taxes:Withholding"
+    # Takes the sub-cent residual of a conversion, and nothing else.
     rounding: str = "Equity:Rounding"
 
 

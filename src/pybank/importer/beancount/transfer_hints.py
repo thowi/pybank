@@ -22,12 +22,12 @@ logger = logging.getLogger(__name__)
 class Hint(NamedTuple):
     """Rows on `account`, or on an account below it, whose text matches.
 
-    `account` is the statement's own account. The other side is always
-    `IN_TRANSIT`. `text` searches the payee and the narration, joined by a
-    space.
+    The other side is always `IN_TRANSIT`.
     """
 
+    # The statement's own account.
     account: data.Account
+    # Searches the payee and the narration, joined by a space.
     text: re.Pattern
 
 

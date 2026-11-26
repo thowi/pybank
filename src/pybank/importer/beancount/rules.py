@@ -25,18 +25,20 @@ logger = logging.getLogger(__name__)
 class Rule(NamedTuple):
     """A categorization rule: A text pattern, filters, and a target account.
 
-    A row that matches the rule books to `book`. `text` searches the payee and
-    the narration, joined by a space. The optional filters narrow the match:
-    `account` is the statement's own account or one above it, `start` and
-    `end` bound the date (both inclusive), and `labels` lists the labels this
-    rule may override.
+    A row that matches the rule books to `book`. The optional filters narrow
+    the match.
     """
 
     book: data.Account
+    # Searches the payee and the narration, joined by a space.
     text: re.Pattern
+    # The statement's own account or one above it.
     account: data.Account | None = None
+    # Last date, inclusive.
     end: datetime.date | None = None
+    # The labels this rule may override.
     labels: frozenset[str] = frozenset()
+    # First date, inclusive.
     start: datetime.date | None = None
 
 

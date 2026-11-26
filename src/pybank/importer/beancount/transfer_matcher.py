@@ -70,9 +70,11 @@ class Choice(NamedTuple):
 
 
 class Pair(NamedTuple):
-    """`sender` is the leg the money leaves, `receiver` the leg it reaches."""
+    """Two legs of one transfer."""
 
+    # The leg the money leaves.
     sender: Leg
+    # The leg the money reaches.
     receiver: Leg
 
     @property

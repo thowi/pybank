@@ -22,19 +22,19 @@ _CENT = decimal.Decimal("0.01")
 class RateCheck(NamedTuple):
     """The rate a pair in two currencies implies, and the market's that day.
 
-    Rates are in `quote` per one `base`, with `base` the currency worth more.
-    `spread` is what the receiver got less than the market rate gives, in the
-    sent currency, and `spread_share` that as a share of what was sent. Both
-    are negative when the rate beat the market. The market fields are None
-    when the ledger holds no price.
+    Rates are in `quote` per one `base`. The market fields are None when the
+    ledger holds no price. A spread is negative when the rate beat the market.
     """
 
+    # The currency worth more.
     base: str
     implied: decimal.Decimal
     market: decimal.Decimal | None
     market_date: datetime.date | None
     quote: str
+    # What the receiver lost against the market rate, in the sent currency.
     spread: amount.Amount | None
+    # `spread` as a share of what was sent.
     spread_share: decimal.Decimal | None
 
 
