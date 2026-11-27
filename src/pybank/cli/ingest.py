@@ -1,19 +1,14 @@
-"""Ingest entry point. Wires the importers to beangulp's CLI.
+"""The `pybank-import` command line: The beangulp CLI and the review commands.
 
 Accounts are configured in a TOML file passed as `--config`.
 """
 
-import datetime
-import functools
 import itertools
 import logging
-import os
-import re
 import shutil
 import sys
 import textwrap
 import threading
-import tomllib
 import webbrowser
 
 import beangulp
@@ -22,46 +17,20 @@ from beancount import loader
 from beancount.core import data
 from beancount.parser import printer
 
+from pybank import config
 from pybank.importer.beancount import (
     IN_TRANSIT,
     META_COUNTERPARTY_ACCOUNT,
     categorize,
-    dkb,
-    ibkr,
-    postfinance,
-    qif,
-    qif_sidecar,
-    refunds,
-    revolut,
+    pipeline,
     routing,
-    rules,
-    see,
-    transfer_hints,
     transfer_matcher,
     transfer_review,
-    wise,
 )
 
 # beangulp reports progress a file at a time and leaves the line open until
 # the file is done, so a log record written meanwhile lands mid-line.
 _LOG_FORMAT = "\n%(message)s"
-
-# The answers on transfer pairs, kept next to the config file.
-_ANSWERS_FILE = "transfer-pairs.toml"
-
-# The approved categories of open rows, kept next to the config file.
-_CATEGORY_ANSWERS_FILE = "categories.toml"
-
-# The model's suggestions, kept next to the config file so a rerun does not pay
-# for them again.
-_SUGGESTIONS_FILE = "category-suggestions.jsonl"
-
-_CATEGORIZE_KEYS = {"country", "cutoff", "effort", "examples", "model"}
-
-# The categorization rules, kept next to the config file. Optional.
-_RULES_FILE = "rules.toml"
-
-_RULE_KEYS = {"account", "book", "from", "labels", "text", "until"}
 
 # Below the minimum a transaction column wraps too much to read. Above the
 # maximum the eye loses the row between two columns.
@@ -74,267 +43,6 @@ _GROUP_SHOWN = 5
 # beangulp skips any input above 8 MiB before an importer sees it. A SEE
 # Finance database passes that after a few years of use.
 _MAX_FILE_SIZE = 1024 * 1024 * 1024
-
-
-# Config that only an importer can find fault with raises the same type. Here
-# it stops the run. Inside beangulp it skips one file and prints the message.
-_ConfigError = routing.ConfigError
-
-
-def _accounts(section: dict, key: str, table: str) -> dict | None:
-    """Returns the fragment-to-account table under `key`, if it is there."""
-    accounts = section.get(key)
-    if accounts is None:
-        return None
-    if not isinstance(accounts, dict):
-        raise _ConfigError(
-            f"[{table}] must be a table mapping a fragment of the account "
-            f"identifier to an account, not a bare account name."
-        )
-    return accounts
-
-
-def _dkb(section: dict) -> list[beangulp.Importer]:
-    # The library is EUR-only in practice, but the account decides, not us.
-    currency = section.get("currency", "EUR")
-    importers = []
-    card = _accounts(section, "card", "dkb.card")
-    if card is not None:
-        importers.append(dkb.CreditCardImporter(card, currency))
-    checking = _accounts(section, "checking", "dkb.checking")
-    if checking is not None:
-        importers.append(dkb.CheckingImporter(checking, currency))
-    return importers
-
-
-def _ibkr(section: dict) -> list[beangulp.Importer]:
-    try:
-        accounts = ibkr.Accounts(**section)
-    except TypeError as err:
-        raise _ConfigError(f"[ibkr]: {err}") from err
-    return [ibkr.Importer(accounts)]
-
-
-def _postfinance(section: dict) -> list[beangulp.Importer]:
-    importers = []
-    card = _accounts(section, "card", "postfinance.card")
-    if card is not None:
-        importers.append(postfinance.CreditCardImporter(card))
-    checking = _accounts(section, "checking", "postfinance.checking")
-    if checking is not None:
-        importers.append(postfinance.CheckingImporter(checking))
-    return importers
-
-
-def _qif_targets(section: dict, table: str) -> dict[str, qif.Target]:
-    targets = {}
-    for name, target in section.get("targets", {}).items():
-        try:
-            targets[name] = qif.Target(target["account"], target["currency"])
-        except (KeyError, TypeError) as err:
-            raise _ConfigError(f"[{table}.targets] {name!r} needs account and currency") from err
-    if not targets:
-        raise _ConfigError(f"[{table}] needs at least one target, or the export imports nothing")
-    return targets
-
-
-def _qif(section: dict) -> list[beangulp.Importer]:
-    return [qif.Importer(_qif_targets(section, "qif"), section.get("categories", {}))]
-
-
-def _revolut(section: dict) -> list[beangulp.Importer]:
-    accounts = _accounts(section, "accounts", "revolut.accounts")
-    if not accounts:
-        raise _ConfigError("[revolut.accounts] must map at least one currency to an account")
-    return [revolut.Importer(accounts)]
-
-
-def _see(section: dict) -> list[beangulp.Importer]:
-    # The database holds what the QIF export holds, so the config is the same.
-    return [see.Importer(_qif_targets(section, "see"), section.get("categories", {}))]
-
-
-def _wise(section: dict) -> list[beangulp.Importer]:
-    accounts = _accounts(section, "accounts", "wise.accounts")
-    if not accounts:
-        raise _ConfigError("[wise.accounts] must map at least one currency to an account")
-    return [wise.Importer(accounts)]
-
-
-def _hints(config: dict) -> list[transfer_hints.Hint]:
-    """Returns the `[[transfers]]` hints, or raises `_ConfigError`."""
-    hints = []
-    for i, hint in enumerate(config.get("transfers", [])):
-        try:
-            # Banks change the case of their own text between export formats.
-            text = re.compile(hint["text"], re.IGNORECASE)
-            hints.append(transfer_hints.Hint(hint["account"], text))
-        except (KeyError, TypeError) as err:
-            raise _ConfigError(f"[[transfers]] #{i + 1} needs account and text") from err
-        except re.error as err:
-            raise _ConfigError(f"[[transfers]] #{i + 1}: Bad text pattern: {err}") from err
-    return hints
-
-
-def _rule(i: int, entry: dict) -> rules.Rule:
-    where = f"{_RULES_FILE} rule #{i + 1}"
-    unknown = sorted(set(entry) - _RULE_KEYS)
-    if unknown:
-        raise _ConfigError(f"{where}: Unknown keys: {', '.join(unknown)}")
-    if "book" not in entry or "text" not in entry:
-        raise _ConfigError(f"{where} needs book and text")
-    try:
-        text = re.compile(entry["text"], re.IGNORECASE)
-    except TypeError as err:
-        raise _ConfigError(f"{where}: text must be a string") from err
-    except re.error as err:
-        raise _ConfigError(f"{where}: Bad text pattern: {err}") from err
-    if not isinstance(entry.get("labels", []), list):
-        raise _ConfigError(f"{where}: labels must be a list")
-    # A quoted date loads as a string, and a datetime never compares to a date.
-    if any(
-        type(entry.get(key, datetime.date.min)) is not datetime.date for key in ("from", "until")
-    ):
-        raise _ConfigError(f"{where}: from and until must be dates")
-    return rules.Rule(
-        account=entry.get("account"),
-        book=entry["book"],
-        end=entry.get("until"),
-        labels=frozenset(entry.get("labels", [])),
-        start=entry.get("from"),
-        text=text,
-    )
-
-
-def _rules(path: str) -> list[rules.Rule]:
-    """Returns the rules in `path`, none if absent, or raises `_ConfigError`."""
-    if not os.path.exists(path):
-        return []
-    loaded = _load_config(path)
-    unknown = sorted(set(loaded) - {"refunds", "rules"})
-    if unknown:
-        raise _ConfigError(f"Unknown {_RULES_FILE} sections: {', '.join(unknown)}")
-    return [_rule(i, entry) for i, entry in enumerate(loaded.get("rules", []))]
-
-
-def _refunds(path: str) -> refunds.Config:
-    """Returns the `[refunds]` table in `path`, or raises `_ConfigError`."""
-    if not os.path.exists(path):
-        return refunds.Config()
-    table = _load_config(path).get("refunds", {})
-    if not isinstance(table, dict):
-        raise _ConfigError(f"{_RULES_FILE} [refunds] must be a table")
-    unknown = sorted(set(table) - {"accounts", "labels", "prefixes"})
-    if unknown:
-        raise _ConfigError(f"{_RULES_FILE} [refunds]: Unknown keys: {', '.join(unknown)}")
-    if not all(isinstance(table.get(key, []), list) for key in ("accounts", "labels", "prefixes")):
-        raise _ConfigError(f"{_RULES_FILE} [refunds]: accounts, labels and prefixes must be lists")
-    try:
-        prefixes = tuple(re.compile(p, re.IGNORECASE) for p in table.get("prefixes", []))
-    except TypeError as err:
-        raise _ConfigError(f"{_RULES_FILE} [refunds]: prefixes must be strings") from err
-    except re.error as err:
-        raise _ConfigError(f"{_RULES_FILE} [refunds]: Bad prefix pattern: {err}") from err
-    return refunds.Config(
-        accounts=tuple(table.get("accounts", [])),
-        labels=frozenset(table.get("labels", [])),
-        prefixes=prefixes,
-    )
-
-
-def _categorize_settings(config: dict) -> categorize.Settings:
-    """Returns the `[categorize]` settings, or raises `_ConfigError`."""
-    table = config.get("categorize", {})
-    if not isinstance(table, dict):
-        raise _ConfigError("[categorize] must be a table")
-    unknown = sorted(set(table) - _CATEGORIZE_KEYS)
-    if unknown:
-        raise _ConfigError(f"[categorize]: Unknown keys: {', '.join(unknown)}")
-    settings = categorize.Settings(**table)
-    if not isinstance(settings.cutoff, int | float) or not isinstance(settings.examples, int):
-        raise _ConfigError("[categorize]: cutoff must be a number, examples a whole number")
-    return settings
-
-
-def _hooks(
-    config: dict,
-    answers: transfer_matcher.Answers,
-    categorization: list[rules.Rule],
-    refund: refunds.Config,
-    categories: dict[str, str],
-    suggested: dict[str, str],
-) -> list:
-    """Returns the beangulp hooks, in the order they must run."""
-    # `donate` and the hints change only rows that are still uncategorized.
-    # A row hinted first would hide from `donate`, which then keeps the export's
-    # copy of it as a second transaction. The rules run last, so a transfer is
-    # booked before a rule sees it. A pair that still waits for an answer is
-    # not booked yet, so a rule that matches one of its legs takes it. The
-    # refunds run after the rules, so a refund follows its purchase's account.
-    # The approved and suggested categories run last, so they book only what
-    # is still open.
-    return [
-        qif_sidecar.donate,
-        functools.partial(transfer_hints.book, _hints(config)),
-        functools.partial(transfer_matcher.book, answers),
-        functools.partial(rules.book, categorization),
-        functools.partial(refunds.book, refund),
-        functools.partial(categorize.book, categories, suggested),
-    ]
-
-
-# One builder per config section. A section that is absent contributes no
-# importer, which is how an institution gets turned off.
-_BUILDERS = {
-    "dkb": _dkb,
-    "ibkr": _ibkr,
-    "postfinance": _postfinance,
-    "qif": _qif,
-    "revolut": _revolut,
-    "see": _see,
-    "wise": _wise,
-}
-
-
-def _answers_path(config: str) -> str:
-    return os.path.join(os.path.dirname(config), _ANSWERS_FILE)
-
-
-def _rules_path(config: str) -> str:
-    return os.path.join(os.path.dirname(config), _RULES_FILE)
-
-
-def _category_answers_path(config: str) -> str:
-    return os.path.join(os.path.dirname(config), _CATEGORY_ANSWERS_FILE)
-
-
-def _suggestions_path(config: str) -> str:
-    return os.path.join(os.path.dirname(config), _SUGGESTIONS_FILE)
-
-
-def _load_config(path: str) -> dict:
-    """Reads the config file, or raises `_ConfigError`."""
-    try:
-        with open(path, "rb") as f:
-            return tomllib.load(f)
-    except OSError as err:
-        raise _ConfigError(f"Cannot read {path}: {err}") from err
-    except tomllib.TOMLDecodeError as err:
-        raise _ConfigError(f"Cannot parse {path}: {err}") from err
-
-
-def _importers(config: dict) -> list[beangulp.Importer]:
-    """Returns one importer per configured source, or raises `_ConfigError`."""
-    unknown = sorted(set(config) - set(_BUILDERS) - {"categorize", "transfers"})
-    if unknown:
-        raise _ConfigError(f"Unknown config sections: {', '.join(unknown)}")
-    result = []
-    for name, build in _BUILDERS.items():
-        if name in config:
-            result.extend(build(config[name]))
-    if not result:
-        raise _ConfigError(f"No importers configured. Expected one of: {', '.join(_BUILDERS)}")
-    return result
 
 
 def _cli() -> click.Group:
@@ -356,14 +64,9 @@ def _cli() -> click.Group:
     @click.pass_context
     def configure(ctx: click.Context, config: str) -> None:
         try:
-            loaded = _load_config(config)
-            answers = transfer_matcher.load_answers(_answers_path(config))
-            path = _rules_path(config)
-            categories = categorize.load_answers(_category_answers_path(config))
-            suggested = categorize.load_suggested(_suggestions_path(config))
-            hooks = _hooks(loaded, answers, _rules(path), _refunds(path), categories, suggested)
-            ctx.obj = beangulp.Ingest(_importers(loaded), hooks=hooks)
-        except _ConfigError as err:
+            ctx.obj = pipeline.ingest(config)
+        # Here a config error stops the run. Inside beangulp it skips one file.
+        except routing.ConfigError as err:
             raise click.ClickException(str(err)) from err
 
     group.callback = configure
@@ -451,7 +154,7 @@ def _confirm_transfers(ctx: click.Context, ledger: str) -> None:
     rebuild of the ledger from its sources books the confirmed pairs.
     """
     session = transfer_review.Session(
-        _answers_path(ctx.find_root().params["config"]), _load_ledger(ledger)
+        config.answers_path(ctx.find_root().params["config"]), _load_ledger(ledger)
     )
     pairs = session.pending_pairs()
     answered = 0
@@ -532,12 +235,12 @@ def _categorize(ctx: click.Context, ledger: str, year: int | None) -> None:
     only about new rows. A rebuild books each row without an answer to its
     top suggestion, flagged `!` for review.
     """
-    config = ctx.find_root().params["config"]
-    answers_path = _category_answers_path(config)
+    config_path = ctx.find_root().params["config"]
+    answers_path = config.category_answers_path(config_path)
     try:
-        settings = _categorize_settings(_load_config(config))
+        settings = config.categorize_settings(config.load(config_path))
         answers = categorize.load_answers(answers_path)
-    except _ConfigError as err:
+    except routing.ConfigError as err:
         raise click.ClickException(str(err)) from err
     if not settings.model:
         raise click.ClickException("[categorize] needs a model")
@@ -550,14 +253,14 @@ def _categorize(ctx: click.Context, ledger: str, year: int | None) -> None:
             _load_ledger(ledger),
             answers,
             categorize.openai_ask(settings.model, settings.effort),
-            _suggestions_path(config),
+            config.suggestions_path(config_path),
             settings,
             progress,
             year,
         )
     except ImportError as err:
         raise click.ClickException(f"{err}. Install the extra: uv sync --extra categorize") from err
-    except _ConfigError as err:
+    except routing.ConfigError as err:
         raise click.ClickException(str(err)) from err
     sure, unsure = categorize.bands(suggestions, settings.cutoff)
     approved, quit = _approve_groups(answers_path, sure, unsure)
@@ -640,15 +343,15 @@ def _review_ui(ctx: click.Context, ledger: str, port: int, year: int | None) -> 
         from pybank.web import review
     except ImportError as err:
         raise click.ClickException(f"{err}. Install the extra: uv sync --extra ui") from err
-    config = ctx.find_root().params["config"]
+    config_path = ctx.find_root().params["config"]
     try:
-        settings = _categorize_settings(_load_config(config))
-    except _ConfigError as err:
+        settings = config.categorize_settings(config.load(config_path))
+    except routing.ConfigError as err:
         raise click.ClickException(str(err)) from err
     app = review.app(
         _load_ledger(ledger),
-        _category_answers_path(config),
-        _suggestions_path(config),
+        config.category_answers_path(config_path),
+        config.suggestions_path(config_path),
         settings.cutoff,
         year,
     )

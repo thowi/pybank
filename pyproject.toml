@@ -23,8 +23,8 @@ dependencies = [
 ]
 
 [project.scripts]
-pybank-fetch = "pybank.fetch:main"
-pybank-import = "pybank.ingest:main"
+pybank-fetch = "pybank.cli.fetch:main"
+pybank-import = "pybank.cli.ingest:main"
 
 [project.optional-dependencies]
 categorize = [

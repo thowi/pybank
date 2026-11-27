@@ -66,7 +66,7 @@ Another front end, such as a web page, must reuse every rule, not copy it.
   formatted text.
 - Presentation, such as the CLI, only reads input, formats, and asks.
 - Example: `transfer_review` picks the pairs to ask about and saves the
-  answers. `ingest.py` draws them and asks.
+  answers. `cli/ingest.py` draws them and asks.
 
 ## Review code changes before committing
 
