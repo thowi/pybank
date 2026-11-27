@@ -1001,6 +1001,26 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    Decided 2026-11-27: No fix. Run a rebuild after `extract -e`. A fix
    could only ask sooner: `extract -e` adds rows and never rewrites the
    old leg, so even a confirmed pair books at the next rebuild.
+
+   Decided 2026-11-27, the review page layout:
+   - The server lives in `src/pybank/web/`, one module per page
+     (`review.py`). It is presentation, like `ingest.py`, and calls only
+     the public functions of `categorize`. Nothing in `importer/` imports
+     it.
+   - The page sources stay in `web/` at the repo root. `npm run build`
+     writes into `src/pybank/web/static/` (gitignored), so the server
+     finds the page next to its own file, also in a wheel.
+   - Later, when a second app arrives with its own dependencies: One
+     repo, a [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/)
+     with two top-level members. `core/` is the `pybank` package (domain
+     and CLI). `ui/` is a `pybank-ui` package that depends on it, with
+     the server in `ui/src/pybank_ui/` and the page sources in `ui/web/`.
+     The move is mechanical, since the paths inside each part stay the
+     same. A lint rule such as import-linter would still have to block
+     `pybank` from importing `pybank_ui`, since both share one venv.
+   - Not chosen: Two repos. They add a dependency pin, a second CI and
+     coordinated commits, and only pay off with a second front end, a
+     second maintainer or a separate release schedule.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority

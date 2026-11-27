@@ -1,0 +1,1 @@
+{"root":["./src/app.tsx","./src/review.tsx","./src/api.ts","./src/format.ts","./src/main.tsx","./src/messages.ts","./src/outcome.ts","./src/schema.d.ts","./src/components/accountname.tsx","./src/components/choices.tsx","./src/components/currentcard.tsx","./src/components/progressheader.tsx","./src/components/upcoming.tsx"],"version":"5.9.3"}

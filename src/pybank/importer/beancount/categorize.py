@@ -10,6 +10,8 @@ answer. Rule output is no label, it would only teach the rules back.
 An answer is a person's approved category for one open row, keyed by its
 import-id. `suggest` asks a model for the likely categories of each open row
 without an answer, and `bands` splits the suggestions for review.
+`group_choices` merges the choices of a group. `categories` lists the
+accounts an answer can name.
 `load_answers` reads the answers, and `save_answers` appends some.
 `load_suggested` reads the top suggestion of each row. `book` is the beangulp
 hook that books both. `openai_ask` makes the model call.
@@ -265,7 +267,7 @@ def _rows(entries: Iterable[data.Directive]) -> list[_Row]:
     return result
 
 
-def _categories(entries: Iterable[data.Directive]) -> list[data.Account]:
+def categories(entries: Iterable[data.Directive]) -> list[data.Account]:
     """Returns the open expense and income accounts, except `UNCATEGORIZED`."""
     opened = {e.account for e in entries if isinstance(e, data.Open)}
     closed = {e.account for e in entries if isinstance(e, data.Close)}
@@ -350,7 +352,7 @@ def _load_cache(path: str, categories: list[data.Account] | None) -> dict[str, t
 def suggest(
     entries: data.Entries,
     answers: dict[str, data.Account],
-    ask: Ask,
+    ask: Ask | None,
     cache_path: str,
     settings: Settings,
     progress: Callable[[int, int], None] | None = None,
@@ -364,12 +366,13 @@ def suggest(
     are the expense and income accounts that the ledger keeps open.
 
     Asks `ask` only about rows that the cache file at `cache_path` lacks, and
-    appends each answer there, so a rerun pays for new rows only. Calls
+    appends each answer there, so a rerun pays for new rows only. With `ask`
+    None, a row that the cache lacks gets no suggestion. Calls
     `progress` with the rows asked so far and the rows to ask, after each.
     A row whose answer names no category gets no suggestion. An error in a
     call stops the run, and a rerun asks the rest.
     """
-    labels = _Labels(_categories(entries))
+    labels = _Labels(categories(entries))
     labeled, pending = [], []
     for row in _rows(entries):
         label = row.label or answers.get(row.import_id)
@@ -381,7 +384,7 @@ def suggest(
             labeled.append(row._replace(label=label))
     cache = _load_cache(cache_path, list(labels.label))
     todo = [row for row in pending if row.import_id not in cache]
-    if todo:
+    if todo and ask:
         _ask_all(todo, labeled, labels, ask, settings, cache_path, cache, progress)
     noise = _noise_words(labeled)
     return [
@@ -454,6 +457,19 @@ def bands(
         else:
             unsure.append(suggestion)
     return sorted(groups.values(), key=len, reverse=True), unsure
+
+
+def group_choices(group: list[Suggestion]) -> tuple[Choice, ...]:
+    """Returns the top choices of a group by mean probability, best first.
+
+    An account that a row does not list counts as 0 for that row.
+    """
+    total: dict[data.Account, float] = collections.defaultdict(float)
+    for suggestion in group:
+        for choice in suggestion.choices:
+            total[choice.account] += choice.probability
+    ranked = sorted(total.items(), key=lambda item: item[1], reverse=True)[:_TOP]
+    return tuple(Choice(account, p / len(group)) for account, p in ranked)
 
 
 def load_answers(path: str) -> dict[str, data.Account]:

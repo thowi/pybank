@@ -135,6 +135,17 @@ def test_a_rerun_asks_only_about_new_rows(tmp_path):
     assert len(prompts) == 1
 
 
+def test_without_ask_only_cached_rows_get_a_suggestion(tmp_path):
+    picks = {"Corner": [(GROCERIES, 1.0)]}
+    _suggest(tmp_path, _ledger(*LABELED, _row("open-1", "Corner Shop")), picks)
+    entries = _ledger(*LABELED, _row("open-1", "Corner Shop"), _row("open-2", "Rail Co"))
+    cache = str(tmp_path / "suggestions.jsonl")
+
+    suggestions = categorize.suggest(entries, {}, None, cache, categorize.Settings())
+
+    assert [s.import_id for s in suggestions] == ["open-1"]
+
+
 def test_a_year_asks_and_returns_only_its_rows(tmp_path):
     entries = _ledger(
         *LABELED, _row("open-1", "Corner Shop"), _row("open-2", "Rail Co", day="2021-02-03")
@@ -249,6 +260,22 @@ def test_sure_suggestions_group_by_payee_and_account():
 
     assert groups == [shop, [rail]]
     assert rest == [unsure]
+
+
+def test_group_choices_rank_accounts_by_mean_probability():
+    def suggestion(*choices):
+        return categorize.Suggestion(tuple(categorize.Choice(*c) for c in choices), "", "", None)
+
+    group = [
+        suggestion((GROCERIES, 0.6), (TRANSIT, 0.4)),
+        suggestion((GROCERIES, 0.8), ("Income:Other", 0.2)),
+    ]
+
+    assert categorize.group_choices(group) == (
+        categorize.Choice(GROCERIES, pytest.approx(0.7)),
+        categorize.Choice(TRANSIT, pytest.approx(0.2)),
+        categorize.Choice("Income:Other", pytest.approx(0.1)),
+    )
 
 
 def test_char_groups_count_a_short_word_once():

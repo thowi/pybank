@@ -12,7 +12,9 @@ import re
 import shutil
 import sys
 import textwrap
+import threading
 import tomllib
+import webbrowser
 
 import beangulp
 import click
@@ -367,6 +369,7 @@ def _cli() -> click.Group:
     group.callback = configure
     group.add_command(_categorize)
     group.add_command(_confirm_transfers)
+    group.add_command(_review_ui)
     group.add_command(_unpaired)
     return group
 
@@ -617,6 +620,43 @@ def _pick_categories(path: str, suggestions: list[categorize.Suggestion]) -> int
             categorize.save_answers(path, {suggestion.import_id: account})
             picked += 1
     return picked
+
+
+@click.command("review-ui")
+@click.argument("ledger", type=click.Path(dir_okay=False, exists=True))
+@click.option("--port", default=8780, show_default=True, help="The local port to serve on.")
+@click.option("--year", type=int, help="Review only the rows of this year.")
+@click.pass_context
+def _review_ui(ctx: click.Context, ledger: str, port: int, year: int | None) -> None:
+    """Review the cached category suggestions for LEDGER on a local web page.
+
+    Shows only rows that `categorize` already asked the model about, and asks
+    it nothing. Answers go to the same file as in `categorize`, and a rebuild
+    books them. Stops with Ctrl-C.
+    """
+    try:
+        import uvicorn
+
+        from pybank.web import review
+    except ImportError as err:
+        raise click.ClickException(f"{err}. Install the extra: uv sync --extra ui") from err
+    config = ctx.find_root().params["config"]
+    try:
+        settings = _categorize_settings(_load_config(config))
+    except _ConfigError as err:
+        raise click.ClickException(str(err)) from err
+    app = review.app(
+        _load_ledger(ledger),
+        _category_answers_path(config),
+        _suggestions_path(config),
+        settings.cutoff,
+        year,
+    )
+    url = f"http://127.0.0.1:{port}"
+    click.echo(f"Reviewing at {url}")
+    # Opens once the server is likely up, uvicorn.run blocks until Ctrl-C.
+    threading.Timer(1, webbrowser.open, [url]).start()
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 
 @click.command("unpaired")

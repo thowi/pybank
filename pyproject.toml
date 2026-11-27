@@ -30,13 +30,23 @@ pybank-import = "pybank.ingest:main"
 categorize = [
     "openai>=3.7",
 ]
+ui = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+]
 
 [dependency-groups]
 dev = [
+    "fastapi>=0.115",
+    "httpx>=0.27",
     "pre-commit>=4.0",
     "pytest>=8.4.1",
     "ruff>=0.16.0",
 ]
+
+[tool.hatch.build]
+# The built review page is gitignored, which hatch would otherwise skip.
+artifacts = ["src/pybank/web/static"]
 
 [tool.pytest.ini_options]
 # Lets the test tree mirror the package without __init__.py files, and

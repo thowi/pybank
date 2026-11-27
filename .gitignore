@@ -229,3 +229,7 @@ __marimo__/
 # Raw research dumps, which carry real payees and institutions. The
 # write-ups in docs/research are .md and are tracked.
 docs/research/*.txt
+
+# The review page's npm packages, and its build inside the Python package.
+node_modules/
+/src/pybank/web/static/

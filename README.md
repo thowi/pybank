@@ -34,6 +34,12 @@ $ uv run ruff check
 $ uv run ruff format
 ```
 
+The review page of `pybank-import review-ui` is a React app in `web/`. Its
+build goes into `src/pybank/web/static/`:
+```bash
+$ cd web && npm install && npm run build
+```
+
 # Web scrapers
 
 The selenium scrapers under `src/pybank/download` are unmaintained. They are
