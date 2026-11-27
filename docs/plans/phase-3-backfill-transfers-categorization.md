@@ -970,7 +970,8 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    Keychain Access, or with `-w "$(pbpaste)"`.
 
    Decided 2026-11-26, the review workflow:
-   - Review one year at a time, from 2021 on. `categorize --year N` asks
+   - Review one year at a time, oldest first, from 2011 on (changed
+     2026-11-27, was from 2021 on). `categorize --year N` asks
      and reviews only the open rows of year N. The examples come from every
      year, so each year learns from the approvals of the years before.
    - The rebuild books each open row without an answer to its top
@@ -984,7 +985,9 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    - The OpenAI key lives in the macOS Keychain, read into
      `OPENAI_API_KEY` per run, never in a `.env` in the synced folder.
    - Per year: `categorize --year N` (the paid step), rebuild, review in as
-     many sittings as needed (no new calls), rebuild.
+     many sittings as needed (no new calls), rebuild. A wrapper script
+     next to the config reads the key and passes its flags through:
+     `./categorize.sh --year N`.
 
    A row on a suggestion counts as open in `hooks.open_slot`, so a
    pending transfer leg stays in the `transfers` review, and a refund
@@ -994,6 +997,10 @@ returns. Scripts: `Ledger-rebuild/refund-match/` (`score2.py`).
    an open ledger row asks nothing until the next rebuild. The `book`
    hook sees only new rows, and the review hides pairs that a rebuild
    would book. This held before for rows on `UNCATEGORIZED` too.
+
+   Decided 2026-11-27: No fix. Run a rebuild after `extract -e`. A fix
+   could only ask sooner: `extract -e` adds rows and never rewrites the
+   old leg, so even a confirmed pair books at the next rebuild.
 4. **The user answers the open pairs in `confirm-transfers`.**
 
 ## Later, not a priority
