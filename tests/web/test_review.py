@@ -100,3 +100,24 @@ def test_a_year_shows_only_its_rows(files):
     cards = _client(files, year=2019).get("/api/review").json()["cards"]
 
     assert cards == []
+
+
+def test_a_new_category_is_opened_and_can_be_answered(files, tmp_path):
+    path = tmp_path / "main.beancount"
+    path.write_text(LEDGER + _row("rail-1", "Rail Co"))
+    entries, _, _ = loader.load_file(str(path))
+    client = TestClient(review.app(entries, *files, cutoff=0.95))
+    new = "Expenses:Mobility:Bike"
+
+    assert client.post("/api/categories", json={"account": new}).status_code == 204
+
+    assert f"2019-01-01 open {new}\n" in path.read_text()
+    assert new in client.get("/api/review").json()["categories"]
+    assert client.post("/api/answers", json={"answers": {"rail-1": new}}).status_code == 204
+
+
+def test_a_category_that_is_open_already_is_refused(files):
+    response = _client(files).post("/api/categories", json={"account": GROCERIES})
+
+    assert response.status_code == 422
+    assert "Already in the ledger" in response.text

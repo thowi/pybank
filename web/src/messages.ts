@@ -1,6 +1,8 @@
 // The page's text, in one place so a second language is one more file.
 export const messages = {
+  addFailed: "Cannot add the category",
   answered: (account: string) => `Answered: ${account}`,
+  create: (account: string) => `New category: ${account}`,
   doneTitle: "All cards seen",
   doneText: (rows: number) =>
     `${rows} rows answered in this session. A rebuild of the ledger books them.`,
@@ -20,7 +22,7 @@ export const messages = {
     `${answered} answered · ${skipped} skipped · ${left} left of ${total} rows`,
   rows: (n: number) => (n === 1 ? "1 row" : `${n} rows`),
   saveFailed: "Cannot save the answer",
-  searchPlaceholder: "Search all categories…",
+  searchPlaceholder: "Search or add a category… Tab completes a level",
   skipped: "Skipped",
   sure: "Sure",
   title: (year: number | null) => (year ? `Category review ${year}` : "Category review"),

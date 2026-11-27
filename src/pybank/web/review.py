@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from pybank.importer.beancount import categorize
+from pybank.importer.beancount import categorize, ledger
 
 # The page as `npm run build` in web/ at the repo root leaves it.
 _PAGE = pathlib.Path(__file__).parent / "static"
@@ -59,6 +59,10 @@ class Answers(BaseModel):
     answers: dict[str, str]
 
 
+class NewCategory(BaseModel):
+    account: str
+
+
 def _choices(choices: tuple[categorize.Choice, ...]) -> list[Choice]:
     return [Choice(account=c.account, probability=c.probability) for c in choices]
 
@@ -97,11 +101,15 @@ def app(
     """Returns the review app for the open rows in `entries`.
 
     Only rows dated in `year`, if given. Reads the answers at `answers_path`
-    on each request, so a row answered elsewhere drops out on reload.
+    on each request, so a row answered elsewhere drops out on reload. A new
+    category writes its `open` line into the ledger files of `entries`.
     """
-    categories = categorize.categories(entries)
-    known = set(categories)
+    # The categories opened here join the ledger for the rest of the run.
+    opened: data.Entries = []
     api = FastAPI(title="pybank review")
+
+    def categories() -> list[data.Account]:
+        return categorize.categories(entries + opened)
 
     def suggestions() -> list[categorize.Suggestion]:
         answers = categorize.load_answers(answers_path)
@@ -112,11 +120,18 @@ def app(
     def review() -> Review:
         sure, unsure = categorize.bands(suggestions(), cutoff)
         cards = [_card(g, True) for g in sure] + [_card([s], False) for s in unsure]
-        return Review(cards=cards, categories=categories, year=year)
+        return Review(cards=cards, categories=categories(), year=year)
+
+    @api.post("/api/categories", status_code=204)
+    def add_category(body: NewCategory) -> None:
+        try:
+            opened.append(ledger.open_account(entries + opened, body.account))
+        except ValueError as err:
+            raise HTTPException(422, str(err)) from err
 
     @api.post("/api/answers", status_code=204)
     def save(body: Answers) -> None:
-        unknown = set(body.answers.values()) - known
+        unknown = set(body.answers.values()) - set(categories())
         if unknown:
             raise HTTPException(422, f"Not a category: {', '.join(sorted(unknown))}")
         open_ids = {s.import_id for s in suggestions()}

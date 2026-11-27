@@ -24,3 +24,14 @@ export async function saveAnswers(answers: Record<string, string>): Promise<void
     }),
   );
 }
+
+/** Opens a new category in the ledger. */
+export async function addCategory(account: string): Promise<void> {
+  await checked(
+    await fetch("/api/categories", {
+      body: JSON.stringify({ account }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    }),
+  );
+}

@@ -5,12 +5,47 @@ import { Spotlight, type SpotlightActionData } from "@mantine/spotlight";
 import { useMutation } from "@tanstack/react-query";
 import { extendedMatch, Fzf } from "fzf";
 import { useState } from "react";
-import { type Card, type ReviewData, saveAnswers } from "./api";
+import { addCategory, type Card, type ReviewData, saveAnswers } from "./api";
 import { CurrentCard } from "./components/CurrentCard";
 import { ProgressHeader } from "./components/ProgressHeader";
 import { Upcoming } from "./components/Upcoming";
 import { messages } from "./messages";
 import { cardKey, type Outcome } from "./outcome";
+
+// A name beancount takes for a category. The server checks it again.
+const CATEGORY_NAME = /^(Expenses|Income)(:[\p{Lu}\p{Nd}][\p{L}\p{Nd}-]*)+$/u;
+const LIMIT = 30;
+const NEW_ID = "new-category";
+
+/** Completes `query` to the deepest account level that all its matches share. */
+function complete(query: string, accounts: string[]): string {
+  // Each typed level starts a level, in any case: "e:te" finds "Expenses:Telecom".
+  const typed = query.toLowerCase().split(":");
+  const split = accounts.map((account) => account.split(":"));
+  // Matches from the root first, else from the shallowest level: "tel" finds
+  // "Expenses:Telecom".
+  const matchesAt = (depth: number) =>
+    split.filter(
+      (levels) =>
+        levels.length >= depth + typed.length &&
+        typed.every((t, i) => levels[depth + i].toLowerCase().startsWith(t)),
+    );
+  const maxDepth = Math.max(0, ...split.map((levels) => levels.length));
+  let depth = 0;
+  while (depth < maxDepth && !matchesAt(depth).length) depth++;
+  const matches = matchesAt(depth);
+  if (!matches.length) return query;
+  const end = depth + typed.length;
+  const heads = matches.map((levels) => levels.slice(0, end).join(":"));
+  if (heads.every((head) => head === heads[0])) {
+    return matches.some((levels) => levels.length > end) ? `${heads[0]}:` : heads[0];
+  }
+  let prefix = heads[0];
+  for (const head of heads) while (!head.startsWith(prefix)) prefix = prefix.slice(0, -1);
+  // A prefix that ends before the last typed level would drop what was typed.
+  if (prefix.split(":").length < end) return query;
+  return prefix.length > query.length ? prefix : query;
+}
 
 /** A card of one row, with that row's own choices. */
 function rowCard(card: Card, i: number): Card {
@@ -29,6 +64,8 @@ function rowCount(cards: Card[], outcomes: Record<string, Outcome>, kind: "answe
 
 export function Review({ review }: { review: ReviewData }) {
   const [cards, setCards] = useState(review.cards);
+  const [categories, setCategories] = useState(review.categories);
+  const [query, setQuery] = useState("");
   const [pos, setPos] = useState(0);
   // The positions left, for going back.
   const [history, setHistory] = useState<number[]>([]);
@@ -37,6 +74,11 @@ export function Review({ review }: { review: ReviewData }) {
     mutationFn: saveAnswers,
     onError: (error) =>
       notifications.show({ color: "red", message: String(error), title: messages.saveFailed }),
+  });
+  const add = useMutation({
+    mutationFn: addCategory,
+    onError: (error) =>
+      notifications.show({ color: "red", message: String(error), title: messages.addFailed }),
   });
   const card: Card | undefined = cards[pos];
 
@@ -53,6 +95,15 @@ export function Review({ review }: { review: ReviewData }) {
     if (!card || save.isPending) return;
     const answers = Object.fromEntries(card.rows.map((row) => [row.import_id, account]));
     save.mutate(answers, { onSuccess: () => settle({ account }) });
+  };
+  const create = (account: string) => {
+    if (!card || add.isPending) return;
+    add.mutate(account, {
+      onSuccess: () => {
+        setCategories((c) => [...c, account].sort());
+        answer(account);
+      },
+    });
   };
   const pick = (i: number) => card?.choices[i] && answer(card.choices[i].account);
   const split = () => {
@@ -74,6 +125,16 @@ export function Review({ review }: { review: ReviewData }) {
     ["n", split],
     ["u", back],
   ]);
+
+  const actions: SpotlightActionData[] = categories.map((account) => ({
+    id: account,
+    label: account,
+    onClick: () => answer(account),
+  }));
+  const name = query.trim();
+  if (CATEGORY_NAME.test(name) && !categories.includes(name)) {
+    actions.push({ id: NEW_ID, label: messages.create(name), onClick: () => create(name) });
+  }
 
   const total = cards.reduce((sum, c) => sum + c.rows.length, 0);
   const answered = rowCount(cards, outcomes, "answered");
@@ -112,26 +173,38 @@ export function Review({ review }: { review: ReviewData }) {
         outcomes={outcomes}
       />
       <Spotlight
-        actions={review.categories.map((account) => ({
-          id: account,
-          label: account,
-          onClick: () => answer(account),
-        }))}
+        actions={actions}
         disabled={!card}
         // The actions hold no groups. Extended match: Each word matches alone.
-        filter={(query, actions) =>
-          new Fzf(actions as SpotlightActionData[], {
-            match: extendedMatch,
-            selector: (action) => action.label ?? "",
-          })
-            .find(query)
-            .map((result) => result.item)
-        }
+        // A new category comes last, so Enter on a partial name picks a match.
+        filter={(q, all) => {
+          const items = all as SpotlightActionData[];
+          const matches = new Fzf(
+            items.filter((action) => action.id !== NEW_ID),
+            { match: extendedMatch, selector: (action) => action.label ?? "" },
+          )
+            .find(q)
+            .map((result) => result.item);
+          return [...matches.slice(0, LIMIT - 1), ...items.filter((a) => a.id === NEW_ID)];
+        }}
         highlightQuery
-        limit={30}
+        limit={LIMIT}
         nothingFound={messages.nothingFound}
+        onQueryChange={setQuery}
+        query={query}
         scrollable
-        searchProps={{ placeholder: messages.searchPlaceholder }}
+        searchProps={{
+          onKeyDown: (event) => {
+            if (event.key !== "Tab" || event.shiftKey) return;
+            event.preventDefault();
+            // Through the input's own event, so Spotlight selects the top match again.
+            const input = event.currentTarget;
+            const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+            setValue?.call(input, complete(query, categories));
+            input.dispatchEvent(new Event("input", { bubbles: true }));
+          },
+          placeholder: messages.searchPlaceholder,
+        }}
         shortcut="/"
       />
     </Stack>
