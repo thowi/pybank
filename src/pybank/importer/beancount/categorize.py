@@ -10,6 +10,8 @@ answer. Rule output is no label, it would only teach the rules back.
 An answer is a person's approved category for one open row, keyed by its
 import-id. `suggest` asks a model for the likely categories of each open row
 without an answer, and `bands` splits the suggestions for review.
+`group_alike` groups the rows that differ in numbers and email addresses
+only.
 `group_choices` merges the choices of a group. `categories` lists the
 accounts an answer can name.
 `load_answers` reads the answers, and `save_answers` appends some.
@@ -130,7 +132,11 @@ class _Row(NamedTuple):
 
     @property
     def text(self) -> str:
-        return " ".join(filter(None, [self.txn.payee, self.txn.narration]))
+        return _text(self.txn)
+
+
+def _text(txn: data.Transaction) -> str:
+    return " ".join(filter(None, [txn.payee, txn.narration]))
 
 
 class _Labels:
@@ -457,6 +463,24 @@ def bands(
         else:
             unsure.append(suggestion)
     return sorted(groups.values(), key=len, reverse=True), unsure
+
+
+def group_alike(suggestions: list[Suggestion]) -> list[list[Suggestion]]:
+    """Groups the suggestions whose rows differ in numbers and email addresses.
+
+    Alike rows share the payee, the own account, the sign and the text after
+    masking numbers and email addresses. The groups keep the order of their
+    first rows.
+    """
+    groups: dict[tuple, list[Suggestion]] = collections.defaultdict(list)
+    for suggestion in suggestions:
+        txn = suggestion.txn
+        own = txn.postings[0]
+        # The masked text tells a payment service's merchants apart, which
+        # the payee's first words may not.
+        key = (suggestion.payee, own.account, own.units.number > 0, _search_text(_text(txn)))
+        groups[key].append(suggestion)
+    return list(groups.values())
 
 
 def group_choices(group: list[Suggestion]) -> tuple[Choice, ...]:

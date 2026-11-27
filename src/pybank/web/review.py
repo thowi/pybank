@@ -2,8 +2,9 @@
 
 `app` serves one ledger's review: The page in `static/`, the open rows
 with their cached suggestions as cards, and a POST that saves answers. It
-never asks the model, so a review costs nothing. A card is a group of sure
-suggestions that one answer books, or one unsure row.
+never asks the model, so a review costs nothing. A card is a group of rows
+that one answer books: Sure suggestions of one payee and top account, or
+unsure rows that differ in numbers and email addresses only.
 """
 
 import datetime
@@ -119,7 +120,8 @@ def app(
     @api.get("/api/review")
     def review() -> Review:
         sure, unsure = categorize.bands(suggestions(), cutoff)
-        cards = [_card(g, True) for g in sure] + [_card([s], False) for s in unsure]
+        alike = categorize.group_alike(unsure)
+        cards = [_card(g, True) for g in sure] + [_card(g, False) for g in alike]
         return Review(cards=cards, categories=categories(), year=year)
 
     @api.post("/api/categories", status_code=204)

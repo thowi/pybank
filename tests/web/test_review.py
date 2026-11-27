@@ -65,6 +65,24 @@ def test_sure_rows_form_one_card_and_unsure_rows_their_own(files):
     assert body["categories"] == [GROCERIES, TRANSIT]
 
 
+def test_unsure_rows_that_differ_in_numbers_only_share_a_card(tmp_path):
+    cache = tmp_path / "suggestions.jsonl"
+    lines = [
+        {"choices": [[TRANSIT, 0.7], [GROCERIES, 0.3]], "import-id": "rail-1"},
+        {"choices": [[GROCERIES, 0.6], [TRANSIT, 0.4]], "import-id": "rail-2"},
+    ]
+    cache.write_text("".join(json.dumps(line) + "\n" for line in lines))
+    rows = [_row("rail-1", "Rail Co ticket 40001"), _row("rail-2", "Rail Co ticket 40002")]
+    entries, _, _ = loader.load_string(LEDGER + "\n".join(rows))
+    client = TestClient(review.app(entries, str(tmp_path / "a.toml"), str(cache), cutoff=0.95))
+
+    cards = client.get("/api/review").json()["cards"]
+
+    assert [[r["import_id"] for r in c["rows"]] for c in cards] == [["rail-1", "rail-2"]]
+    assert not cards[0]["sure"]
+    assert [r["choices"][0]["account"] for r in cards[0]["rows"]] == [TRANSIT, GROCERIES]
+
+
 def test_a_saved_answer_is_booked_and_drops_the_row(files):
     client = _client(files)
 

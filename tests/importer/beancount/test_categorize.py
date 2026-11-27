@@ -28,12 +28,20 @@ OPENS = f"""\
 """
 
 
-def _row(import_id, text, contra=UNCATEGORIZED, source=None, day="2020-02-03", number="-20.00"):
+def _row(
+    import_id,
+    text,
+    contra=UNCATEGORIZED,
+    source=None,
+    day="2020-02-03",
+    number="-20.00",
+    account=CHECKING,
+):
     meta = f'\n  category-source: "{source}"' if source else ""
     flag = "*" if contra != UNCATEGORIZED else "!"
     return (
         f'{day} {flag} "{text}"\n  import-id: "{import_id}"{meta}\n'
-        f"  {CHECKING}  {number} CHF\n  {contra}\n"
+        f"  {account}  {number} CHF\n  {contra}\n"
     )
 
 
@@ -260,6 +268,34 @@ def test_sure_suggestions_group_by_payee_and_account():
 
     assert groups == [shop, [rail]]
     assert rest == [unsure]
+
+
+def test_rows_that_differ_in_numbers_only_group_alike():
+    savings = "Assets:Bank:Savings"
+    entries = _ledger(
+        _row("bill-1", "Phone Co invoice 10001 of 2020-02-01"),
+        _row("pay-coffee", "Payhub shop.example coffee"),
+        _row("bill-2", "Phone Co invoice 10002 of 2020-03-01", number="-25.00"),
+        _row("refund", "Phone Co invoice 10003 of 2020-04-01", number="5.00"),
+        _row("pay-books", "Payhub shop.example books"),
+        f"2020-01-01 open {savings}\n",
+        _row("saved", "Phone Co invoice 10004 of 2020-05-01", account=savings),
+    )
+    choices = (categorize.Choice(GROCERIES, 0.5),)
+    suggestions = [
+        categorize.Suggestion(choices, r.import_id, " ".join(r.text.lower().split()[:2]), r.txn)
+        for r in categorize._rows(entries)
+    ]
+
+    groups = categorize.group_alike(suggestions)
+
+    assert [[s.import_id for s in g] for g in groups] == [
+        ["bill-1", "bill-2"],
+        ["pay-coffee"],
+        ["refund"],
+        ["pay-books"],
+        ["saved"],
+    ]
 
 
 def test_group_choices_rank_accounts_by_mean_probability():
