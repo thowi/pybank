@@ -144,6 +144,30 @@ def test_a_rerun_asks_only_about_new_rows(tmp_path):
     assert len(prompts) == 1
 
 
+def test_alike_rows_share_one_call(tmp_path):
+    entries = _ledger(
+        *LABELED,
+        _row("open-1", "Rail Co ticket 1001"),
+        _row("open-2", "Rail Co ticket 1002", day="2020-03-03"),
+        _row("open-3", "Rail Co ticket 1003", number="5.00"),
+    )
+    ask, prompts = _fake({"Rail": [(TRANSIT, 1.0)]})
+    cache = str(tmp_path / "suggestions.jsonl")
+    calls = []
+
+    suggestions = categorize.suggest(
+        entries, {}, ask, cache, categorize.Settings(), lambda *done: calls.append(done)
+    )
+
+    assert sorted(s.import_id for s in suggestions) == ["open-1", "open-2", "open-3"]
+    # The refund is no alike row. The newest row stands for the others.
+    assert len(prompts) == 2
+    assert any("Transaction:\nRail Co ticket | account | out 20.00 CHF | Mar" in p for p in prompts)
+    assert calls[-1] == (3, 3)
+    # Each row of a group is in the cache file.
+    assert _suggest(tmp_path, entries, {})[1] == []
+
+
 def test_without_ask_only_cached_rows_get_a_suggestion(tmp_path):
     picks = {"Corner": [(GROCERIES, 1.0)]}
     _suggest(tmp_path, _ledger(*LABELED, _row("open-1", "Corner Shop")), picks)

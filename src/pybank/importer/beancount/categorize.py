@@ -8,8 +8,10 @@ category: A label from an export (`category-source` "qif"), or an approved
 answer. Rule output is no label, it would only teach the rules back.
 
 An answer is a person's approved category for one open row, keyed by its
-import-id. `suggest` asks a model for the likely categories of each open row
-without an answer, and `bands` splits the suggestions for review.
+import-id. Alike rows share the payee, the own account, the sign and the
+text after masking numbers and email addresses. `suggest` asks a model for
+the likely categories of each open row without an answer, once per group
+of alike rows, and `bands` splits the suggestions for review.
 `group_alike` groups the rows that differ in numbers and email addresses
 only.
 `group_choices` merges the choices of a group. `categories` lists the
@@ -195,6 +197,13 @@ def _payee(text: str, noise: frozenset[str]) -> str:
     return " ".join(([w for w in words if w not in noise] or words)[:_PAYEE_WORDS])
 
 
+def _alike_key(payee: str, txn: data.Transaction) -> tuple:
+    own = txn.postings[0]
+    # The masked text tells a payment service's merchants apart, which the
+    # payee's first words may not.
+    return (payee, own.account, own.units.number > 0, _search_text(_text(txn)))
+
+
 def _grams(text: str) -> list[str]:
     """Returns the letter groups of 2 to 5 inside each word, space-padded."""
     # Counted like scikit-learn's `char_wb` analyzer, which the tuning used.
@@ -372,10 +381,11 @@ def suggest(
     `settings.examples` labeled rows with the most similar text. The categories
     are the expense and income accounts that the ledger keeps open.
 
-    Asks `ask` only about rows that the cache file at `cache_path` lacks, and
-    appends each answer there, so a rerun pays for new rows only. With `ask`
-    None, a row that the cache lacks gets no suggestion. Calls
-    `progress` with the rows asked so far and the rows to ask, after each.
+    Asks `ask` only about rows that the cache file at `cache_path` lacks, once
+    per group of alike rows, and appends each answer there for each row, so a
+    rerun pays for new rows only. With `ask` None, a row that the cache lacks
+    gets no suggestion. Calls `progress` with the rows asked so far and the
+    rows to ask, after each call.
     A row whose answer names no category gets no suggestion. An error in a
     call stops the run, and a rerun asks the rest.
     """
@@ -390,10 +400,13 @@ def suggest(
         elif label in labels.label:
             labeled.append(row._replace(label=label))
     cache = _load_cache(cache_path, list(labels.label))
-    todo = [row for row in pending if row.import_id not in cache]
-    if todo and ask:
-        _ask_all(todo, labeled, labels, ask, settings, cache_path, cache, progress)
     noise = _noise_words(labeled)
+    todo: dict[tuple, list[_Row]] = collections.defaultdict(list)
+    for row in pending:
+        if row.import_id not in cache:
+            todo[_alike_key(_payee(row.text, noise), row.txn)].append(row)
+    if todo and ask:
+        _ask_all(list(todo.values()), labeled, labels, ask, settings, cache_path, cache, progress)
     return [
         Suggestion(cache[row.import_id], row.import_id, _payee(row.text, noise), row.txn)
         for row in pending
@@ -402,7 +415,7 @@ def suggest(
 
 
 def _ask_all(
-    todo: list[_Row],
+    todo: list[list[_Row]],
     labeled: list[_Row],
     labels: _Labels,
     ask: Ask,
@@ -411,10 +424,13 @@ def _ask_all(
     cache: dict[str, tuple[Choice, ...]],
     progress: Callable[[int, int], None] | None,
 ) -> None:
-    """Asks about each row in `todo`, and adds the answers to the cache."""
+    """Asks once per group of alike rows in `todo`, and caches each row."""
     index = _Index([_search_text(row.text) for row in labeled])
+    total = sum(map(len, todo))
 
-    def ask_one(row: _Row) -> dict:
+    def ask_one(group: list[_Row]) -> dict:
+        # The newest row stands for its group.
+        row = group[-1]
         near = index.nearest(_search_text(row.text), settings.examples)
         examples = [labeled[i] for i in reversed(near)]
         return ask(_prompt(settings, labels, examples, row), _ANSWER_SCHEMA)
@@ -423,24 +439,27 @@ def _ask_all(
         open(cache_path, "a", encoding="utf-8") as f,
         concurrent.futures.ThreadPoolExecutor(_WORKERS) as pool,
     ):
-        futures = {pool.submit(ask_one, row): row for row in todo}
+        futures = {pool.submit(ask_one, group): group for group in todo}
+        done = 0
         try:
-            for done, future in enumerate(concurrent.futures.as_completed(futures), start=1):
-                row = futures[future]
+            for future in concurrent.futures.as_completed(futures):
+                group = futures[future]
                 try:
                     choices = _choices(future.result(), labels)
-                # A row's answer can be cut off or no JSON. Any other error
-                # stops the run.
+                # An answer can be cut off or no JSON. Any other error stops
+                # the run.
                 except (KeyError, TypeError, ValueError):
-                    logger.warning("Malformed answer for %s.", row.import_id)
+                    logger.warning("Malformed answer for %s.", group[-1].import_id)
                     choices = ()
                 if choices:
-                    cache[row.import_id] = choices
-                    line = {"choices": choices, "import-id": row.import_id}
-                    f.write(json.dumps(line) + "\n")
+                    for row in group:
+                        cache[row.import_id] = choices
+                        line = {"choices": choices, "import-id": row.import_id}
+                        f.write(json.dumps(line) + "\n")
                     f.flush()
+                done += len(group)
                 if progress:
-                    progress(done, len(todo))
+                    progress(done, total)
         finally:
             # A failed call fails the rest alike, a wrong key for example.
             pool.shutdown(cancel_futures=True)
@@ -467,20 +486,10 @@ def bands(
 
 
 def group_alike(suggestions: list[Suggestion]) -> list[list[Suggestion]]:
-    """Groups the suggestions whose rows differ in numbers and email addresses.
-
-    Alike rows share the payee, the own account, the sign and the text after
-    masking numbers and email addresses. The groups keep the order of their
-    first rows.
-    """
+    """Groups the suggestions of alike rows, in order of their first rows."""
     groups: dict[tuple, list[Suggestion]] = collections.defaultdict(list)
     for suggestion in suggestions:
-        txn = suggestion.txn
-        own = txn.postings[0]
-        # The masked text tells a payment service's merchants apart, which
-        # the payee's first words may not.
-        key = (suggestion.payee, own.account, own.units.number > 0, _search_text(_text(txn)))
-        groups[key].append(suggestion)
+        groups[_alike_key(suggestion.payee, suggestion.txn)].append(suggestion)
     return list(groups.values())
 
 
