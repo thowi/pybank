@@ -37,9 +37,6 @@ _LOG_FORMAT = "\n%(message)s"
 _MAX_COLUMN_WIDTH = 60
 _MIN_COLUMN_WIDTH = 24
 
-# The rows of a group of suggestions shown before it is approved in bulk.
-_GROUP_SHOWN = 5
-
 # beangulp skips any input above 8 MiB before an importer sees it. A SEE
 # Finance database passes that after a few years of use.
 _MAX_FILE_SIZE = 1024 * 1024 * 1024
@@ -225,21 +222,17 @@ def _pick_partners(session: transfer_review.Session) -> None:
 @click.option("--year", type=int, help="Ask and review only the rows of this year.")
 @click.pass_context
 def _categorize(ctx: click.Context, ledger: str, year: int | None) -> None:
-    """Suggest a category for each open row in LEDGER, and ask which to book.
+    """Suggest a category for each open row in LEDGER, for review in review-ui.
 
-    The model of `[categorize]` in the config suggests. First come the sure
-    suggestions, grouped by payee. Each group is approved as a whole. Then the
-    rest come one by one, with a pick from the top 3. The answers go to the
-    answers file next to the config, and a rebuild of the ledger books them.
-    The model's suggestions are cached next to the config, so a rerun asks
-    only about new rows. A rebuild books each row without an answer to its
-    top suggestion, flagged `!` for review.
+    The model of `[categorize]` in the config suggests. The suggestions are
+    cached next to the config, so a rerun asks only about new rows. A rebuild
+    books each row without an answer to its top suggestion, flagged `!` for
+    review.
     """
     config_path = ctx.find_root().params["config"]
-    answers_path = config.category_answers_path(config_path)
     try:
         settings = config.categorize_settings(config.load(config_path))
-        answers = categorize.load_answers(answers_path)
+        answers = categorize.load_answers(config.category_answers_path(config_path))
     except routing.ConfigError as err:
         raise click.ClickException(str(err)) from err
     if not settings.model:
@@ -262,67 +255,7 @@ def _categorize(ctx: click.Context, ledger: str, year: int | None) -> None:
         raise click.ClickException(f"{err}. Install the extra: uv sync --extra categorize") from err
     except routing.ConfigError as err:
         raise click.ClickException(str(err)) from err
-    sure, unsure = categorize.bands(suggestions, settings.cutoff)
-    approved, quit = _approve_groups(answers_path, sure, unsure)
-    if not quit:
-        approved += _pick_categories(answers_path, unsure)
-    click.echo(f"Approved {approved} of {len(suggestions)} rows. A rebuild books them.")
-
-
-def _approve_groups(
-    path: str, groups: list[list[categorize.Suggestion]], unsure: list[categorize.Suggestion]
-) -> tuple[int, bool]:
-    """Asks to approve each group, adds the declined ones to `unsure`.
-
-    Returns how many rows were approved, and whether the person quit.
-    """
-    approved = 0
-    for i, group in enumerate(groups, start=1):
-        account = group[0].choices[0].account
-        click.echo(f"\nGroup {i} of {len(groups)}: {len(group)} rows of {group[0].payee!r}")
-        click.echo(f"Suggested: {account}")
-        for suggestion in group[:_GROUP_SHOWN]:
-            txn = suggestion.txn
-            text = " | ".join(filter(None, (txn.payee, txn.narration)))
-            click.echo(f"  {txn.date}  {txn.postings[0].units}  {text}")
-        if len(group) > _GROUP_SHOWN:
-            click.echo(f"  and {len(group) - _GROUP_SHOWN} more")
-        choice = click.prompt(
-            "Book all to it? [y]es, [n]o (ask one by one), [s]kip, [q]uit",
-            type=click.Choice(["y", "n", "s", "q"], case_sensitive=False),
-            show_choices=False,
-        )
-        if choice == "q":
-            return approved, True
-        if choice == "y":
-            categorize.save_answers(path, {s.import_id: account for s in group})
-            approved += len(group)
-        elif choice == "n":
-            unsure.extend(group)
-    return approved, False
-
-
-def _pick_categories(path: str, suggestions: list[categorize.Suggestion]) -> int:
-    """Asks for the category of each row, from its top choices."""
-    picked = 0
-    for i, suggestion in enumerate(suggestions, start=1):
-        click.echo()
-        _echo_columns([f"Row {i} of {len(suggestions)}"], [_txn_fields(suggestion.txn)])
-        for n, choice in enumerate(suggestion.choices, start=1):
-            click.echo(f"  {n}) {choice.account}  {choice.probability:.0%}")
-        numbers = [str(n) for n in range(1, len(suggestion.choices) + 1)]
-        pick = click.prompt(
-            f"[1-{len(numbers)}], [s]kip, [q]uit",
-            type=click.Choice([*numbers, "s", "q"], case_sensitive=False),
-            show_choices=False,
-        )
-        if pick == "q":
-            break
-        if pick != "s":
-            account = suggestion.choices[int(pick) - 1].account
-            categorize.save_answers(path, {suggestion.import_id: account})
-            picked += 1
-    return picked
+    click.echo(f"{len(suggestions)} open rows have a suggestion. Review them with review-ui.")
 
 
 @click.command("review-ui")
@@ -334,8 +267,8 @@ def _review_ui(ctx: click.Context, ledger: str, port: int, year: int | None) -> 
     """Review the cached category suggestions for LEDGER on a local web page.
 
     Shows only rows that `categorize` already asked the model about, and asks
-    it nothing. Answers go to the same file as in `categorize`, and a rebuild
-    books them. Stops with Ctrl-C.
+    it nothing. Answers go to the answers file next to the config, and a
+    rebuild books them. Stops with Ctrl-C.
     """
     try:
         import uvicorn

@@ -322,39 +322,26 @@ def _fake_ask(model, effort):
     return ask
 
 
-def _categorize(tmp_path, monkeypatch, keys, config=ONE_SECTION + '[categorize]\nmodel = "m"\n'):
+def _categorize(tmp_path, monkeypatch, config=ONE_SECTION + '[categorize]\nmodel = "m"\n'):
     ledger = tmp_path / "main.beancount"
     ledger.write_text(CATEGORIZE_LEDGER, encoding="utf-8")
     monkeypatch.setattr(categorize, "openai_ask", _fake_ask)
-    monkeypatch.setattr("sys.stdin", io.StringIO(keys))
-    monkeypatch.setenv("COLUMNS", "100")
     return ingest.main(["--config", _write(tmp_path, config), "categorize", str(ledger)])
 
 
-def test_categorize_approves_a_sure_group_then_asks_one_by_one(tmp_path, monkeypatch, capsys):
-    assert _categorize(tmp_path, monkeypatch, "y\n2\n") == 0
+def test_categorize_caches_a_suggestion_per_open_row(tmp_path, monkeypatch, capsys):
+    assert _categorize(tmp_path, monkeypatch) == 0
 
-    answers = categorize.load_answers(str(tmp_path / "categories.toml"))
-    assert answers == {
+    cached = categorize.load_suggested(str(tmp_path / "category-suggestions.jsonl"))
+    assert cached == {
         "open-1": "Expenses:Living:Groceries",
         "open-2": "Expenses:Living:Groceries",
-        "open-3": "Expenses:Living:Groceries",
+        "open-3": "Expenses:Mobility:Transit",
     }
-    out = capsys.readouterr().out
-    assert "Group 1 of 1: 2 rows of 'corner shop'" in out
-    assert "  1) Expenses:Mobility:Transit  67%" in out
-    assert "Approved 3 of 3 rows." in out
-
-
-def test_categorize_asks_one_by_one_about_a_declined_group(tmp_path, monkeypatch, capsys):
-    assert _categorize(tmp_path, monkeypatch, "n\ns\n1\nq\n") == 0
-
-    answers = categorize.load_answers(str(tmp_path / "categories.toml"))
-    assert answers == {"open-1": "Expenses:Living:Groceries"}
-    assert "Approved 1 of 3 rows." in capsys.readouterr().out
+    assert "3 open rows have a suggestion." in capsys.readouterr().out
 
 
 def test_categorize_needs_a_model(tmp_path, monkeypatch, capsys):
-    assert _categorize(tmp_path, monkeypatch, "", config=ONE_SECTION) == 1
+    assert _categorize(tmp_path, monkeypatch, config=ONE_SECTION) == 1
 
     assert "[categorize] needs a model" in capsys.readouterr().err
