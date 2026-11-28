@@ -9,12 +9,21 @@ import { addCategory, type Card, type ReviewData, saveAnswers, saveNote } from "
 import { CurrentCard } from "./components/CurrentCard";
 import { NoteDialog } from "./components/NoteDialog";
 import { ProgressHeader } from "./components/ProgressHeader";
+import { SureList } from "./components/SureList";
 import { Upcoming } from "./components/Upcoming";
 import { messages } from "./messages";
 import { cardKey, type Outcome } from "./outcome";
 
 // A name beancount takes for a category. The server checks it again.
 const CATEGORY_NAME = /^(Expenses|Income)(:[\p{Lu}\p{Nd}][\p{L}\p{Nd}-]*)+$/u;
+const CARD_KEYS: [string, string][] = [
+  ["↵ 1 2 3", messages.keys.pick],
+  ["s", messages.keys.skip],
+  ["n", messages.keys.note],
+  ["o", messages.keys.split],
+  ["/", messages.keys.search],
+  ["u", messages.keys.undo],
+];
 const LIMIT = 30;
 const NEW_ID = "new-category";
 
@@ -64,7 +73,11 @@ function rowCount(cards: Card[], outcomes: Record<string, Outcome>, kind: "answe
 }
 
 export function Review({ review }: { review: ReviewData }) {
-  const [cards, setCards] = useState(review.cards);
+  // The sure cards show as one list first, the other cards follow one by one.
+  const [sure, setSure] = useState(() => review.cards.filter((c) => c.sure));
+  const [cards, setCards] = useState(() => review.cards.filter((c) => !c.sure));
+  // The rows accepted from the sure list.
+  const [accepted, setAccepted] = useState(0);
   const [categories, setCategories] = useState(review.categories);
   const [query, setQuery] = useState("");
   const [pos, setPos] = useState(0);
@@ -132,6 +145,21 @@ export function Review({ review }: { review: ReviewData }) {
     const singles = card.rows.map((_, i) => rowCard(card, i));
     setCards((c) => [...c.slice(0, pos), ...singles, ...c.slice(pos + 1)]);
   };
+  const accept = (ticked: Set<string>) => {
+    if (save.isPending) return;
+    const rows = sure.flatMap((c) => c.rows).filter((row) => ticked.has(row.import_id));
+    const singles = sure.flatMap((c) =>
+      c.rows.flatMap((row, i) => (ticked.has(row.import_id) ? [] : [rowCard(c, i)])),
+    );
+    const next = () => {
+      setAccepted(rows.length);
+      setCards((c) => [...singles, ...c]);
+      setSure([]);
+    };
+    if (!rows.length) return next();
+    const answers = Object.fromEntries(rows.map((row) => [row.import_id, row.choices[0].account]));
+    save.mutate(answers, { onSuccess: next });
+  };
   const back = () => {
     if (!history.length) return;
     setPos(history[history.length - 1]);
@@ -139,7 +167,7 @@ export function Review({ review }: { review: ReviewData }) {
   };
 
   // Off while the note dialog is open, so its keys never reach the card.
-  useHotkeys(noting ? [] : [
+  useHotkeys(noting || sure.length ? [] : [
     ["1", () => pick(0)],
     ["Enter", () => pick(0)],
     ["2", () => pick(1)],
@@ -160,17 +188,21 @@ export function Review({ review }: { review: ReviewData }) {
     actions.push({ id: NEW_ID, label: messages.create(name), onClick: () => create(name) });
   }
 
-  const total = cards.reduce((sum, c) => sum + c.rows.length, 0);
-  const answered = rowCount(cards, outcomes, "answered");
+  const total = [...sure, ...cards].reduce((sum, c) => sum + c.rows.length, accepted);
+  const answered = rowCount(cards, outcomes, "answered") + accepted;
+  const reviewed = cards.length > 0 || accepted > 0;
   return (
     <Stack gap="xl">
       <ProgressHeader
         answered={answered}
+        keys={sure.length ? [] : CARD_KEYS}
         skipped={rowCount(cards, outcomes, "skipped")}
         total={total}
         year={review.year}
       />
-      {card ? (
+      {sure.length ? (
+        <SureList busy={save.isPending} cards={sure} onAccept={accept} />
+      ) : card ? (
         <CurrentCard
           busy={save.isPending}
           card={card}
@@ -179,9 +211,9 @@ export function Review({ review }: { review: ReviewData }) {
         />
       ) : (
         <Paper withBorder p="xl" radius="lg">
-          <Title order={2}>{cards.length ? messages.doneTitle : messages.emptyTitle}</Title>
+          <Title order={2}>{reviewed ? messages.doneTitle : messages.emptyTitle}</Title>
           <Text c="dimmed" mt="xs">
-            {cards.length ? messages.doneText(answered) : messages.emptyText}
+            {reviewed ? messages.doneText(answered) : messages.emptyText}
           </Text>
           {history.length > 0 && (
             <Button variant="light" mt="md" onClick={back}>
@@ -196,15 +228,17 @@ export function Review({ review }: { review: ReviewData }) {
         onSave={skipWithNote}
         opened={noting}
       />
-      <Upcoming
-        key={pos}
-        cards={cards.map((c, index) => ({ card: c, index })).slice(pos + 1)}
-        onOpen={goTo}
-        outcomes={outcomes}
-      />
+      {!sure.length && (
+        <Upcoming
+          key={pos}
+          cards={cards.map((c, index) => ({ card: c, index })).slice(pos + 1)}
+          onOpen={goTo}
+          outcomes={outcomes}
+        />
+      )}
       <Spotlight
         actions={actions}
-        disabled={!card}
+        disabled={!card || sure.length > 0}
         // The actions hold no groups. Extended match: Each word matches alone.
         // A new category comes last, so Enter on a partial name picks a match.
         filter={(q, all) => {

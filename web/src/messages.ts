@@ -1,5 +1,6 @@
 // The page's text, in one place so a second language is one more file.
 export const messages = {
+  accept: (n: number) => (n ? `Accept ${messages.rows(n)}` : "Review them one by one"),
   addFailed: "Cannot add the category",
   answered: (account: string) => `Answered: ${account}`,
   choicesDiffer: "Choices differ",
@@ -10,11 +11,14 @@ export const messages = {
   emptyTitle: "Nothing to review",
   emptyText: "No open row has a cached suggestion. Run categorize first.",
   keys: {
+    accept: "accept",
+    move: "move",
     note: "skip with note",
     pick: "pick",
     search: "search",
     skip: "skip",
     split: "one by one",
+    tick: "tick",
     undo: "back",
   },
   loadFailed: "Cannot load the review",
@@ -31,6 +35,9 @@ export const messages = {
   searchPlaceholder: "Search or add a category… Tab completes a level",
   skipped: "Skipped",
   sure: "Sure",
+  sureText: (n: number) =>
+    `The model is sure about ${n === 1 ? "this row" : `these ${n} rows`}. Scan the list, untick any wrong row, and accept the rest in one step. Unticked rows come back as cards.`,
+  sureTitle: "Sure suggestions",
   title: (year: number | null) => (year ? `Category review ${year}` : "Category review"),
   upNext: "Up next",
 };
