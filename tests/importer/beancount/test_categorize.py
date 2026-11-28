@@ -1,5 +1,6 @@
 import datetime
 import re
+import tomllib
 
 import pytest
 from beancount import loader
@@ -325,6 +326,18 @@ def test_answers_round_trip_and_a_later_answer_wins(tmp_path):
     categorize.save_answers(path, {"a": TRANSIT})
 
     assert categorize.load_answers(path) == {"a": TRANSIT, "b": TRANSIT}
+
+
+def test_a_note_keeps_the_answers_and_books_nothing(tmp_path):
+    path = str(tmp_path / "categories.toml")
+    categorize.save_answers(path, {"a": GROCERIES})
+
+    categorize.save_note(path, ["b", "c"], 'Split "this" 😀\x7f\nwith me')
+
+    assert categorize.load_answers(path) == {"a": GROCERIES}
+    with open(path, "rb") as f:
+        notes = tomllib.load(f)["note"]
+    assert notes == [{"import-ids": ["b", "c"], "note": 'Split "this" 😀\x7f\nwith me'}]
 
 
 def test_no_answers_file_means_no_answers(tmp_path):

@@ -5,8 +5,9 @@ import { Spotlight, type SpotlightActionData } from "@mantine/spotlight";
 import { useMutation } from "@tanstack/react-query";
 import { extendedMatch, Fzf } from "fzf";
 import { useState } from "react";
-import { addCategory, type Card, type ReviewData, saveAnswers } from "./api";
+import { addCategory, type Card, type ReviewData, saveAnswers, saveNote } from "./api";
 import { CurrentCard } from "./components/CurrentCard";
+import { NoteDialog } from "./components/NoteDialog";
 import { ProgressHeader } from "./components/ProgressHeader";
 import { Upcoming } from "./components/Upcoming";
 import { messages } from "./messages";
@@ -70,6 +71,7 @@ export function Review({ review }: { review: ReviewData }) {
   // The positions left, for going back.
   const [history, setHistory] = useState<number[]>([]);
   const [outcomes, setOutcomes] = useState<Record<string, Outcome>>({});
+  const [noting, setNoting] = useState(false);
   const save = useMutation({
     mutationFn: saveAnswers,
     onError: (error) =>
@@ -79,6 +81,12 @@ export function Review({ review }: { review: ReviewData }) {
     mutationFn: addCategory,
     onError: (error) =>
       notifications.show({ color: "red", message: String(error), title: messages.addFailed }),
+  });
+  const note = useMutation({
+    mutationFn: ({ importIds, text }: { importIds: string[]; text: string }) =>
+      saveNote(importIds, text),
+    onError: (error) =>
+      notifications.show({ color: "red", message: String(error), title: messages.saveNoteFailed }),
   });
   const card: Card | undefined = cards[pos];
 
@@ -105,6 +113,19 @@ export function Review({ review }: { review: ReviewData }) {
       },
     });
   };
+  const skipWithNote = (text: string) => {
+    if (!card) return;
+    const importIds = card.rows.map((row) => row.import_id);
+    note.mutate(
+      { importIds, text },
+      {
+        onSuccess: () => {
+          setNoting(false);
+          settle("skipped");
+        },
+      },
+    );
+  };
   const pick = (i: number) => card?.choices[i] && answer(card.choices[i].account);
   const split = () => {
     if (!card || card.rows.length < 2) return;
@@ -117,12 +138,15 @@ export function Review({ review }: { review: ReviewData }) {
     setHistory((h) => h.slice(0, -1));
   };
 
-  useHotkeys([
+  // Off while the note dialog is open, so its keys never reach the card.
+  useHotkeys(noting ? [] : [
     ["1", () => pick(0)],
+    ["Enter", () => pick(0)],
     ["2", () => pick(1)],
     ["3", () => pick(2)],
-    ["s", () => !save.isPending && settle("skipped")],
-    ["n", split],
+    ["s", () => !save.isPending && !note.isPending && settle("skipped")],
+    ["n", () => card && setNoting(true)],
+    ["o", split],
     ["u", back],
   ]);
 
@@ -166,6 +190,12 @@ export function Review({ review }: { review: ReviewData }) {
           )}
         </Paper>
       )}
+      <NoteDialog
+        busy={note.isPending}
+        onClose={() => setNoting(false)}
+        onSave={skipWithNote}
+        opened={noting}
+      />
       <Upcoming
         key={pos}
         cards={cards.map((c, index) => ({ card: c, index })).slice(pos + 1)}

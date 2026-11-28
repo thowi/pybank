@@ -1,10 +1,10 @@
 """A local web page to review the cached category suggestions.
 
 `app` serves one ledger's review: The page in `static/`, the open rows
-with their cached suggestions as cards, and a POST that saves answers. It
-never asks the model, so a review costs nothing. A card is a group of rows
-that one answer books: Sure suggestions of one payee and top account, or
-unsure rows that differ in numbers and email addresses only.
+with their cached suggestions as cards, and POSTs that save answers and
+notes. It never asks the model, so a review costs nothing. A card is a
+group of rows that one answer books: Sure suggestions of one payee and top
+account, or unsure rows that differ in numbers and email addresses only.
 """
 
 import datetime
@@ -62,6 +62,11 @@ class Answers(BaseModel):
 
 class NewCategory(BaseModel):
     account: str
+
+
+class Note(BaseModel):
+    import_ids: list[str]
+    note: str
 
 
 def _choices(choices: tuple[categorize.Choice, ...]) -> list[Choice]:
@@ -143,6 +148,15 @@ def app(
         if missing:
             raise HTTPException(422, f"Not an open row: {', '.join(sorted(missing))}")
         categorize.save_answers(answers_path, body.answers)
+
+    @api.post("/api/notes", status_code=204)
+    def note(body: Note) -> None:
+        if not body.note.strip():
+            raise HTTPException(422, "The note is empty")
+        missing = set(body.import_ids) - {s.import_id for s in suggestions()}
+        if missing:
+            raise HTTPException(422, f"Not an open row: {', '.join(sorted(missing))}")
+        categorize.save_note(answers_path, body.import_ids, body.note.strip())
 
     if _PAGE.is_dir():
         api.mount("/", StaticFiles(directory=_PAGE, html=True), name="page")

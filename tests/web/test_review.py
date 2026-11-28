@@ -1,4 +1,6 @@
 import json
+import os
+import tomllib
 
 import pytest
 from beancount import loader
@@ -112,6 +114,26 @@ def test_an_unknown_category_or_row_is_refused(files, answers):
 
     assert response.status_code == 422
     assert categorize.load_answers(files[0]) == {}
+
+
+def test_a_note_is_saved_and_the_row_stays_open(files):
+    client = _client(files)
+
+    response = client.post("/api/notes", json={"import_ids": ["rail-1"], "note": " Ask "})
+
+    assert response.status_code == 204
+    with open(files[0], "rb") as f:
+        assert tomllib.load(f) == {"note": [{"import-ids": ["rail-1"], "note": "Ask"}]}
+    cards = client.get("/api/review").json()["cards"]
+    assert "rail-1" in [r["import_id"] for c in cards for r in c["rows"]]
+
+
+@pytest.mark.parametrize(
+    "body", [{"import_ids": ["rail-1"], "note": " "}, {"import_ids": ["old"], "note": "Ask"}]
+)
+def test_an_empty_note_or_a_closed_row_is_refused(files, body):
+    assert _client(files).post("/api/notes", json=body).status_code == 422
+    assert not os.path.exists(files[0])
 
 
 def test_a_year_shows_only_its_rows(files):

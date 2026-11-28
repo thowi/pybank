@@ -35,3 +35,14 @@ export async function addCategory(account: string): Promise<void> {
     }),
   );
 }
+
+/** Saves a note on rows to discuss later. The rows stay open. */
+export async function saveNote(importIds: string[], note: string): Promise<void> {
+  await checked(
+    await fetch("/api/notes", {
+      body: JSON.stringify({ import_ids: importIds, note }),
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    }),
+  );
+}

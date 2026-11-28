@@ -9,9 +9,10 @@ interface Props {
 }
 
 const KEYS: [string, string][] = [
-  ["1 2 3", messages.keys.pick],
+  ["↵ 1 2 3", messages.keys.pick],
   ["s", messages.keys.skip],
-  ["n", messages.keys.split],
+  ["n", messages.keys.note],
+  ["o", messages.keys.split],
   ["/", messages.keys.search],
   ["u", messages.keys.undo],
 ];

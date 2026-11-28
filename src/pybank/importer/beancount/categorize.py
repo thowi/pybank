@@ -15,6 +15,7 @@ only.
 `group_choices` merges the choices of a group. `categories` lists the
 accounts an answer can name.
 `load_answers` reads the answers, and `save_answers` appends some.
+`save_note` appends a note on rows to discuss, which books nothing.
 `load_suggested` reads the top suggestion of each row. `book` is the beangulp
 hook that books both. `openai_ask` makes the model call.
 """
@@ -520,12 +521,24 @@ def load_answers(path: str) -> dict[str, data.Account]:
 
 def save_answers(path: str, answers: dict[str, data.Account]) -> None:
     """Appends answers to the answers file."""
-    # Appending keeps comments and hand edits. A JSON string is valid TOML.
+    # Appending keeps comments and hand edits.
     with open(path, "a", encoding="utf-8") as f:
         f.writelines(
-            f"\n[[row]]\nimport-id = {json.dumps(i)}\naccount = {json.dumps(a)}\n"
-            for i, a in answers.items()
+            f"\n[[row]]\nimport-id = {_toml(i)}\naccount = {_toml(a)}\n" for i, a in answers.items()
         )
+
+
+def save_note(path: str, import_ids: list[str], note: str) -> None:
+    """Appends a note on some rows to the answers file. It leaves them open."""
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(f"\n[[note]]\nimport-ids = {_toml(import_ids)}\nnote = {_toml(note)}\n")
+
+
+def _toml(value: str | list[str]) -> str:
+    # JSON escapes the control characters as TOML does. An ASCII-only dump
+    # would write an emoji as a surrogate pair, which TOML rejects, and TOML
+    # also rejects a raw DEL.
+    return json.dumps(value, ensure_ascii=False).replace("\x7f", "\\u007f")
 
 
 def load_suggested(cache_path: str) -> dict[str, data.Account]:

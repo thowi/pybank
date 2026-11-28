@@ -10,6 +10,7 @@ export const messages = {
   emptyTitle: "Nothing to review",
   emptyText: "No open row has a cached suggestion. Run categorize first.",
   keys: {
+    note: "skip with note",
     pick: "pick",
     search: "search",
     skip: "skip",
@@ -18,12 +19,15 @@ export const messages = {
   },
   loadFailed: "Cannot load the review",
   more: (n: number) => `and ${n} more`,
+  note: "Skip with note",
+  notePlaceholder: "What to discuss… Shift+Enter starts a new line",
   nothingFound: "No category matches",
   progress: (answered: number, skipped: number, left: number, total: number) =>
     `${answered} answered · ${skipped} skipped · ${left} left of ${total} rows`,
   rowChoice: (percent: number) => `Top choice for this row (${percent}%):`,
   rows: (n: number) => (n === 1 ? "1 row" : `${n} rows`),
   saveFailed: "Cannot save the answer",
+  saveNoteFailed: "Cannot save the note",
   searchPlaceholder: "Search or add a category… Tab completes a level",
   skipped: "Skipped",
   sure: "Sure",
